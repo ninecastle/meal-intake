@@ -51,3 +51,16 @@
 
 ### 위험 (리더 판단 필요)
 - 4.5.3 (a)-3 때문에 제육볶음, 달걀후라이, 제육(돼지고기 수육) 같은 흔한 고형 음식 이름 775개가 DB에서 빠진다. 급식·외식 재료량 기반 행이 100ml 기준이라서다. 이 이름들은 AI 추정으로 간다. 10/29 측정에서 DB 일치율로 영향을 보고, 필요하면 분류별 밀도 환산 같은 대안을 정한다.
+
+## 프롬프트 a1 (2026-10-26, 1단계 조각 2: 먹기 전 분석 `analyzeBefore`)
+- 프롬프트: `prompt-template.md` 시스템 지시 A 원문 그대로(`web/src/analysis/beforePrompt.ts`, `PROMPT_VERSION_A = 'a1'`). 사용자 파트는 `BEFORE 사진` 텍스트 → 이미지 순서. 응답 스키마 A(Schema 클래스, 템플릿상 모든 필드 필수라 `optionalProperties` 없음), `thinkingLevel: LOW`, `maxOutputTokens: 4096`.
+- 시험 호출 1회(18:14 KST, Node, `spike/bibimbap.jpg`, gemini-3.5-flash-lite, App Check 없음): 성공. 6.1초, STOP, 입력 1,394 토큰(이미지 1,080) · 출력 138 토큰. 결과 1개 `돌솥비빔밥` 450g, confidence 0.95, per_100g_guess 150/22/5/4(범위 통과). warnings 없음. 정리 함수(`parseBeforeText`) 통과. 스파이크 call1과 같은 결과(사진에 돌솥 하나만 있음). 반찬 여러 개 상차림은 10/29 샘플 측정에서 본다.
+
+### 스펙과 다르게(또는 새로) 정한 점
+1. 응답 정리 규칙(형식 검증): JSON 파싱 실패·`items` 배열 없음·유효 항목 0개는 형식 오류(재시도 대상). `items: []`는 `NO_FOOD_DETECTED`(재시도 안 함). 이름이 비었거나 중량이 0 이하·숫자가 아닌 항목은 빼고 경고. 중량은 정수 반올림 후 1~3000g으로 자르고, 잘랐으면 경고 + confidence 0.5 이하. confidence는 0~1로 자르고 빠지면 0.3, 1 초과 100 이하이면 100으로 나눈다. `per_100g_guess`는 kcal 0~900, 탄·단·지 0~100, 합 100 이하가 아니면 null. 항목 30개, 경고 10개 상한. id는 i1부터 다시 매긴다.
+2. 오류 변환 표(스펙 4.4절 요구): 413 → `PHOTO_INVALID` / 429 → quota(오류 상세에 PerDay·daily가 있으면 `quotaScope: 'day'`로 재시도 안 함, 아니면 `'minute'`로 2초 뒤 1회) / 401·403 → app_check / 400·404·그 밖 4xx·`API_NOT_ENABLED`·스키마·설정 오류 → bad_request / 408·시간 초과 → timeout / 5xx → server / 상태 없는 `fetch-error`·`error`·TypeError → network / `parse-failed`·`response-error`·JSON·형식 실패 → invalid_response / promptFeedback 차단·finishReason SAFETY 등·빈 응답 → blocked(재시도 안 함). 재시도 대상은 network·timeout·server·quota(분당)·invalid_response. 사용자 취소는 `AbortError`를 그대로 던진다.
+3. `AnalysisError`에 선택 필드 `quotaScope`를 더했다(스펙 5.2.2 "429 분당·일일 구분과 한도 모드"용). 시그니처는 그대로.
+4. 시간 제한: 자체 타이머 20초(초과 시 요청 취소). SDK `timeout`은 안전망으로 21초.
+5. 같은 사진 캐시: IndexedDB `meal-analysis-cache`, 저장소 `before`(조각 3용 `after`도 v1에서 같이 만듦). 키는 SHA-256(hex), 값은 `{ key, value(결과 JSON), at, model, prompt_version }`. 모델·프롬프트 버전이 다르거나 7일이 지나면 쓰지 않고, 쓰기 때 7일 지난 항목을 지운다. IndexedDB 작업은 1.5초 안에 안 끝나면 캐시 없이 진행. 세션 메모리 캐시도 함께 둔다. `crypto.subtle`이 없으면(비보안 컨텍스트) 캐시를 건너뛴다. 출처는 `getAnalysisOrigin(result)` → `{ source: 'live'|'cache'|'mock', analyzedAt, attempts }`(WeakMap, 반환 타입 그대로).
+6. 목업: `VITE_AI_MOCK === '1'`이면 `__fixtures__/before-*.json`(지연 import, 배포 번들에 안 섞임) 중 이름순 첫 파일을 0.6초 뒤 같은 정리 함수로 돌려준다. `model: 'mock'`. 캐시는 쓰지 않는다. `getAnalysisMode()` → `{ mode: 'mock'|'live', model, promptVersions }`.
+7. firebase 13.1의 `Part`는 `type` 구분 필드(`'text'`, `'inlineData'`)가 필수다. 앱 코드와 시험 호출 모두 이 필드를 넣었고 호출이 통과했다.
