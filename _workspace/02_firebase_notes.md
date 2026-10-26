@@ -133,3 +133,7 @@ firebase firestore:databases:create "(default)" --location asia-northeast3 --edi
 - `web/src/data/meals.ts`: `subscribeDay`(where dateKey ==, status ==, orderBy 없음, includeMetadataChanges로 hasPendingWrites), `subscribeMeal`(문서 하나, 없거나 지워지면 null), `MealDoc.editedAt?: Timestamp | null`(타입만, 규칙은 조각 2).
 - 인덱스: 하루 요약 쿼리는 등호 조건 두 개라 단일 필드 인덱스 병합으로 돈다. 대기 카드(`status in`)는 단일 필드. `subscribeMeal`은 문서 읽기. `firestore.indexes.json`은 빈 채로 둔다.
 - 시험: `node spike/tests/summary_test.mjs <루트>` 통과, `npx tsc -b` 통과. AI 호출 0회.
+
+### 배포본 로그인 문제 해결 (2026-10-26, 사용자)
+- 증상: 배포본 로그인 `redirect_uri_mismatch`.
+- 조치: Google Cloud 콘솔 OAuth 웹 클라이언트에 승인된 JavaScript 원본 `https://meal-intake-2026.web.app`과 승인된 리디렉션 URI `https://meal-intake-2026.web.app/__/auth/handler` 추가. 이후 배포본 로그인·저장 정상(사용자 확인). 2단계 완료.

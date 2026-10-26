@@ -26,7 +26,7 @@
 | M3 | 먹은 후 촬영 → 즉시 먹은 후 분석(호출 B, 두 장 함께) → 영양값 3단계 조회 + 코드 계산 → `needs_review` 저장 → IndexedDB 사진 삭제 | 남긴 양을 빼서 실제 섭취량을 계산한다 | vision-ai-engineer, frontend-dev, firebase-engineer |
 | M4 | 결과 확인·수정(2.3절 규칙 전부) | AI 오차를 한 화면에서 바로잡는다 | frontend-dev(계산은 vision 모듈) |
 | M5 | 저장(`done`) → 하루 요약으로 이동 | - | frontend-dev, firebase-engineer |
-| M6 | 하루 요약: 클라이언트 합산(kcal·탄·단·지), 끼니별(아침·점심·저녁·간식) 기록 목록(음식 이름·kcal)과 끼니 합계, 기록을 누르면 상세 보기(S7), 날짜 이동(◀ 어제 / 내일 ▶, 지난 날짜의 기록과 요약), 기록 삭제(확인 후). **축소 대상 아님**(2026-10-26 사용자 결정) | 핵심 기능 2 | frontend-dev, firebase-engineer |
+| M6 | 하루 요약: 클라이언트 합산(kcal·탄·단·지), 끼니별(아침·점심·저녁·간식) 기록 목록(음식 이름·kcal)과 끼니 합계, 기록을 누르면 상세 보기(S7), 날짜 이동(◀ 전날 / 다음 날 ▶, 오늘이 아니면 [오늘로], 지난 날짜의 기록과 요약), 기록 삭제(확인 후). **축소 대상 아님**(2026-10-26 사용자 결정) | 핵심 기능 2 | frontend-dev, firebase-engineer |
 | M7 | 식약처 DB JSON: 변환, 지연 로드, 이름 매칭, 자동완성(3.5절, 4.5절) | 공식 값을 먼저 써서 정확도를 높인다 | vision-ai-engineer |
 | M8 | 출처 배지(DB·검색 기반·AI 추정·직접 입력). 검색 기반이면 검색 추천도 표시 | 사용자가 신뢰도를 판단한다 | frontend-dev |
 | M9 | 실패 대체 경로(5절): 자동 재시도 1회, 직접 입력, 남긴 비율 직접 고르기, 샘플 체험 | 녹화와 심사 기간에 흐름이 끊기지 않는다 | 전원 |
@@ -100,7 +100,7 @@ S0 로그인 → S1 홈(=오늘의 하루 요약) ─"식사 기록"→ S2 먹�
 | ID | 경로 | 화면 | 주요 요소 | 주 버튼 |
 | --- | --- | --- | --- | --- |
 | S0 | `/login` | 로그인 | Google 버튼 하나. 이미 로그인했으면 바로 S1. 인앱 브라우저면 "Chrome·Safari로 열어 주세요" | Google로 로그인 |
-| S1 | `/`(`?date=YYYY-MM-DD`) | 홈 = 하루 요약 | 맨 위 대기 카드(`awaiting_after`: "다 드셨나요? 남은 음식 찍기", `needs_review`: "확인하고 저장하기"). 합계 kcal·탄·단·지, 끼니별(아침·점심·저녁·간식 순서, 기록 없는 끼니는 숨김) 기록 목록: 기록마다 음식 이름 요약과 섭취 kcal, 끼니 합계(사진 없음). 기록을 누르면 S7. 날짜 이동 "◀ 어제"·"내일 ▶"(오늘이면 "내일 ▶" 비활성, 지난 날짜도 같은 요약·목록), 영양 정보 출처 한 줄. 목표가 있으면 kcal·탄·단·지 "먹은 양/목표" 막대와 남은 양, 없으면 "목표 설정하기" 카드(3단계, 4.7절) | 식사 기록 |
+| S1 | `/`(`?date=YYYY-MM-DD`) | 홈 = 하루 요약 | 맨 위 대기 카드(`awaiting_after`: "다 드셨나요? 남은 음식 찍기", `needs_review`: "확인하고 저장하기"). 합계 kcal·탄·단·지, 끼니별(아침·점심·저녁·간식 순서, 기록 없는 끼니는 숨김) 기록 목록: 기록마다 음식 이름 요약과 섭취 kcal, 끼니 합계(사진 없음). 기록을 누르면 S7. 날짜 이동 "◀ 전날"·"다음 날 ▶"(오늘이면 "다음 날 ▶" 비활성, 오늘이 아니면 [오늘로], 지난 날짜도 같은 요약·목록), 영양 정보 출처 한 줄. 목표가 있으면 kcal·탄·단·지 "먹은 양/목표" 막대와 남은 양, 없으면 "목표 설정하기" 카드(3단계, 4.7절) | 식사 기록 |
 | S2 | `/capture/before` | 먹기 전 촬영 | "수저를 함께, 위에서 찍어 주세요", 사진 전송 고지 한 줄, "데모 사진 사용" | 촬영 |
 | S3 | `/meal/:mealId/after` | 먹은 후 촬영 | 먹기 전 사진(IndexedDB에 있을 때), 인식한 음식 목록(이름·g, 읽기 전용), "같은 위치·각도로", "데모 사진 사용", "기록 취소" | 남은 음식 찍기 |
 | S7 | `/meal/:mealId` | 기록 상세(3단계, 읽기 전용) | 날짜·끼니·저장 시각, 음식별 이름·먹기 전 무게(g)·남긴 비율·같이 먹은 인원·섭취 kcal·탄·단·지·출처 배지(DB·DB(환산)·AI 추정·직접 입력, 참고 DB 대표값), 끼니 합계, [삭제]("이 기록을 삭제할까요?" 확인 → `deleteMeal` → 그 날짜 S1). [수정](S8)·[삭제]("이 기록을 삭제할까요?" 확인 → `deleteMeal` → 그 날짜 S1). 수정한 기록이면 "수정됨 · 시각" | 수정·삭제 |
@@ -182,6 +182,7 @@ users/{uid}/meals/{mealId}      식사 1건. mealId는 클라이언트가 먼저
 | `per_100g_fill` | `items[]`, `{ carbs_g?, fat_g? }`. 값은 `ai_estimate` 또는 `missing` | `nutrition_source=db`이고 DB 행에 그 값이 비어 있을 때만 | 식약처 행 상당수가 탄·지 빈 값이다[L]. 영양소 단위로 출처를 보여 준다 |
 | `db_name` | `items[]`, string 또는 null | db일 때 채운다 | 무엇과 매칭됐는지 사용자가 보고 판단한다 |
 | `db_match` | `items[]`, `name`·`group`·`partial` | db일 때 | 대표값·부분 일치 표시, 출처 평가 지표 |
+| `grams_source`, `published_g`, `unit_count` | `items[]`, `"published"`·숫자·정수(공개 중량을 썼을 때만 넣음) | 4.5.5절 조건을 모두 만족해 `before_grams = published_g × unit_count`로 정했을 때 | 먹기 전 무게가 AI 추정이 아니라 업체 공개 중량임을 보인다(2026-10-26 사용자 결정) |
 | `db_ml_converted` | `items[]`, boolean(true일 때만 넣음) | db이고 매칭된 행이 100ml 기준을 1g/ml로 환산한 행(`ml: 1`)일 때 | 화면 출처를 "DB(환산)"으로 구분한다(4.5.3 (a)-4, 2026-10-26 사용자 결정) |
 
 추가할 검증 규칙(vision-ai-engineer가 `validate_analysis.mjs`와 TS 함수에 반영)
@@ -328,7 +329,8 @@ interface MfdsFood {
   cb: number | null;  // 탄수화물 g/100g, 원본이 비어 있으면 null
   f: number | null;   // 지방 g/100g, 원본이 비어 있으면 null
   ml?: 1;             // 원본 기준량 100ml를 밀도 1.0으로 환산한 행
-  s?: number;         // 1인(회)분량 참고량(g). g 숫자로 바꿀 수 있을 때만
+  s?: number;         // 1인(회)분량 참고량(g). g 숫자로 바꿀 수 있을 때만(원본이 모두 비어 있어 실제로는 없음)
+  w?: number;         // 공개 중량(g, 4.5.5절). 업체 제공 행의 식품중량이 100g·100ml가 아닐 때만, ml은 1ml=1g
 }
 ```
 - 원본의 나머지 항목(당류, 나트륨 등 40여 개)은 넣지 않는다. 세부명 키(4.5.4)는 파일에 넣을지, 로드 직후 앱에서 만들지 vision-ai-engineer가 정한다. 어느 쪽이든 아래 크기 목표를 지켜야 한다.
@@ -423,7 +425,8 @@ export interface MealIntakeAnalysis {
 }
 // 호출 A·B 결과(응답 스키마 A·B + 메타). Firestore에는 BeforeAnalysis만 저장한다.
 export interface BeforeItem { id: string; name: string; location: string; before_grams: number;
-  confidence: number; per_100g_guess: Nutrients | null /* 범위 검사에 실패하면 null */ }
+  confidence: number; per_100g_guess: Nutrients | null /* 범위 검사에 실패하면 null */;
+  whole_count: number | null /* a3: 한 개·한 마리·한 판·1인분이 통째로 보이는 개수(1~10), 일부면 null. 4.5.5절 */ }
 export interface BeforeAnalysis { items: BeforeItem[]; warnings: string[]; model: string; prompt_version: string }
 export interface AfterItem { id: string; remaining_ratio: number | null; confidence: number }
 export interface AfterAnalysis { items: AfterItem[]; warnings: string[]; used_before_photo: boolean;
@@ -454,7 +457,7 @@ export function assembleAnalysis(before: BeforeAnalysis, after: AfterAnalysis | 
 // ── web/src/analysis/nutrition/index.ts ── 담당: vision-ai-engineer
 export type NutritionResult =
   | { source: "db"; per_100g: Nutrients; fill?: Partial<Record<"carbs_g" | "fat_g", FillSource>>;
-      db_food_code: string; db_name: string; db_match: DbMatch; ml_converted?: true }  // ml_converted: 화면 출처 "DB(환산)"
+      db_food_code: string; db_name: string; db_match: DbMatch; ml_converted?: true; published_g?: number /* 4.5.5절 */ }  // ml_converted: 화면 출처 "DB(환산)"
   | { source: "search"; per_100g: Nutrients; searchSuggestionHtml: string | null;
       groundingSources: { title?: string; uri: string }[] }        // 화면 표시용. 저장하지 않는다
   | { source: "ai_estimate"; per_100g: Nutrients; via: "guess" | "call_d" }
@@ -640,6 +643,22 @@ Firebase AI SDK 오류를 `reason`으로 바꾸는 표는 vision-ai-engineer가 
 
 - 국물·건더기: 호출 A는 국·찌개를 건더기와 국물로 나누는데(intake-calorie-estimation), DB 값은 완성 음식 기준이다. 그래서 1~4의 정확 일치만 허용하고 부분 일치로 완성 음식 값을 붙이지 않는다. 이런 항목은 대개 AI 추정이 되며, 평가에서 따로 측정한다(7.2절 R7).
 - 자동완성(`searchFoodNames`): 세 키의 앞부분 일치. 그룹을 먼저("김치찌개 · 대표값"), 다음은 이름이 짧은 순으로 최대 8개. 고르면 `dbCode`로 조회한다.
+
+#### 4.5.5 공개 중량으로 먹기 전 무게 정하기 (2026-10-26 사용자 결정)
+
+프랜차이즈처럼 크기가 정해진 메뉴(예: 빅맥 한 개, 싸이버거 한 개, 피자 한 판)는 업체가 공개한 중량이 사진 추정보다 정확하다.
+
+- **공개 중량(`w`)**: 식약처 원본 `식품중량` 가운데 식품기원이 "외식(프랜차이즈 등 업체 제공 영양정보)"이고 값이 100g·100ml가 아닌 것만 쓴다(100이면 영양값 기준량과 같은 값이라 메뉴 크기가 아니다. 예: `닭튀김_허니콤보 치킨` 식품중량 100g → 공개 중량 없음). ml이면 1ml=1g으로 바꾼다(DB(환산)과 같은 가정). 가정식·급식·외식 분석 행의 식품중량은 분석 시료 무게라 쓰지 않는다. 원본 확인(2026-10-26): 업체 제공 g 행 12,625 중 100g이 아닌 것 11,897, ml 행 2,600 중 100ml가 아닌 것 2,599.
+- **적용 조건(모두 만족)**
+  1. 호출 A가 그 음식을 "한 개·한 마리·한 판·1인분이 통째로 보인다"고 답했다: `whole_count`(정수 1~10). 일부만 덜어 왔거나, 잘라 놓은 조각이거나, 나눠 담겼으면 `null`.
+  2. DB 매칭이 세부 종류까지 일치(`db_match: "name"`, 자동완성 dbCode 포함)했다.
+  3. 매칭된 DB 행에 공개 중량 `w`가 있다.
+- **적용하면** `before_grams = w × whole_count`, 항목에 `grams_source: "published"`, `published_g: w`, `unit_count: whole_count`. 화면은 무게 옆에 "공개 중량 223g × 1" 표시.
+- **적용하지 않으면** 지금처럼 호출 A의 추정 무게(AI 추정).
+- 남긴 비율은 그대로 사진 비교(호출 B). 섭취량 공식은 4.6절 그대로.
+- 결과 수정에서 사용자가 무게를 고치면 `grams_source` 등을 지우고 사용자 값으로 둔다. 이름을 바꿔도 무게는 유지한다(공개 중량을 다시 적용하지 않는다, 결과 수정 규칙).
+- 프롬프트는 a3(호출 A에 `whole_count` 추가). 버전이 바뀌므로 같은 사진 캐시는 다시 분석한다.
+- 일정: 3단계 조각 1-2와 함께 분석 쪽에서 넣고(10/29 측정 전), 화면 표시("공개 중량")는 리더가 붙인다. 10/29 측정에서 공개 중량 적용 항목의 무게 오차를 따로 본다.
 
 ### 4.6 칼로리 계산식 (`compute.ts`)
 
@@ -1038,6 +1057,7 @@ U0·U3·U5는 결정 내용으로 바꿨다. 나머지(U1·U2·U4·U6·U7·U8)�
 | 날짜 | 변경 내용 | 절 | 영향을 받는 에이전트 |
 | --- | --- | --- | --- |
 | 2026-10-26 | 초안 작성(0단계). 리더 요청에 따라 식약처 DB 처리 규칙(100ml 행, 탄·지 빈 값, 같은 이름 중복, 이름 매칭, 앱 JSON 필드·크기)을 반영하고 analysis-schema v2(선택 필드 `per_100g_fill`·`db_name`·`db_match`)를 제안. 공식 문서 확인 결과(그라운딩 무료 등급 미제공, App Check 자동 강제, AI 모니터링 프롬프트 저장, 무료 등급 데이터 약관)를 7.2절 위험과 부록 A에 기록 | 전체 | vision-ai-engineer, frontend-dev, firebase-engineer, qa-integrator, pitch-writer |
+| 2026-10-26 | (리더, 사용자 결정) 공개 중량 4.5.5절: 업체 제공 식품중량(100g·100ml 제외)을 DB JSON `w`로 넣고, 통째로 보인 메뉴(`whole_count`)가 세부 종류까지 일치하면 먹기 전 무게 = 공개 중량 × 개수, `grams_source` 표시. 프롬프트 a3. 홈 날짜 이동 문구 ◀ 전날 / 다음 날 ▶, 오늘이 아니면 [오늘로] | 2.2, 3.3, 3.5, 4.3, 4.5.5 | vision-ai-engineer, frontend-dev, qa-integrator |
 | 2026-10-26 | (리더, 사용자 결정) 3단계 조각을 사용자 순서로 확정(1 홈 기록 보기 → 2 목표 설정 → 3 목표 대비 비교 → 4 주간 추이 → 5 배포). 주간 추이 M17·S9 `/week` 추가, 1.3절 "주간 통계 안 만듦"을 월간으로 좁힘, 프리미엄 기능(음식 추천·월간 그래프·리포트)은 3단계 뒤 따로. 축소안 0-1 | 1.1, 1.3, 2.2, 4.7, 6.1, 6.3 | firebase-engineer, frontend-dev, qa-integrator, pitch-writer |
 | 2026-10-26 | (리더, 사용자 결정) 저장한 기록 수정 M16: S8 `/meal/:mealId/edit`(결과 수정 규칙 그대로 + 끼니·날짜(오늘과 지난 날짜만)), 전이 `done → done`, 필드 `editedAt`, P5를 MVP로 옮김. 3단계에서 기록 보기·상세 바로 다음 순서, 밀리면 가장 먼저 4단계로 | 1.1, 1.2, 2.1, 2.2, 3.2, 4.3, 6.1, 6.3 | firebase-engineer, frontend-dev, qa-integrator |
 | 2026-10-26 | (리더, 사용자 결정) 하루 요약 필수 항목: 끼니별 기록 목록(음식 이름·kcal), 기록 상세 S7 `/meal/:mealId`(읽기 전용, 삭제), 날짜 이동 ◀▶, 삭제 확인. 축소안에서 "끼니별 합계 → 목록만"·"날짜 이동 → 오늘만"을 빼고 끝까지 지킬 것에 넣음 | 1.1, 2.2, 6.1, 6.3 | frontend-dev, firebase-engineer, qa-integrator |
