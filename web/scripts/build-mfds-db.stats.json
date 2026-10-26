@@ -1,0 +1,139 @@
+{
+  "source": "mfds_food_std_raw.json",
+  "version": "2026-10-06",
+  "input_rows": 19738,
+  "by_basis": {
+    "100g": 13954,
+    "100ml": 5784
+  },
+  "raw_null": {
+    "carbs": 12777,
+    "fat": 13319
+  },
+  "raw_unique_names": 15658,
+  "dropped": {
+    "missing_energy_or_protein": 0,
+    "unknown_basis": 0,
+    "empty_name": 0,
+    "out_of_range": 19,
+    "ml_row_has_g_row": 2165,
+    "ml_only_solid": 1690
+  },
+  "unparsable_values": 0,
+  "ml_only_names_by_category": {
+    "찜류": {
+      "names": 47,
+      "included": 0
+    },
+    "생채·무침류": {
+      "names": 118,
+      "included": 0
+    },
+    "찌개 및 전골류": {
+      "names": 93,
+      "included": 93
+    },
+    "튀김류": {
+      "names": 52,
+      "included": 0
+    },
+    "김치류": {
+      "names": 5,
+      "included": 0
+    },
+    "국 및 탕류": {
+      "names": 126,
+      "included": 126
+    },
+    "볶음류": {
+      "names": 118,
+      "included": 0
+    },
+    "면 및 만두류": {
+      "names": 53,
+      "included": 0
+    },
+    "구이류": {
+      "names": 66,
+      "included": 0
+    },
+    "조림류": {
+      "names": 50,
+      "included": 0
+    },
+    "빵 및 과자류": {
+      "names": 17,
+      "included": 0
+    },
+    "전·적 및 부침류": {
+      "names": 34,
+      "included": 0
+    },
+    "밥류": {
+      "names": 92,
+      "included": 0
+    },
+    "나물·숙채류": {
+      "names": 72,
+      "included": 0
+    },
+    "채소, 해조류": {
+      "names": 1,
+      "included": 0
+    },
+    "죽 및 스프류": {
+      "names": 16,
+      "included": 16
+    },
+    "음료 및 차류": {
+      "names": 985,
+      "included": 985
+    },
+    "유제품류 및 빙과류": {
+      "names": 34,
+      "included": 0
+    },
+    "장아찌·절임류": {
+      "names": 4,
+      "included": 0
+    },
+    "젓갈류": {
+      "names": 4,
+      "included": 0
+    },
+    "장류, 양념류": {
+      "names": 6,
+      "included": 0
+    },
+    "수·조·어·육류": {
+      "names": 1,
+      "included": 0
+    },
+    "곡류, 서류 제품": {
+      "names": 1,
+      "included": 0
+    }
+  },
+  "liquid_categories": [
+    "음료 및 차류",
+    "국 및 탕류",
+    "찌개 및 전골류",
+    "죽 및 스프류"
+  ],
+  "serving_size_nonempty": 0,
+  "rows_after_filters": 19719,
+  "merged_same_name": 5258,
+  "foods": 10606,
+  "foods_ml_converted": 1220,
+  "foods_carbs_null": 7472,
+  "foods_fat_null": 7813,
+  "foods_carbs_and_fat_null": 7398,
+  "unique_normalized_names": 11381,
+  "groups": 816,
+  "detail_keys": 9704,
+  "file": "web/public/data/mfds-foods-20261006.json",
+  "file_bytes": 1710496,
+  "gzip_bytes": 275105,
+  "brotli_bytes": 206934,
+  "excluded_total": 3874
+}
