@@ -93,3 +93,25 @@ firebase firestore:databases:create "(default)" --location asia-northeast3 --edi
 1. Firebase 콘솔 → Authentication → 설정 → 승인된 도메인에 `localhost`, `meal-intake-2026.web.app`, `meal-intake-2026.firebaseapp.com`이 있는지.
 2. Google Cloud 콘솔 → API 및 서비스 → 사용자 인증 정보 → "Web client (auto created by Google Service)" → 승인된 리디렉션 URI에 `https://meal-intake-2026.web.app/__/auth/handler`가 있는지(없으면 추가). **없으면 배포본에서 팝업·리디렉션 로그인이 모두 `redirect_uri_mismatch`로 실패한다.**
 3. OAuth 동의 화면(Google 인증 플랫폼 → 대상)이 "프로덕션"인지. "테스트"면 등록한 테스트 사용자만 로그인된다(심사위원 불가).
+
+## Firestore 저장·규칙 (2단계 조각 3, 2026-10-26, firebase-engineer)
+
+### 만든 것
+- `web/src/data/meals.ts`: 스펙 4.3절 `newMealId`, `createAwaitingMeal`, `saveReview`, `saveMeal`, `deleteMeal`, `getMeal`, `subscribePending` + 확인용 `listRecentMeals(uid, n)`(전체 읽고 클라이언트 정렬). 오류는 `MealStoreError`(`code: MealStoreErrorCode`)로 던진다. 저장 전 `validateAnalysis` 필수, analysis·beforeAnalysis는 규칙 허용 키만 골라 JSON 왕복(undefined 제거) 후 저장. `subscribeDay`·`summarizeDay`는 3단계.
+- `web/src/lib/firebase.ts`(영구 캐시), `web/src/lib/time.ts`(`toDateKey` 등)는 이전 작업분 그대로 커밋.
+
+### 규칙 v1 요약 (`firestore.rules`)
+- `users/{uid}/meals/{mealId}`만 본인 읽기·쓰기. `users/{uid}` 문서·`goals`·그 밖 경로는 규칙이 없어 거부(3단계에 추가).
+- 문서 키 8개 `hasOnly`(dateKey, mealType, status, beforeAnalysis, analysis, consumedKcal, createdAt, updatedAt). `analysis` 키는 items·totals·warnings·model·prompt_version, `beforeAnalysis` 키는 items·warnings·model·prompt_version만.
+- 열거값(status·mealType), dateKey `[0-9]{4}-[0-9]{2}-[0-9]{2}`, items ≤ 30, consumedKcal 0~10000이고 `analysis.totals.consumed.kcal`과 같음, analysis와 consumedKcal은 함께 있거나 함께 없음. awaiting_after는 beforeAnalysis 필수, needs_review·done은 analysis 필수.
+- 생성은 awaiting_after·done만, createdAt·updatedAt = request.time. 수정은 awaiting_after→needs_review·done, needs_review→done만(같은 상태 유지·되돌리기 거부), createdAt 불변. 삭제는 모든 상태.
+- 배포: 2026-10-26 `firebase deploy --only firestore:rules --project meal-intake-2026` 성공(규칙만, 인덱스·Hosting 배포 안 함).
+
+### 규칙 테스트
+- `firestore-tests/rules.test.mjs`(node:test + `@firebase/rules-unit-testing` 6.0.0 + firebase 13.1.0, 프로젝트 ID `demo-meal-intake`). 실행: `cd firestore-tests && npm install && npm test`(에뮬레이터 자동 실행) 또는 에뮬레이터를 띄운 뒤 `npm run test:running`.
+- 상태: **작성만, 실행 안 함** — 이 PC에 Java가 없다(Firestore 에뮬레이터는 JDK 21+ 필요). `node --check` 문법 확인만 통과.
+
+### 남은 이슈
+- 스펙 2.1절은 샘플 체험 문서에 `entry: "sample"`을 남긴다고 하지만 3.2절 허용 키 8개에는 없다. 지금 규칙은 `entry`를 거부한다. 샘플 체험을 구현할 때 3.2절에 넣기로 정하면 규칙에 `entry`(값 'sample')를 추가해 다시 배포한다.
+- done → done(저장된 식사 다시 수정)은 거부된다. 저장 뒤 수정 기능을 넣으면 전이를 추가한다.
+- 쓰기 Promise는 서버 확인 뒤에 끝난다. 오프라인에서는 화면이 기다리지 않게 한다(프런트).

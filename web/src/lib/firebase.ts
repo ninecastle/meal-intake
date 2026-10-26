@@ -1,7 +1,12 @@
 import { initializeApp } from 'firebase/app'
 import { initializeAppCheck, ReCaptchaEnterpriseProvider, type AppCheck } from 'firebase/app-check'
 import { connectAuthEmulator, getAuth } from 'firebase/auth'
-import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore'
+import {
+  connectFirestoreEmulator,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore'
 
 // authDomain: Hosting 기본 도메인에서 열렸으면 지금 주소와 같은 도메인을 쓴다.
 // 로그인(팝업·리디렉션)은 authDomain의 /__/auth/handler를 거치는데, 앱 출처와 다르면
@@ -26,7 +31,7 @@ const firebaseConfig = {
   appId: '1:686292653830:web:87f810922b0016e244f087',
 }
 
-// 초기화 순서(스펙 5절): initializeApp → initializeAppCheck → getAuth·getFirestore·getAI(ai.ts).
+// 초기화 순서(스펙 5절): initializeApp → initializeAppCheck → getAuth·initializeFirestore·getAI(ai.ts).
 export const app = initializeApp(firebaseConfig)
 
 // 개발 빌드에서만: App Check 초기화 전에 디버그 토큰 모드를 켠다.
@@ -56,7 +61,12 @@ function initAppCheck(): AppCheck | null {
 
 export const appCheck = initAppCheck()
 export const auth = getAuth(app)
-export const db = getFirestore(app)
+// Firestore 영구 캐시(IndexedDB): 오프라인에서도 기록을 보여 주고, 쓰기는 대기했다가 다시 연결되면 보낸다.
+// 여러 탭을 열어도 캐시를 함께 쓰도록 multi-tab 관리자를 쓴다. IndexedDB를 못 쓰는 브라우저는 SDK가 메모리 캐시로 바꾼다.
+// 캐시에는 분석 결과만 들어간다(사진 필드 없음, data/meals.ts).
+export const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+})
 
 export const usingEmulators =
   import.meta.env.DEV && import.meta.env.VITE_USE_EMULATORS === 'on'

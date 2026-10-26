@@ -1,10 +1,82 @@
 rules_version = '2';
 
-// 골격 단계: 전부 차단. 규칙 v1은 2단계에서 작성한다.
+// 규칙 v1 (2단계, 2026-10-26). 스펙 _workspace/01_architect_spec.md 2.1절(상태 전이)·3.2절(meals 필드).
+// - 로그인한 본인만 users/{uid}/meals/* 를 읽고 쓴다.
+// - 그 밖의 경로는 모두 거부한다. users/{uid} 문서와 하위 goals는 3단계에 규칙을 더한다.
+// - 사진이 들어오지 않게 문서 키와 analysis·beforeAnalysis 하위 키를 허용 목록으로 제한한다.
+// - 칼로리는 클라이언트가 쓰므로 형식·범위만 검사한다. 항목(items) 안의 필드는 검사하지 않는다(스펙 1.4절).
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if false;
+
+    function signedInAs(uid) {
+      return request.auth != null && request.auth.uid == uid;
     }
+
+    // 호출 A 결과(BeforeAnalysis)
+    function validBefore(b) {
+      return b is map
+        && b.keys().hasOnly(['items', 'warnings', 'model', 'prompt_version'])
+        && b.items is list
+        && b.items.size() <= 30;
+    }
+
+    // MealIntakeAnalysis v2 + consumedKcal 사본
+    function validAnalysis(m) {
+      return m.analysis is map
+        && m.analysis.keys().hasOnly(['items', 'totals', 'warnings', 'model', 'prompt_version'])
+        && m.analysis.items is list
+        && m.analysis.items.size() <= 30
+        && m.analysis.totals is map
+        && m.analysis.totals.consumed is map
+        && m.consumedKcal is number
+        && m.consumedKcal >= 0
+        && m.consumedKcal <= 10000
+        && m.consumedKcal == m.analysis.totals.consumed.kcal;
+    }
+
+    function validMeal(m) {
+      return m.keys().hasOnly(['dateKey', 'mealType', 'status', 'beforeAnalysis', 'analysis',
+                               'consumedKcal', 'createdAt', 'updatedAt'])
+        && m.keys().hasAll(['dateKey', 'mealType', 'status', 'createdAt', 'updatedAt'])
+        && m.dateKey is string
+        && m.dateKey.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && m.mealType in ['breakfast', 'lunch', 'dinner', 'snack']
+        && m.status in ['awaiting_after', 'needs_review', 'done']
+        && m.createdAt is timestamp
+        && m.updatedAt is timestamp
+        && (!('beforeAnalysis' in m) || validBefore(m.beforeAnalysis))
+        && (('analysis' in m) == ('consumedKcal' in m))
+        && (!('analysis' in m) || validAnalysis(m))
+        // 상태별 필수 필드: awaiting_after는 먹기 전 분석, needs_review·done은 최종 분석
+        && (m.status != 'awaiting_after' || ('beforeAnalysis' in m))
+        && (m.status == 'awaiting_after' || ('analysis' in m));
+    }
+
+    // 2.1절: awaiting_after → needs_review·done, needs_review → done (같은 상태 유지·되돌리기 없음)
+    function validTransition(from, to) {
+      return (from == 'awaiting_after' && to in ['needs_review', 'done'])
+        || (from == 'needs_review' && to == 'done');
+    }
+
+    match /users/{uid}/meals/{mealId} {
+      allow read: if signedInAs(uid);
+
+      // 없음 → awaiting_after(호출 A 성공), 없음 → done(직접 입력·샘플)
+      allow create: if signedInAs(uid)
+        && validMeal(request.resource.data)
+        && request.resource.data.status in ['awaiting_after', 'done']
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time;
+
+      allow update: if signedInAs(uid)
+        && validMeal(request.resource.data)
+        && validTransition(resource.data.status, request.resource.data.status)
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.updatedAt == request.time;
+
+      allow delete: if signedInAs(uid);
+    }
+
+    // 위에 없는 경로(users/{uid} 문서, goals, 그 밖 모두)는 규칙이 없으므로 거부된다.
   }
 }

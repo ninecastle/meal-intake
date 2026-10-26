@@ -1,0 +1,14 @@
+{
+  "name": "firestore-tests",
+  "private": true,
+  "type": "module",
+  "description": "firestore.rules 테스트. Firestore 에뮬레이터(JDK 21+ 필요, firebase-tools 15 기준)에서 실행한다.",
+  "scripts": {
+    "test": "firebase emulators:exec --only firestore --project demo-meal-intake \"node --test rules.test.mjs\"",
+    "test:running": "node --test rules.test.mjs"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "6.0.0",
+    "firebase": "13.1.0"
+  }
+}

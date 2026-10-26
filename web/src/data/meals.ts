@@ -1,0 +1,273 @@
+import {
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocFromCache,
+  getDocs,
+  onSnapshot,
+  query,
+  serverTimestamp,
+  setDoc,
+  updateDoc,
+  where,
+  type DocumentReference,
+  type DocumentSnapshot,
+  type Timestamp,
+} from 'firebase/firestore'
+import { validateAnalysis } from '../analysis/validate'
+import { db } from '../lib/firebase'
+import type { BeforeAnalysis, MealIntakeAnalysis } from '../types/analysis'
+
+// 식사 기록 저장소(스펙 2.1절 상태 전이, 3.2절 필드, 4.3절 시그니처, 4.4절 오류 코드).
+// Firestore에는 분석 결과만 저장한다. 사진·썸네일·base64·이미지 URL 필드는 두지 않는다(CLAUDE.md).
+// 규칙(firestore.rules)이 문서 키와 analysis·beforeAnalysis 하위 키를 허용 목록으로 막으므로,
+// 여기서도 허용 키만 골라 쓴다. 하루 요약(subscribeDay·summarizeDay)은 3단계.
+
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack'
+export type MealStatus = 'awaiting_after' | 'needs_review' | 'done'
+
+export interface MealDoc {
+  dateKey: string
+  mealType: MealType
+  status: MealStatus
+  beforeAnalysis?: BeforeAnalysis
+  analysis?: MealIntakeAnalysis
+  consumedKcal?: number
+  createdAt: Timestamp | null
+  updatedAt: Timestamp | null
+}
+
+export type MealWithId = MealDoc & { id: string }
+
+export type MealStoreErrorCode = 'MEAL_SAVE_REJECTED' | 'MEAL_NOT_FOUND' | 'MEAL_STORE_UNAVAILABLE'
+
+export class MealStoreError extends Error {
+  readonly code: MealStoreErrorCode
+  constructor(code: MealStoreErrorCode, message?: string, options?: { cause?: unknown }) {
+    super(message ?? code, options)
+    this.name = 'MealStoreError'
+    this.code = code
+  }
+}
+
+const DATE_KEY_RE = /^\d{4}-\d{2}-\d{2}$/
+const MEAL_TYPES: readonly string[] = ['breakfast', 'lunch', 'dinner', 'snack']
+const MAX_ITEMS = 30 // 규칙과 같은 값
+const MAX_KCAL = 10000 // 규칙과 같은 값
+const PHOTO_KEY_RE = /photo|image|img|thumb|base64|data_?url|blob/i
+
+const mealsCol = (uid: string) => collection(db, 'users', uid, 'meals')
+const mealRef = (uid: string, mealId: string) => doc(db, 'users', uid, 'meals', mealId)
+
+/** JSON 왕복: Firestore가 거부하는 undefined 값과 JSON이 아닌 값(Blob 등)을 없앤다. */
+function plain<T>(v: T): T {
+  return JSON.parse(JSON.stringify(v)) as T
+}
+
+/** 사진처럼 보이는 키나 data: URL 문자열이 있으면 저장하지 않는다(beforeAnalysis용. analysis는 validateAnalysis가 검사). */
+function assertNoPhoto(v: unknown, path = 'beforeAnalysis'): void {
+  if (typeof v === 'string') {
+    if (v.startsWith('data:') || v.length > 2000) reject(`${path}: 사진·긴 문자열은 저장하지 않습니다`)
+    return
+  }
+  if (Array.isArray(v)) return v.forEach((x, i) => assertNoPhoto(x, `${path}[${i}]`))
+  if (v && typeof v === 'object') {
+    for (const [k, x] of Object.entries(v)) {
+      if (PHOTO_KEY_RE.test(k)) reject(`${path}.${k}: 사진 필드는 저장하지 않습니다`)
+      assertNoPhoto(x, `${path}.${k}`)
+    }
+  }
+}
+
+function reject(message: string): never {
+  throw new MealStoreError('MEAL_SAVE_REJECTED', message)
+}
+
+function checkKeys(dateKey: string, mealType: MealType): void {
+  if (!DATE_KEY_RE.test(dateKey)) reject(`dateKey 형식 오류: ${dateKey}`)
+  if (!MEAL_TYPES.includes(mealType)) reject(`mealType 오류: ${mealType}`)
+}
+
+/** validateAnalysis 통과 + 규칙의 analysis 허용 키만 남긴다. */
+function checkedAnalysis(analysis: MealIntakeAnalysis): MealIntakeAnalysis {
+  const r = validateAnalysis(analysis)
+  if (!r.ok) reject(`분석 결과 검증 실패: ${r.errors.join('; ')}`)
+  const { items, totals, warnings, model, prompt_version } = r.value
+  const a = plain({ items, totals, warnings, model, prompt_version })
+  if (a.items.length > MAX_ITEMS) reject(`음식은 ${MAX_ITEMS}개까지 저장합니다`)
+  const kcal = a.totals.consumed.kcal
+  if (!(typeof kcal === 'number' && kcal >= 0 && kcal <= MAX_KCAL)) reject(`섭취 칼로리 범위 밖: ${kcal}`)
+  return a
+}
+
+function pickBefore(b: BeforeAnalysis): BeforeAnalysis {
+  const { items, warnings, model, prompt_version } = b
+  const v = plain({ items, warnings, model, prompt_version })
+  if (!Array.isArray(v.items) || v.items.length > MAX_ITEMS) reject(`먹기 전 음식은 ${MAX_ITEMS}개까지 저장합니다`)
+  assertNoPhoto(v)
+  return v
+}
+
+function errCode(e: unknown): string {
+  return typeof e === 'object' && e !== null && 'code' in e ? String((e as { code: unknown }).code) : ''
+}
+
+function writeError(e: unknown): MealStoreError {
+  if (e instanceof MealStoreError) return e
+  const c = errCode(e)
+  if (c === 'permission-denied') return new MealStoreError('MEAL_SAVE_REJECTED', '저장이 거부됐습니다(보안 규칙)', { cause: e })
+  if (c === 'not-found') return new MealStoreError('MEAL_NOT_FOUND', '식사 기록이 없습니다(삭제됨)', { cause: e })
+  return new MealStoreError('MEAL_STORE_UNAVAILABLE', `저장소 오류: ${c || String(e)}`, { cause: e })
+}
+
+function readError(e: unknown): MealStoreError {
+  return e instanceof MealStoreError
+    ? e
+    : new MealStoreError('MEAL_STORE_UNAVAILABLE', `불러오기 오류: ${errCode(e) || String(e)}`, { cause: e })
+}
+
+/** 대기 중인 serverTimestamp는 추정값으로 읽는다(정렬용). */
+function toMeal(s: DocumentSnapshot): MealWithId {
+  const d = s.data({ serverTimestamps: 'estimate' }) as MealDoc
+  return { ...d, id: s.id, createdAt: d.createdAt ?? null, updatedAt: d.updatedAt ?? null }
+}
+
+/** createdAt 내림차순(최근 먼저). orderBy를 쓰지 않으므로 정렬은 클라이언트에서 한다(스펙 3.2절). */
+function newestFirst(meals: MealWithId[]): MealWithId[] {
+  const t = (m: MealWithId) => m.createdAt?.toMillis() ?? Number.MAX_SAFE_INTEGER
+  return meals.sort((a, b) => t(b) - t(a))
+}
+
+/** 서버 왕복 없이 새 문서 id를 만든다. 먹기 전 사진 IndexedDB 키로도 쓴다. */
+export function newMealId(uid: string): string {
+  return doc(mealsCol(uid)).id
+}
+
+/**
+ * 호출 A 성공 직후: 없음 → awaiting_after.
+ * 쓰기 Promise는 서버 확인 뒤에 끝난다(오프라인이면 다시 연결될 때까지 대기). 화면은 기다리지 않아도 된다.
+ */
+export async function createAwaitingMeal(
+  uid: string,
+  mealId: string,
+  v: { dateKey: string; mealType: MealType; beforeAnalysis: BeforeAnalysis },
+): Promise<void> {
+  checkKeys(v.dateKey, v.mealType)
+  const beforeAnalysis = pickBefore(v.beforeAnalysis)
+  try {
+    await setDoc(mealRef(uid, mealId), {
+      dateKey: v.dateKey,
+      mealType: v.mealType,
+      status: 'awaiting_after',
+      beforeAnalysis,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    })
+  } catch (e) {
+    throw writeError(e)
+  }
+}
+
+/** 호출 B 성공 직후: awaiting_after → needs_review. 문서가 없으면 MEAL_NOT_FOUND. */
+export async function saveReview(uid: string, mealId: string, analysis: MealIntakeAnalysis): Promise<void> {
+  const a = checkedAnalysis(analysis)
+  try {
+    await updateDoc(mealRef(uid, mealId), {
+      status: 'needs_review',
+      analysis: a,
+      consumedKcal: a.totals.consumed.kcal,
+      updatedAt: serverTimestamp(),
+    })
+  } catch (e) {
+    throw writeError(e)
+  }
+}
+
+/** 캐시 → 서버 순으로 문서가 있는지 본다. 오프라인이고 캐시에도 없으면 새 식사(직접 입력)로 본다. */
+async function mealExists(ref: DocumentReference): Promise<boolean> {
+  try {
+    if ((await getDocFromCache(ref)).exists()) return true
+  } catch {
+    // 캐시에 없음
+  }
+  try {
+    return (await getDoc(ref)).exists()
+  } catch {
+    return false
+  }
+}
+
+/**
+ * S4 저장: awaiting_after·needs_review → done, 문서가 없으면 done으로 만든다(직접 입력).
+ * consumedKcal = analysis.totals.consumed.kcal. 이미 done인 문서는 규칙이 거부한다(done → done 전이 없음).
+ */
+export async function saveMeal(
+  uid: string,
+  mealId: string,
+  v: { dateKey: string; mealType: MealType; analysis: MealIntakeAnalysis },
+): Promise<void> {
+  checkKeys(v.dateKey, v.mealType)
+  const a = checkedAnalysis(v.analysis)
+  const ref = mealRef(uid, mealId)
+  const fields = {
+    dateKey: v.dateKey,
+    mealType: v.mealType,
+    status: 'done' as const,
+    analysis: a,
+    consumedKcal: a.totals.consumed.kcal,
+    updatedAt: serverTimestamp(),
+  }
+  try {
+    if (await mealExists(ref)) await updateDoc(ref, fields)
+    else await setDoc(ref, { ...fields, createdAt: serverTimestamp() })
+  } catch (e) {
+    throw writeError(e)
+  }
+}
+
+/** 모든 상태에서 삭제할 수 있다. 호출하는 쪽이 beforePhotoStore.remove도 부른다. */
+export async function deleteMeal(uid: string, mealId: string): Promise<void> {
+  try {
+    await deleteDoc(mealRef(uid, mealId))
+  } catch (e) {
+    throw writeError(e)
+  }
+}
+
+/** 문서가 없으면 null(화면은 MEAL_NOT_FOUND로 처리해 S1로 이동). */
+export async function getMeal(uid: string, mealId: string): Promise<MealWithId | null> {
+  try {
+    const s = await getDoc(mealRef(uid, mealId))
+    return s.exists() ? toMeal(s) : null
+  } catch (e) {
+    throw readError(e)
+  }
+}
+
+/** awaiting_after·needs_review 식사(최근 먼저). 단일 필드 인덱스로 동작한다. */
+export function subscribePending(
+  uid: string,
+  cb: (meals: MealWithId[]) => void,
+  onError?: (code: MealStoreErrorCode) => void,
+): () => void {
+  const q = query(mealsCol(uid), where('status', 'in', ['awaiting_after', 'needs_review']))
+  return onSnapshot(
+    q,
+    (snap) => cb(newestFirst(snap.docs.map(toMeal))),
+    (e) => {
+      console.warn('[meals] subscribePending 오류', e)
+      onError?.('MEAL_STORE_UNAVAILABLE')
+    },
+  )
+}
+
+/** 확인용: 최근 n개(모든 상태). 전체를 읽어 클라이언트에서 정렬한다(orderBy 없음). */
+export async function listRecentMeals(uid: string, n: number): Promise<MealWithId[]> {
+  try {
+    const snap = await getDocs(mealsCol(uid))
+    return newestFirst(snap.docs.map(toMeal)).slice(0, Math.max(0, n))
+  } catch (e) {
+    throw readError(e)
+  }
+}
