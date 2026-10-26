@@ -44,3 +44,15 @@
 - 연결 대기 중 [홈으로]로 나간 뒤 서버가 거부하면(규칙) 알릴 곳이 없다(콘솔만). 식사는 `needs_review`로 남아 홈 대기 카드에 다시 보인다.
 - 라우터가 `<BrowserRouter>`면 브라우저·안드로이드 뒤로 가기는 확인 없이 나간다(값은 `needs_review`로 서버에 남아 있음, 직접 입력은 사라짐).
 - S3에서 S4로 갈 때 `replace`로 가야 저장 뒤 뒤로 가기에서 촬영 화면이 다시 나오지 않는다.
+
+## 2단계 조각 4-A (2026-10-26): 라우팅, 홈(S1 최소판), 먹기 전·후 촬영(S2·S3)
+- `react-router` 8.5.0(고정). `App.tsx`가 `BrowserRouter`. 로그인 전이면 어느 경로든 `/login`(가려던 경로는 state `from`으로 기억해 로그인 뒤 돌려보냄).
+- 경로: `/login`, `/`(HomePage), `/capture/before`, `/meal/:mealId/after`, `/meal/new/review`·`/meal/:mealId/review`(ReviewPage, lazy), `/dev`(DEV에서만 등록, 배포 `dist/`에 DevPage·FlowTest 문자열 없음 확인). 그 밖은 `/`.
+- 촬영 화면·ReviewPage는 lazy(분석 모듈이 첫 번들에 안 들어감). 공용: `components/capture/AnalyzingOverlay.tsx`(10초 뒤 "조금 더 걸려요"+직접 입력), `captureText.ts`(U4 문구, 고지 확인 플래그 `localStorage photoNoticeAck.v1`, 오류 코드별 안내).
+- 스펙과 다르게 정한 점
+  - S2→S3도 navigate state `{ beforeAnalysis, dateKey, mealType }`를 넘긴다. `createAwaitingMeal`을 기다리지 않으므로 S3가 바로 `getMeal`하면 느리거나(오프라인) 비어 보일 수 있어서. state가 없을 때만 `getMeal`.
+  - S2 분석이 실패·중단되면 문서가 없으므로 IndexedDB 먹기 전 사진을 바로 지운다(F1의 "같은 사진으로 다시 시도" 대신 [다시 찍기]).
+  - S3 [남긴 양 직접 고르기]는 `saveReview`를 부르지 않고 S4로만 간다(문서는 `awaiting_after` 유지, 먹기 전 사진도 남김 → 앱 시작 정리 때 상태에 맞춰 지워짐).
+  - 홈 첫 대기 목록 수신 때 세션당 1회 `beforePhotoStore.cleanup(awaiting_after id들)`(스펙 4.3 "앱 시작").
+  - 일일 한도 안내 시각: 11/1까지 16:00, 11/2부터 17:00(KST).
+- 남은 이슈: F10 "AI 한도 모드"(세션 동안 직접 입력 먼저), 데모 사진·샘플 체험, 사용자별 하루 상한은 미구현. 첫 번들 `index-*.js` 937KB(gzip 288KB, 대부분 Firebase SDK) → 4단계 번들 점검. S3 먹기 전 사진은 나란히 표시(반투명 겹치기 아님).
