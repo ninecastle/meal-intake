@@ -33,6 +33,7 @@
 | M10 | 사진 전송 고지: 첫 촬영 전 1회 + 촬영 화면에 한 줄(문구는 7.1절 U4) | 약관 대응(7.2절 R2) | frontend-dev |
 | M11 | Hosting 배포, App Check, 개발용 AI 목업 스위치 | 운영, 무료 한도 절약 | firebase-engineer, frontend-dev |
 | M12 | 샘플 체험: 실제 모델로 미리 분석한 결과(정적 JSON)로 촬영 없이 전체 흐름을 체험. AI 호출 0회, 화면에 "미리 분석한 결과" 표시(7.1절 U6) | 음식·카메라가 없는 심사위원도 체험하고 한도를 지킨다 | vision-ai-engineer(결과), frontend-dev(화면) |
+| M16 | 저장한 기록 수정(S8): 기록 상세 → [수정] → 결과 수정 규칙 그대로 음식별 값·음식 추가·삭제, 끼니, 날짜(오늘과 지난 날짜만). 사진 재분석 없음. `done → done` 전이, `editedAt` 기록. **3단계가 밀리면 가장 먼저 4단계로 미룬다**(삭제는 남긴다) | 실수로 저장한 값을 삭제하지 않고 바로잡는다(2026-10-26 사용자 결정) | firebase-engineer(규칙·저장), frontend-dev(화면) |
 | M14 | 목표 설정(S6): 성별·나이·키·몸무게·활동량·목표 → Mifflin-St Jeor로 기초대사량·하루 소모량 → 목표 kcal·탄단지 추천(4.7절). AI 호출 없음. 안전 장치(기초대사량 하한, 만 18세 미만 유지, 의학적 조언 아님 고지) | 하루 요약을 "얼마나 먹었나"에서 "목표 대비 얼마나 남았나"로 바꾼다(2026-10-26 사용자 결정, 3단계) | vision-ai-engineer(계산), firebase-engineer(저장·규칙), frontend-dev(화면) |
 | M15 | 하루 요약 목표 비교: kcal·탄·단·지 "먹은 양/목표" 막대와 남은 양(4.7절) | 같음 | frontend-dev |
 | M13 | 호출 절약 장치(5.2.2절): 같은 사진 결과 캐시, 분석 중 잠금, 429 분당·일일 구분과 한도 모드, 호출 D 결과 캐시, 사용자별 하루 실시간 분석 상한 | 심사 기간 내내 동작한다 | vision-ai-engineer, frontend-dev, firebase-engineer |
@@ -45,7 +46,7 @@
 | P2 | 호출 A 프롬프트에 DB 대표식품명 목록 넣기 | DB 적중률이 오른다. 토큰·지연이 늘어나는지 평가로 확인한 뒤 적용 |
 | P3 | "남김 없이 다 먹었어요" 버튼(먹은 후 촬영 생략, 남긴 비율 0) | 입력 단계와 호출 수가 준다 |
 | P4 | PWA 매니페스트(홈 화면 설치) | 시연 인상 |
-| P5 | 저장한 식사 다시 수정 | MVP는 삭제 후 직접 입력으로 대신한다 |
+| P5 | (MVP M16으로 옮김, 2026-10-26 사용자 결정) | - |
 | P6 | (MVP M14·M15로 옮김, 2026-10-26 사용자 결정) | - |
 
 ### 1.3 만들지 않는 것
@@ -89,7 +90,7 @@ S0 로그인 → S1 홈(=오늘의 하루 요약) ─"식사 기록"→ S2 먹�
 | `needs_review` | 먹은 후 분석까지 끝났고 사용자가 아직 확인하지 않았다 | 호출 B 성공 직후. 앱을 닫아도 결과가 남는다 | 아니요 |
 | `done` | 사용자가 저장했다 | S4에서 저장 | **예(이 상태만)** |
 
-- 허용하는 전이: 없음→`awaiting_after`, 없음→`done`(직접 입력), `awaiting_after`→`needs_review`·`done`, `needs_review`→`done`. 삭제는 모든 상태에서 할 수 있다.
+- 허용하는 전이: 없음→`awaiting_after`, 없음→`done`(직접 입력), `awaiting_after`→`needs_review`·`done`, `needs_review`→`done`, `done`→`done`(저장한 기록 수정, M16. `editedAt` 함께 기록). `done`에서 다른 상태로 되돌리지 않는다. 삭제는 모든 상태에서 할 수 있다.
 - 샘플 체험(S5)도 같은 상태 흐름을 탄다. 호출 A·B 대신 미리 분석한 결과를 쓰고(AI 호출 0회), 문서에는 `entry: "sample"`을 남긴다(3.2절).
 - 기본 경로에서 앱 안 탭은 3번이다(식사 기록 → 남은 음식 찍기 → 저장). 여기에 카메라 셔터와 확인이 더해진다. QA 점검표 F의 목표는 촬영부터 저장까지(식사 시간 제외) 60초 이내다.
 
@@ -101,7 +102,8 @@ S0 로그인 → S1 홈(=오늘의 하루 요약) ─"식사 기록"→ S2 먹�
 | S1 | `/`(`?date=YYYY-MM-DD`) | 홈 = 하루 요약 | 맨 위 대기 카드(`awaiting_after`: "다 드셨나요? 남은 음식 찍기", `needs_review`: "확인하고 저장하기"). 합계 kcal·탄·단·지, 끼니별(아침·점심·저녁·간식 순서, 기록 없는 끼니는 숨김) 기록 목록: 기록마다 음식 이름 요약과 섭취 kcal, 끼니 합계(사진 없음). 기록을 누르면 S7. 날짜 이동 "◀ 어제"·"내일 ▶"(오늘이면 "내일 ▶" 비활성, 지난 날짜도 같은 요약·목록), 영양 정보 출처 한 줄. 목표가 있으면 kcal·탄·단·지 "먹은 양/목표" 막대와 남은 양, 없으면 "목표 설정하기" 카드(3단계, 4.7절) | 식사 기록 |
 | S2 | `/capture/before` | 먹기 전 촬영 | "수저를 함께, 위에서 찍어 주세요", 사진 전송 고지 한 줄, "데모 사진 사용" | 촬영 |
 | S3 | `/meal/:mealId/after` | 먹은 후 촬영 | 먹기 전 사진(IndexedDB에 있을 때), 인식한 음식 목록(이름·g, 읽기 전용), "같은 위치·각도로", "데모 사진 사용", "기록 취소" | 남은 음식 찍기 |
-| S7 | `/meal/:mealId` | 기록 상세(3단계, 읽기 전용) | 날짜·끼니·저장 시각, 음식별 이름·먹기 전 무게(g)·남긴 비율·같이 먹은 인원·섭취 kcal·탄·단·지·출처 배지(DB·DB(환산)·AI 추정·직접 입력, 참고 DB 대표값), 끼니 합계, [삭제]("이 기록을 삭제할까요?" 확인 → `deleteMeal` → 그 날짜 S1). 저장한 기록 다시 수정은 P5(만들지 않음) | 삭제 |
+| S7 | `/meal/:mealId` | 기록 상세(3단계, 읽기 전용) | 날짜·끼니·저장 시각, 음식별 이름·먹기 전 무게(g)·남긴 비율·같이 먹은 인원·섭취 kcal·탄·단·지·출처 배지(DB·DB(환산)·AI 추정·직접 입력, 참고 DB 대표값), 끼니 합계, [삭제]("이 기록을 삭제할까요?" 확인 → `deleteMeal` → 그 날짜 S1). [수정](S8)·[삭제]("이 기록을 삭제할까요?" 확인 → `deleteMeal` → 그 날짜 S1). 수정한 기록이면 "수정됨 · 시각" | 수정·삭제 |
+| S8 | `/meal/:mealId/edit` | 기록 수정(3단계, M16) | S4 편집기를 수정 모드로 다시 쓴다: 음식별 이름·무게·남긴 비율·인원·kcal, 음식 추가·삭제(2.3절 규칙 그대로), 끼니 칩, 날짜 선택(오늘과 지난 날짜만). 사진은 다시 분석하지 않는다. 음식이 0개면 저장하지 않고 기록 삭제를 안내한다. 나가기 전 "저장하지 않고 나갈까요?". 저장 → S7("수정했어요") | 수정 저장 |
 | S6 | `/goal` | 목표 설정(3단계, 언제든 수정) | 성별·나이·키·몸무게·활동량·목표 입력(바꾸면 바로 재계산) → 기초대사량·하루 소모량·목표 kcal·탄단지 추천 표시, 추천값 직접 조정과 [추천값으로], 안전 장치 문구, 의학적 조언 아님 고지(4.7절). AI 호출 없음 | 저장 |
 | S4 | `/meal/:mealId/review` | 결과 확인·수정 | 음식 카드(2.3절), 끼니 칩, 경고, 합계. 직접 입력은 같은 화면을 빈 목록으로 연다(`/meal/new/review?date=`) | 저장 |
 | - | S2·S3 위에 덮는 상태 | 분석 중 | 진행 표시. 10초가 지나면 "조금 더 걸려요"와 "직접 입력" 링크. 실패하면 5절 선택지 | - |
@@ -155,10 +157,11 @@ users/{uid}/meals/{mealId}      식사 1건. mealId는 클라이언트가 먼저
 | `analysis` | MealIntakeAnalysis v2 | `needs_review`, `done` | `analysis-schema.json` v2(3.3절) |
 | `consumedKcal` | number 0~10000 | `needs_review`, `done` | `analysis.totals.consumed.kcal`의 사본 |
 | `createdAt`, `updatedAt` | timestamp(serverTimestamp) | 항상 | 목록 정렬은 클라이언트에서 한다(복합 인덱스가 필요 없다) |
+| `editedAt` | timestamp(serverTimestamp) | 저장한(`done`) 기록을 수정했을 때부터(M16) | 마지막 수정 시각. 목록·상세에 "수정됨" 표시. 수정할 때마다 `request.time` |
 
 보안 규칙에 넣을 결정(세부 원칙은 firebase-stack)
 - 본인 uid만 읽기·쓰기
-- 문서 키는 위 8개만 허용(`hasOnly`). `analysis` 키는 `items`, `totals`, `warnings`, `model`, `prompt_version`만 허용
+- 문서 키는 위 9개만 허용(`hasOnly`, `editedAt` 포함). `createdAt`은 바꿀 수 없다. `done → done`이면 `editedAt == request.time`, 그 밖의 전이에서는 `editedAt`을 새로 넣지 않는다. `analysis` 키는 `items`, `totals`, `warnings`, `model`, `prompt_version`만 허용
 - `status`·`mealType` 열거값, `dateKey` 형식, 2.1절 상태 전이
 - `analysis.items.size() <= 30`. `consumedKcal`은 0~10000이고 `analysis.totals.consumed.kcal`과 같아야 한다
 - 항목 안의 필드는 규칙으로 검사하지 않는다(1.4절)
@@ -525,7 +528,7 @@ export function createAwaitingMeal(uid: string, mealId: string,
   v: { dateKey: string; mealType: MealType; beforeAnalysis: BeforeAnalysis }): Promise<void>;
 export function saveReview(uid: string, mealId: string, analysis: MealIntakeAnalysis): Promise<void>;  // needs_review
 export function saveMeal(uid: string, mealId: string,
-  v: { dateKey: string; mealType: MealType; analysis: MealIntakeAnalysis }): Promise<void>;  // done, consumedKcal 자동, 문서가 없으면 만든다
+  v: { dateKey: string; mealType: MealType; analysis: MealIntakeAnalysis }): Promise<void>;  // done, consumedKcal 자동, 문서가 없으면 만든다. 이미 done이면 수정(M16): dateKey·mealType·analysis·consumedKcal을 바꾸고 editedAt 기록
 export function deleteMeal(uid: string, mealId: string): Promise<void>;   // 호출하는 쪽이 beforePhotoStore.remove도 부른다
 export function getMeal(uid: string, mealId: string): Promise<(MealDoc & { id: string }) | null>;
 export function subscribePending(uid: string, cb: (meals: (MealDoc & { id: string })[]) => void,
@@ -824,12 +827,12 @@ export function compareToGoal(consumed: Nutrients, targets: GoalTargets):   // �
 
 | 담당 | 작업 |
 | --- | --- |
-| firebase-engineer | `subscribeDay`, `summarizeDay`, 쿼리 인덱스 확인, `users/{uid}.goal`과 `users/{uid}/goals/{dateKey}` 읽기·쓰기(같은 배치), 그날 목표 조회, 규칙과 규칙 테스트(4.7절) |
-| frontend-dev | S1 홈 = 하루 요약(합계, 끼니별 기록 목록·끼니 합계, 날짜 이동 ◀▶, 대기 카드, 목표 비교 막대·남은 양), S7 기록 상세(읽기 전용, 삭제), S6 목표 설정. 앱 시작 시 `beforePhotoStore.cleanup`은 2단계에 이미 넣었다 |
+| firebase-engineer | `subscribeDay`, `summarizeDay`, 쿼리 인덱스 확인, 기록 수정용 규칙(`done → done`, `editedAt`)·규칙 테스트·`saveMeal` 수정 경로(M16), `users/{uid}.goal`과 `users/{uid}/goals/{dateKey}` 읽기·쓰기(같은 배치), 그날 목표 조회, 규칙과 규칙 테스트(4.7절) |
+| frontend-dev | S1 홈 = 하루 요약(합계, 끼니별 기록 목록·끼니 합계, 날짜 이동 ◀▶, 대기 카드, 목표 비교 막대·남은 양), S7 기록 상세(삭제), S8 기록 수정(M16, S7 다음 순서), S6 목표 설정. 앱 시작 시 `beforePhotoStore.cleanup`은 2단계에 이미 넣었다 |
 | vision-ai-engineer | 10쌍 측정(사진이 모이면), 별칭표 보강, `goal.ts`(4.7절 공식·안전 장치·직접 조정 `applyOverride`, 단위 시험) |
 | qa-integrator | 점검표 E, 점검표 C의 IndexedDB 정리 항목 |
 
-완료 기준: 홈에 오늘 기록이 끼니별로 음식 이름·kcal과 함께 보이고, 기록을 누르면 음식별 무게·남긴 비율·kcal·탄단지·출처가 보인다. ◀▶로 지난 날짜의 기록과 요약을 볼 수 있다. 삭제는 확인 후 되고 바로 사라진다. 저장·삭제 직후 새로고침 없이 반영된다. 화면 합계가 그날 `done` 문서들의 합과 같다(Firestore에서 직접 대조). 대기 상태 식사는 빠진다. 날짜를 옮겨도 다른 날 기록이 섞이지 않는다. 목표 계산이 손 계산 예시와 같고(감량 목표가 기초대사량 아래로 내려가지 않음, 만 18세 미만은 유지), 하루 요약의 남은 양이 그날 목표 − 합계와 같다. 목표를 바꾼 뒤 지난 날을 열면 그때 목표로 비교된다. 직접 조정은 하한을 어기면 저장되지 않는다.
+완료 기준: 홈에 오늘 기록이 끼니별로 음식 이름·kcal과 함께 보이고, 기록을 누르면 음식별 무게·남긴 비율·kcal·탄단지·출처가 보인다. ◀▶로 지난 날짜의 기록과 요약을 볼 수 있다. 삭제는 확인 후 되고 바로 사라진다. 저장한 기록을 고치면(끼니·날짜 포함) 그 날짜 요약에 바로 반영되고 "수정됨"이 보인다(M16, 밀리면 4단계). 저장·삭제 직후 새로고침 없이 반영된다. 화면 합계가 그날 `done` 문서들의 합과 같다(Firestore에서 직접 대조). 대기 상태 식사는 빠진다. 날짜를 옮겨도 다른 날 기록이 섞이지 않는다. 목표 계산이 손 계산 예시와 같고(감량 목표가 기초대사량 아래로 내려가지 않음, 만 18세 미만은 유지), 하루 요약의 남은 양이 그날 목표 − 합계와 같다. 목표를 바꾼 뒤 지난 날을 열면 그때 목표로 비교된다. 직접 조정은 하한을 어기면 저장되지 않는다.
 
 **4단계 · 11/2(월)~11/3(화) · 정확도 개선·화면 다듬기**
 
@@ -871,6 +874,7 @@ export function compareToGoal(consumed: Nutrients, targets: GoalTargets):   // �
 - 어느 하나라도 안 됐으면 리더가 6.3절 축소안을 사용자에게 제시한다.
 
 ### 6.3 축소안 (일정이 밀리면 위에서부터 뺀다)
+0. (3단계에서 가장 먼저) M16 저장한 기록 수정(S8) → 4단계로 미룬다. 기록 상세(S7)와 삭제는 남긴다
 1. 1.2절 P1~P6 전부
 2. (검색 단계가 꺼져 있을 때만) 검색 추천 렌더링 구현
 3. 목표 비교 막대 → kcal 한 줄만(탄·단·지 막대 생략). 목표 설정 화면과 안전 장치·고지는 남긴다
@@ -1020,6 +1024,7 @@ U0·U3·U5는 결정 내용으로 바꿨다. 나머지(U1·U2·U4·U6·U7·U8)�
 | 날짜 | 변경 내용 | 절 | 영향을 받는 에이전트 |
 | --- | --- | --- | --- |
 | 2026-10-26 | 초안 작성(0단계). 리더 요청에 따라 식약처 DB 처리 규칙(100ml 행, 탄·지 빈 값, 같은 이름 중복, 이름 매칭, 앱 JSON 필드·크기)을 반영하고 analysis-schema v2(선택 필드 `per_100g_fill`·`db_name`·`db_match`)를 제안. 공식 문서 확인 결과(그라운딩 무료 등급 미제공, App Check 자동 강제, AI 모니터링 프롬프트 저장, 무료 등급 데이터 약관)를 7.2절 위험과 부록 A에 기록 | 전체 | vision-ai-engineer, frontend-dev, firebase-engineer, qa-integrator, pitch-writer |
+| 2026-10-26 | (리더, 사용자 결정) 저장한 기록 수정 M16: S8 `/meal/:mealId/edit`(결과 수정 규칙 그대로 + 끼니·날짜(오늘과 지난 날짜만)), 전이 `done → done`, 필드 `editedAt`, P5를 MVP로 옮김. 3단계에서 기록 보기·상세 바로 다음 순서, 밀리면 가장 먼저 4단계로 | 1.1, 1.2, 2.1, 2.2, 3.2, 4.3, 6.1, 6.3 | firebase-engineer, frontend-dev, qa-integrator |
 | 2026-10-26 | (리더, 사용자 결정) 하루 요약 필수 항목: 끼니별 기록 목록(음식 이름·kcal), 기록 상세 S7 `/meal/:mealId`(읽기 전용, 삭제), 날짜 이동 ◀▶, 삭제 확인. 축소안에서 "끼니별 합계 → 목록만"·"날짜 이동 → 오늘만"을 빼고 끝까지 지킬 것에 넣음 | 1.1, 2.2, 6.1, 6.3 | frontend-dev, firebase-engineer, qa-integrator |
 | 2026-10-26 | (리더, 사용자 결정) 4.7절에 언제든 수정·즉시 재계산·추천값 직접 조정(`GoalOverride`, `applyOverride`, kcal 하한), 날짜별 목표 기록 `users/{uid}/goals/{dateKey}`(지난 날은 그때 목표로 비교) 추가 | 2.2, 3.1, 4.7, 6.1 | vision-ai-engineer, firebase-engineer, frontend-dev, qa-integrator |
 | 2026-10-26 | (리더, 사용자 결정) 3단계에 목표 설정 추가: M14·M15, S6, `users/{uid}.goal`, 4.7절(Mifflin-St Jeor, 안전 장치, 고지), 3단계 작업·완료 기준, 축소안 3. P6은 MVP로 옮김. 음식 추천·주간/월간 리포트는 프리미엄 계획(발표에서만) | 1, 2.2, 3.1, 4.7, 6.1, 6.3 | vision-ai-engineer, firebase-engineer, frontend-dev, qa-integrator, pitch-writer |
