@@ -1,6 +1,9 @@
-import { useRef, useState } from 'react'
+import { lazy, Suspense, useRef, useState } from 'react'
 import type { FoodHit } from './analysis/nutrition/db'
 import { usingEmulators } from './lib/firebase'
+
+// 개발 빌드에서만 흐름 시험 패널을 불러온다(배포 번들에는 들어가지 않는다).
+const FlowTest = import.meta.env.DEV ? lazy(() => import('./dev/FlowTest')) : null
 
 // 개발용: AI Logic + App Check 연결 시험. 누를 때만 1회 호출, 자동 재시도 없음.
 function AiConnectionTest() {
@@ -112,6 +115,11 @@ export default function App() {
       {usingEmulators && <p className="text-xs text-amber-600">에뮬레이터 연결됨</p>}
       {import.meta.env.DEV && <AiConnectionTest />}
       {import.meta.env.DEV && <DbSearchTest />}
+      {FlowTest && (
+        <Suspense fallback={null}>
+          <FlowTest />
+        </Suspense>
+      )}
     </main>
   )
 }
