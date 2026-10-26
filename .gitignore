@@ -21,3 +21,10 @@ _workspace/00_input/samples/**/*.JPEG
 _workspace/00_input/samples/**/*.PNG
 _workspace/00_input/samples/**/*.HEIC
 _workspace/00_input/samples/**/*.WEBP
+
+# 스파이크 시험 이미지·원시 결과(공개 라이선스 사진이지만 저장소에 넣지 않는다)
+spike/*.jpg
+spike/*.jpeg
+spike/*.png
+spike/*.webp
+spike/results/
