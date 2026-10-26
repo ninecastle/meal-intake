@@ -1,0 +1,27 @@
+# spike/ — 개발용 Node 시험 스크립트
+
+앱 코드가 아니다. 배포·빌드에 들어가지 않는다. 결과 파일은 `spike/results/`(git 제외)에 쓴다.
+스크립트 안에 `C:/Users/kkama/dev/hackathon` 절대 경로가 들어 있다. 다른 위치에서 쓰려면 고친다.
+
+## tests/ — 실제 AI 호출 없음(호출 D는 `mockEstimate`)
+| 파일 | 내용 | 실행 |
+| --- | --- | --- |
+| `piece4_integration.mjs` | 목업 먹기 전·후 픽스처 + 실제 식약처 DB → `assembleAnalysis` → `validateAnalysis`, 인원수 1→2 | `node spike/tests/piece4_integration.mjs C:/Users/kkama/dev/hackathon` |
+| `run-tests.mjs` | compute·assemble·validate 시험(가짜 resolve) | `node spike/tests/run-tests.mjs` |
+| `resolve_test.mjs`, `extra.mjs` | `resolveNutrition` 조회 결과 표(종류 규칙, DB(환산), 빈 값 채우기) | `node spike/tests/resolve_test.mjs` |
+| `alias_test.mjs` | 별칭·단어 치환·`listFoodVariants` | `node spike/tests/alias_test.mjs [extra]` |
+| `search_test.mjs` | DB 이름 검색 | `node spike/tests/search_test.mjs` |
+
+`assemble.ts`처럼 앱용 `nutrition/index.ts`·`lib/ai`(import.meta.env)를 따라가는 모듈은 Node에서 바로 못 불러온다.
+`piece4_integration.mjs`는 `module.registerHooks`로 두 모듈을 빈 모듈로 바꿔 돌린다. 10/29 측정 스크립트도 이 방식을 쓴다.
+
+## live/ — 실제 Gemini 호출(프로젝트 무료 한도를 쓴다)
+| 파일 | 내용 |
+| --- | --- |
+| `call_a1.mjs` | 호출 A(먹기 전) 1회. `spike/bibimbap.jpg` |
+| `after_test.mjs` | 호출 B(먹은 후) 정리 규칙 오프라인 검사, `LIVE=1`이면 실제 1회 |
+| `live.mjs` | `a`(호출 A) 또는 `d`(호출 D) 1회 |
+| `../ai_spike.mjs` | 0단계 스파이크(모델·그라운딩 시험) |
+- 1번 실행 = 호출 1회, 재시도 없음. 11/5 17:00 이후에는 돌리지 않는다(`CLAUDE.md` "제출·심사").
+- AI Logic에 App Check 적용(Enforce)을 켜면 Node 호출은 막힌다(적용은 10/29 측정 뒤).
+- 시험 이미지 `bibimbap.jpg`: https://commons.wikimedia.org/wiki/File:Dolsot-bibimbap.jpg (CC BY 2.0, Sous Chef). git 제외.
