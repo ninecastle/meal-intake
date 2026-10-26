@@ -1,4 +1,6 @@
-# 인계 메모 — 0단계 진행 상황 (2026-10-26)
+# 인계 메모 — 0단계 완료 (2026-10-26)
+
+> **상태: 0단계 완료(2026-10-26).** 다음은 1단계(10/27~10/29). 아래 "0단계 완료 정리"부터 읽는다. 그 아래 절들은 진행 기록이다.
 
 이 프로젝트는 `C:\Users\kkama\$HOME\Desktop\hackathon`(폴더 이름에 `$HOME`이 글자 그대로 들어간 잘못된 위치)에서 `C:\Users\kkama\dev\hackathon`으로 복사해 옮겼다(사용자 결정).
 새 세션은 이 메모 → `CLAUDE.md` → `_workspace/01_architect_spec.md` 순서로 읽고 이어 간다. 결정은 모두 파일에 있다. 이전 대화 기록은 넘어오지 않는다.
@@ -55,3 +57,33 @@
 - 무료 한도 값은 미확인(AI Studio 권한 없음, 429 본문에 quota 정보 없음). 계획용 추정치로 관리.
 - 남은 0단계 완료 기준: 사용자가 localhost에서 디버그 토큰 등록 후 "AI 연결 시험" 버튼 1회 성공.
 - 첫 배포 전 할 일: AI Logic App Check 강제 켜기, 배포 빌드에 `VITE_RECAPTCHA_SITE_KEY` 들어 있는지 확인.
+
+## 0단계 완료 정리 (2026-10-26)
+### 완료 기준 확인
+| 기준 | 결과 |
+| --- | --- |
+| 사용자 스펙 확인 | 완료. 해시 `_workspace/freeze_01.sha` |
+| localhost AI 호출 1회 성공 | 완료. `npm --prefix web run dev` → "AI 연결 시험" → "성공: 빨강"(사용자 보고). 디버그 토큰 등록함(이름은 사용자 메시지에 `kkama-pc`·`kkamang-pc` 두 가지로 적혀 있어 확인 필요) |
+| 무료 한도·그라운딩 가능 여부 기록 | 그라운딩: 무료 등급 불가(`03_vision_eval.md`). 한도 값: 확인 불가(AI Studio 권한 없음, 429 본문에 값 없음) → 계획용 추정치로 관리 |
+| U1·U3 결정 | U1 `gemini-3.5-flash-lite`, U3 검색 코드 유지·기본 off(`CLAUDE.md` 반영) |
+
+### 주의: App Check는 아직 검증되지 않았다
+AI Logic API에 App Check 강제가 꺼져 있어서 "성공: 빨강"은 디버그 토큰 없이도 성공했을 호출이다. 디버그 토큰이 유효한지는 아직 모른다.
+→ 2단계 첫 배포 전에 강제(Enforce)를 켜고, localhost에서 버튼을 1회 다시 눌러 확인한다. 강제를 켜면 `spike/ai_spike.mjs` 같은 Node 스크립트 호출은 막히므로, 실제 사진으로 측정하는 1단계(10/29)가 끝난 뒤에 켠다.
+
+### 저장소·환경
+- 커밋: `a11eb1c` 골격 → `78e5aed` App Check 코드 → `0c06a4f` 스파이크 → `d0ff5f3` 결정 반영 → (이 메모 커밋)
+- `web/.env.local`(git 제외): `VITE_RECAPTCHA_SITE_KEY`, `VITE_USE_EMULATORS=off`. 모델은 코드 기본값 `gemini-3.5-flash-lite`
+- 스파이크 스크립트 `node spike/ai_spike.mjs <1..5>`(1번 실행에 호출 1회). 시험 이미지 `spike/bibimbap.jpg`(CC BY 2.0, git 제외)
+- 빌드 청크 경고(gzip 약 219KB): 4단계에서 청크 분리 검토
+- 사고 기록: 스파이크 중 Wikimedia Commons 요청 1회의 User-Agent에 사용자 이메일이 들어갔다(사용자에게 알림). 이후 외부 요청에 사용자 정보를 넣지 않는다
+
+### 1단계(10/27~10/29) 시작점
+스펙 6.1절 1단계 표를 따른다. 10/29 끝에 "촬영 → 분석 → 결과 표시"를 한 번 연결한다.
+- vision-ai-engineer: 10/27 analysis-schema v2·`validate_analysis.mjs`·`web/src/types/analysis.ts`, 식약처 DB 변환 스크립트·JSON → 10/28 `analyzeBefore`·`analyzeAfter`, `resolveNutrition`(검색 off 경로 포함), 계산·검증, 목업 픽스처 → 10/29 5쌍 측정
+- frontend-dev: 목업 JSON으로 촬영 화면·IndexedDB 임시 보관부터
+- 작업은 짧게 나눈다(산출물 하나, 도구 호출 약 20회)
+- 사용자: 10/29까지 샘플 5쌍과 `expected.json`(`_workspace/00_input/samples/README.md`)
+
+### 2단계 전 할 일
+App Check 강제 켜고 버튼으로 재확인, 배포 빌드에 사이트 키가 들어 있는지 확인, OAuth 동의 화면 게시 상태 확인, Firestore 규칙 v1·규칙 테스트

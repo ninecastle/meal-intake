@@ -77,3 +77,7 @@ firebase firestore:databases:create "(default)" --location asia-northeast3 --edi
 2. `npm --prefix web run dev` 실행 → 브라우저로 localhost 접속.
 3. 브라우저 개발자 도구 콘솔에 찍힌 "App Check debug token: ..." 값을 복사해 Firebase 콘솔 App Check → 앱(`meal-intake-web`) 메뉴 → '디버그 토큰 관리'에 등록한다. 같은 브라우저 프로필이면 토큰은 유지된다.
 4. 화면의 "AI 연결 시험" 버튼을 1회 누른다. "성공: 빨간색" 류가 나오면 완료. 401·403이면 토큰 등록·사이트 키를 확인하고, 다시 누르기 전에 원인을 먼저 본다.
+
+## 디버그 토큰·연결 확인 (2026-10-26, 사용자 보고)
+- 개발 PC 디버그 토큰을 App Check 콘솔에 등록함(이름 `kkama-pc` 또는 `kkamang-pc`, 확인 필요).
+- localhost "AI 연결 시험" → "성공: 빨강". 단, AI Logic 강제가 꺼져 있어 토큰 유효성은 미검증. 강제는 10/29 측정 뒤, 첫 배포 전에 켜고 버튼으로 다시 확인.
