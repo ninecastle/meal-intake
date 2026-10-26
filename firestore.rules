@@ -2,10 +2,12 @@ rules_version = '2';
 
 // 규칙 v2 (3단계 조각 1-2, 2026-10-26). 스펙 _workspace/01_architect_spec.md 2.1절(상태 전이)·3.2절(meals 필드).
 // - 로그인한 본인만 users/{uid}/meals/* 를 읽고 쓴다.
-// - 그 밖의 경로는 모두 거부한다. users/{uid} 문서와 하위 goals는 3단계에 규칙을 더한다.
+// - 그 밖의 경로는 모두 거부한다.
 // - 사진이 들어오지 않게 문서 키와 analysis·beforeAnalysis 하위 키를 허용 목록으로 제한한다.
 // - 칼로리는 클라이언트가 쓰므로 형식·범위만 검사한다. 항목(items) 안의 필드는 검사하지 않는다(스펙 1.4절).
 // - v2: 저장한 기록 수정(M16)으로 done → done 허용. 이때만 editedAt = request.time(v1은 done → done 거부).
+// - v3(3단계 조각 2, 2026-10-27): 목표 설정 users/{uid}(goal 필드 하나)와 날짜별 목표 users/{uid}/goals/{dateKey}. 스펙 4.7절.
+//   targets.target_kcal 하한은 스펙의 800이 아니라 300(리더 결정: 정상 최저값은 BMR 하한 약 390kcal).
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -90,6 +92,70 @@ service cloud.firestore {
       allow delete: if signedInAs(uid);
     }
 
-    // 위에 없는 경로(users/{uid} 문서, goals, 그 밖 모두)는 규칙이 없으므로 거부된다.
+    // ---- 목표 설정(스펙 4.7절) ----
+
+    // GoalTargets: 키 정확히 5개, kcal 300~6000, 탄·단·지 0~1000g
+    function validTargets(t) {
+      return t is map
+        && t.keys().hasOnly(['target_kcal', 'carbs_g', 'protein_g', 'fat_g', 'source'])
+        && t.keys().hasAll(['target_kcal', 'carbs_g', 'protein_g', 'fat_g', 'source'])
+        && t.target_kcal is number && t.target_kcal >= 300 && t.target_kcal <= 6000
+        && t.carbs_g is number && t.carbs_g >= 0 && t.carbs_g <= 1000
+        && t.protein_g is number && t.protein_g >= 0 && t.protein_g <= 1000
+        && t.fat_g is number && t.fat_g >= 0 && t.fat_g <= 1000
+        && t.source in ['recommended', 'custom'];
+    }
+
+    // GoalInput: 열거값·범위, 만 18세 미만은 유지만
+    function validGoalInput(i) {
+      return i is map
+        && i.keys().hasOnly(['sex', 'age', 'height_cm', 'weight_kg', 'activity', 'goal'])
+        && i.keys().hasAll(['sex', 'age', 'height_cm', 'weight_kg', 'activity', 'goal'])
+        && i.sex in ['male', 'female']
+        && i.age is int && i.age >= 14 && i.age <= 100
+        && i.height_cm is number && i.height_cm >= 120 && i.height_cm <= 220
+        && i.weight_kg is number && i.weight_kg >= 30 && i.weight_kg <= 250
+        && i.activity in ['sedentary', 'light', 'moderate', 'active', 'very_active']
+        && i.goal in ['lose', 'maintain', 'gain']
+        && (i.age >= 18 || i.goal == 'maintain');
+    }
+
+    function validOverride(o) {
+      return o == null
+        || (o is map && o.keys().hasOnly(['target_kcal', 'carbs_g', 'protein_g', 'fat_g']));
+    }
+
+    function validGoal(g) {
+      return g is map
+        && g.keys().hasOnly(['input', 'override', 'result', 'targets', 'updatedAt'])
+        && g.keys().hasAll(['input', 'override', 'result', 'targets', 'updatedAt'])
+        && validGoalInput(g.input)
+        && validOverride(g.override)
+        && g.result is map
+        && validTargets(g.targets)
+        && g.updatedAt == request.time;
+    }
+
+    // 프로필 문서: goal 필드 하나만. 삭제 규칙 없음(거부).
+    match /users/{uid} {
+      allow read: if signedInAs(uid);
+      allow create, update: if signedInAs(uid)
+        && request.resource.data.keys().hasOnly(['goal'])
+        && validGoal(request.resource.data.goal);
+    }
+
+    // 날짜별 목표: 문서 id == dateKey 필드. 같은 날은 덮어쓴다. 삭제 규칙 없음(거부).
+    match /users/{uid}/goals/{dateKey} {
+      allow read: if signedInAs(uid);
+      allow create, update: if signedInAs(uid)
+        && dateKey.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && request.resource.data.keys().hasOnly(['dateKey', 'targets', 'updatedAt'])
+        && request.resource.data.keys().hasAll(['dateKey', 'targets', 'updatedAt'])
+        && request.resource.data.dateKey == dateKey
+        && validTargets(request.resource.data.targets)
+        && request.resource.data.updatedAt == request.time;
+    }
+
+    // 위에 없는 경로는 규칙이 없으므로 거부된다.
   }
 }

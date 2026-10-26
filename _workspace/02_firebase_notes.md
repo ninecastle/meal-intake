@@ -144,3 +144,18 @@ firebase firestore:databases:create "(default)" --location asia-northeast3 --edi
 - `saveMeal`(`web/src/data/meals.ts`): 문서 상태를 캐시 → 서버 순으로 보고, `done`이면 dateKey·mealType·analysis·consumedKcal·updatedAt과 `editedAt: serverTimestamp()`로 갱신한다. 시그니처는 그대로(화면은 같은 함수로 수정 저장).
 - 배포: 2026-10-26 `firebase deploy --only firestore:rules --project meal-intake-2026` 성공(규칙만).
 - 남은 이슈: 다른 기기에서 done으로 저장했는데 이 기기 캐시가 아직 needs_review이면 editedAt 없이 보내 규칙이 거부한다(MEAL_SAVE_REJECTED). 드문 경우라 그대로 둔다. 2단계 "남은 이슈"의 done → done 거부 항목은 이 절로 해결됐다.
+
+## 3단계 조각 2 목표 저장 (스펙 4.7절 "저장", 2026-10-27, firebase-engineer)
+- `web/src/data/goals.ts`(시그니처·주석 계약 그대로, 구현만):
+  - `saveGoal(uid, input, override, now)`: `validateGoalInput` → `computeGoal` → `applyOverride`, 실패하면 `GOAL_INVALID`(이유를 `; `로 이음). `writeBatch`로 `users/{uid}`에 `{ goal: { input, override, result, targets, updatedAt } }`를 `mergeFields: ['goal']`로(goal 통째 교체, 지난 override 키 안 남음), `users/{uid}/goals/{toDateKey(now)}`에 `{ dateKey, targets, updatedAt }`. override는 허용 키만 남기고 undefined를 빼며, 비면 null. 미성년이면 `validateGoalInput`이 goal을 maintain으로 바꾼 값을 저장한다. 오류 변환: permission-denied → `GOAL_SAVE_REJECTED`, 그 밖 → `GOAL_STORE_UNAVAILABLE`.
+  - `subscribeGoal`: `users/{uid}` onSnapshot, 문서·goal 없으면 null, `serverTimestamps: 'estimate'`.
+  - `subscribeGoalForDate`: `where('dateKey','<=',D)`, `orderBy('dateKey','desc')`, `limit(1)`. 같은 필드 범위+정렬이라 단일 필드 인덱스로 동작(`firestore.indexes.json` 그대로 빈 채).
+  - 구독 오류는 meals와 같이 모두 `GOAL_STORE_UNAVAILABLE`로 알린다.
+- `firestore.rules` v3 (meals 규칙은 그대로):
+  - `users/{uid}`: 본인만 읽기·생성·수정, 삭제 거부. 키 `hasOnly(['goal'])`. goal 키는 정확히 input·override·result·targets·updatedAt, `updatedAt == request.time`. input: 키 정확히 6개, sex·activity·goal 열거값, age 정수 14~100, height_cm 120~220, weight_kg 30~250, age < 18이면 goal == maintain. override: null 또는 target_kcal·carbs_g·protein_g·fat_g 안의 키만 든 map. result: map.
+  - targets(두 문서 공통): 키 정확히 5개, **target_kcal 300~6000(스펙 800 대신 리더 결정)**, 탄·단·지 0~1000, source recommended·custom.
+  - `goals/{dateKey}`: 본인만, 삭제 거부. id 형식 `[0-9]{4}-[0-9]{2}-[0-9]{2}`, 필드 dateKey == id, 키 정확히 dateKey·targets·updatedAt, `updatedAt == request.time`.
+- 규칙 테스트: 목표 시험 12개 추가 → **33개 통과, 실패 0**. 기존 "users/{uid}·goals 아직 거부" 시험은 본인 읽기가 이제 허용이라 `getDoc` 거부 줄을 빼고 형식 거부 두 줄만 남겼다(개수는 그대로 21).
+- `npx tsc -b` 통과.
+- 배포: 2026-10-27 `firebase deploy --only firestore:rules --project meal-intake-2026` 성공(규칙만, 인덱스·Hosting 안 함). AI 호출 0회.
+- 남은 이슈: override 값의 타입·범위는 규칙에서 보지 않는다(실제로 쓰는 값인 targets를 검사하므로 충분). 클라이언트 위조로 result와 targets가 어긋날 수 있으나 본인 기록만 영향이라 받아들인다.

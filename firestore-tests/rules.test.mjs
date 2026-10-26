@@ -1,7 +1,8 @@
-// firestore.rules v2 테스트(@firebase/rules-unit-testing + node:test).
+// firestore.rules v3 테스트(@firebase/rules-unit-testing + node:test).
 // 실행: firestore-tests 폴더에서 `npm test` (Firestore 에뮬레이터를 띄워 실행, JDK 21+ 필요, firebase-tools 15 기준).
 // 이미 에뮬레이터가 떠 있으면 `npm run test:running`.
 // 실제 프로젝트는 건드리지 않는다(demo- 프로젝트 ID). AI 호출 없음.
+import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { after, before, beforeEach, describe, test } from 'node:test'
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing'
@@ -11,11 +12,14 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
+  orderBy,
   query,
   serverTimestamp,
   setDoc,
   updateDoc,
   where,
+  writeBatch,
 } from 'firebase/firestore'
 
 const RULES = readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8')
@@ -165,9 +169,8 @@ describe('다른 사용자·미로그인 거부', () => {
     await assertFails(deleteDoc(doc(anon, MEAL)))
   })
 
-  test('users/{uid} 문서와 goals는 아직 거부(3단계)', async () => {
+  test('users/{uid} 문서와 goals: 목표 형식이 아닌 쓰기 거부(v3부터 본인 읽기는 허용)', async () => {
     await assertFails(setDoc(doc(alice(), 'users/alice'), { timezone: 'Asia/Seoul' }))
-    await assertFails(getDoc(doc(alice(), 'users/alice')))
     await assertFails(setDoc(doc(alice(), 'users/alice/goals/2026-10-27'), { kcal: 2000 }))
   })
 })
@@ -267,5 +270,137 @@ describe('저장한 기록 수정(M16, done → done)', () => {
     await seed('users/alice/meals/m3', awaitingDoc())
     await assertFails(updateDoc(m3, { ...reviewFields(), editedAt: serverTimestamp() }))
     await assertSucceeds(updateDoc(m3, reviewFields()))
+  })
+})
+
+describe('목표 설정(users/{uid}.goal, goals/{dateKey}, 스펙 4.7절)', () => {
+  const DAY = '2026-10-27'
+  const USER = 'users/alice'
+  const goalInput = (extra = {}) => ({
+    sex: 'male', age: 30, height_cm: 175, weight_kg: 70, activity: 'moderate', goal: 'lose', ...extra,
+  })
+  const goalResult = () => ({
+    bmr: 1650, tdee: 2560, target_kcal: 2060, macros: { carbs_g: 283, protein_g: 103, fat_g: 57 },
+    goal_applied: 'lose', clamped: false, minor: false, formula: 'mifflin-st-jeor',
+  })
+  const goalTargets = (extra = {}) => ({
+    target_kcal: 2060, carbs_g: 283, protein_g: 103, fat_g: 57, source: 'recommended', ...extra,
+  })
+  const userDoc = ({ input = {}, override = null, targets = {}, goal = {}, top = {} } = {}) => ({
+    goal: {
+      input: goalInput(input), override, result: goalResult(), targets: goalTargets(targets),
+      updatedAt: serverTimestamp(), ...goal,
+    },
+    ...top,
+  })
+  const datedDoc = (dateKey = DAY, extra = {}) => ({
+    dateKey, targets: goalTargets(), updatedAt: serverTimestamp(), ...extra,
+  })
+  const goalPath = (id) => USER + '/goals/' + id
+  /** saveGoal과 같은 모양: users/{uid}(mergeFields goal) + goals/{dateKey}를 한 배치로 */
+  const saveBatch = (fs, { user = userDoc(), dated = datedDoc(), id = DAY } = {}) => {
+    const b = writeBatch(fs)
+    b.set(doc(fs, USER), user, { mergeFields: ['goal'] })
+    b.set(doc(fs, goalPath(id)), dated)
+    return b.commit()
+  }
+  const setUser = (data) => setDoc(doc(alice(), USER), data, { mergeFields: ['goal'] })
+  const setDated = (id, data) => setDoc(doc(alice(), goalPath(id)), data)
+
+  test('본인 배치 저장(두 문서)·다시 저장·읽기 허용, 다시 저장하면 지난 override 키가 남지 않음', async () => {
+    const fs = alice()
+    const t = { target_kcal: 2300, fat_g: 70, source: 'custom' }
+    const custom = userDoc({ override: { target_kcal: 2300, fat_g: 70 }, targets: t })
+    await assertSucceeds(saveBatch(fs, { user: custom, dated: datedDoc(DAY, { targets: goalTargets(t) }) }))
+    await assertSucceeds(saveBatch(fs, { user: userDoc({ override: { carbs_g: 250 } }) }))
+    const s = await assertSucceeds(getDoc(doc(fs, USER)))
+    assert.deepEqual(s.data().goal.override, { carbs_g: 250 })
+    await assertSucceeds(getDoc(doc(fs, goalPath(DAY))))
+  })
+
+  test('남의 uid·미로그인: 쓰기·읽기·목록 거부', async () => {
+    await seed(USER, userDoc())
+    await seed(goalPath(DAY), datedDoc())
+    for (const fs of [db('bob'), db(null)]) {
+      await assertFails(saveBatch(fs))
+      await assertFails(setDoc(doc(fs, goalPath('2026-10-28')), datedDoc('2026-10-28')))
+      await assertFails(getDoc(doc(fs, USER)))
+      await assertFails(getDoc(doc(fs, goalPath(DAY))))
+      await assertFails(getDocs(collection(fs, USER + '/goals')))
+    }
+  })
+
+  test('나이 범위 밖·정수 아님 거부(14·100은 허용)', async () => {
+    for (const age of [13, 101, 30.5, '30']) await assertFails(setUser(userDoc({ input: { age } })))
+    await assertSucceeds(setUser(userDoc({ input: { age: 14, goal: 'maintain' } })))
+    await assertSucceeds(setUser(userDoc({ input: { age: 100 } })))
+  })
+
+  test('만 18세 미만 + lose·gain 거부, + maintain 허용', async () => {
+    await assertFails(setUser(userDoc({ input: { age: 17, goal: 'lose' } })))
+    await assertFails(setUser(userDoc({ input: { age: 17, goal: 'gain' } })))
+    await assertSucceeds(setUser(userDoc({ input: { age: 17, goal: 'maintain' } })))
+  })
+
+  test('target_kcal 6001·299 거부(두 문서 모두), 300·6000 허용', async () => {
+    for (const target_kcal of [6001, 299]) {
+      await assertFails(setUser(userDoc({ targets: { target_kcal } })))
+      await assertFails(setDated(DAY, datedDoc(DAY, { targets: goalTargets({ target_kcal }) })))
+    }
+    await assertSucceeds(setDated(DAY, datedDoc(DAY, { targets: goalTargets({ target_kcal: 300 }) })))
+    await assertSucceeds(setUser(userDoc({ targets: { target_kcal: 6000 } })))
+  })
+
+  test('열거값·범위 오류 거부: sex, activity, goal, height·weight, 탄단지 0~1000, source', async () => {
+    const bad = [
+      { input: { sex: 'other' } }, { input: { activity: 'extreme' } }, { input: { goal: 'bulk' } },
+      { input: { height_cm: 119 } }, { input: { weight_kg: 251 } },
+      { targets: { carbs_g: 1001 } }, { targets: { fat_g: -1 } }, { targets: { source: 'auto' } },
+    ]
+    for (const b of bad) await assertFails(setUser(userDoc(b)))
+  })
+
+  test('추가 키·빠진 키 거부: 문서·goal·input·targets·override·goals 문서', async () => {
+    await assertFails(setDoc(doc(alice(), USER), userDoc({ top: { timezone: 'Asia/Seoul' } })))
+    await assertFails(setUser(userDoc({ goal: { photo: 'data:image/jpeg;base64,AAAA' } })))
+    await assertFails(setUser(userDoc({ input: { name: 'alice' } })))
+    await assertFails(setUser(userDoc({ targets: { kcal: 2000 } })))
+    await assertFails(setUser(userDoc({ override: { sugar_g: 10 } })))
+    const { override: _omit, ...noOverride } = userDoc().goal
+    await assertFails(setUser({ goal: noOverride }))
+    await assertFails(setDated(DAY, datedDoc(DAY, { input: goalInput() })))
+    const { source: _s, ...noSource } = goalTargets()
+    await assertFails(setDated(DAY, datedDoc(DAY, { targets: noSource })))
+  })
+
+  test('updatedAt이 request.time이 아니면 거부(두 문서)', async () => {
+    const t = new Date('2026-10-27T12:00:00Z')
+    await assertFails(setUser(userDoc({ goal: { updatedAt: t } })))
+    await assertFails(setDated(DAY, datedDoc(DAY, { updatedAt: t })))
+  })
+
+  test('goals: 문서 id와 dateKey 불일치 거부, 배치 하나가 틀리면 둘 다 거부', async () => {
+    await assertFails(setDated(DAY, datedDoc('2026-10-28')))
+    await assertFails(saveBatch(alice(), { id: '2026-10-28' }))
+    const s = await getDoc(doc(alice(), USER))
+    assert.equal(s.exists(), false)
+  })
+
+  test('goals: 잘못된 dateKey 형식 거부', async () => {
+    for (const k of ['2026-10-6', '20261027', '2026-10-27x']) await assertFails(setDated(k, datedDoc(k)))
+  })
+
+  test('본인 dateKey <= D 쿼리(desc, limit 1) 허용, 가장 늦은 기록을 고른다', async () => {
+    for (const k of ['2026-10-20', '2026-10-25', '2026-10-30']) await seed(goalPath(k), datedDoc(k))
+    const q = query(collection(alice(), USER + '/goals'), where('dateKey', '<=', DAY), orderBy('dateKey', 'desc'), limit(1))
+    const snap = await assertSucceeds(getDocs(q))
+    assert.deepEqual(snap.docs.map((d) => d.id), ['2026-10-25'])
+  })
+
+  test('삭제 거부(users/{uid}, goals)', async () => {
+    await seed(USER, userDoc())
+    await seed(goalPath(DAY), datedDoc())
+    await assertFails(deleteDoc(doc(alice(), USER)))
+    await assertFails(deleteDoc(doc(alice(), goalPath(DAY))))
   })
 })
