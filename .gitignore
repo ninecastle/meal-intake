@@ -1,0 +1,23 @@
+node_modules/
+dist/
+.firebase/
+*.local
+.env.local
+firebase-debug*.log
+firestore-debug*.log
+ui-debug*.log
+
+# 식약처 DB 원본(31MB) — fetch_mfds_food.py로 다시 받는다
+_workspace/00_input/mfds/mfds_food_std_raw.json
+
+# 샘플 사진(README.md, expected.json은 추적)
+_workspace/00_input/samples/**/*.jpg
+_workspace/00_input/samples/**/*.jpeg
+_workspace/00_input/samples/**/*.png
+_workspace/00_input/samples/**/*.heic
+_workspace/00_input/samples/**/*.webp
+_workspace/00_input/samples/**/*.JPG
+_workspace/00_input/samples/**/*.JPEG
+_workspace/00_input/samples/**/*.PNG
+_workspace/00_input/samples/**/*.HEIC
+_workspace/00_input/samples/**/*.WEBP

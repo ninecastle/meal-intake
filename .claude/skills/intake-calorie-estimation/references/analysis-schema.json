@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MealIntakeAnalysis",
+  "description": "먹기 전·후 사진 분석으로 계산한 한 끼 섭취 결과. Firestore meals/{id}.analysis에 그대로 저장한다. 프런트·분석 모듈·QA가 공유하는 계약. 사진 관련 필드는 두지 않는다.",
+  "type": "object",
+  "required": ["items", "totals", "warnings"],
+  "additionalProperties": false,
+  "$defs": {
+    "nutrients": {
+      "type": "object",
+      "required": ["kcal", "carbs_g", "protein_g", "fat_g"],
+      "additionalProperties": false,
+      "properties": {
+        "kcal": {"type": "number", "minimum": 0},
+        "carbs_g": {"type": "number", "minimum": 0},
+        "protein_g": {"type": "number", "minimum": 0},
+        "fat_g": {"type": "number", "minimum": 0}
+      }
+    }
+  },
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "db_food_code", "eaters", "before_grams", "remaining_ratio", "consumed_grams", "per_100g", "nutrition_source", "consumed", "kcal_overridden", "confidence", "needs_review"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string"},
+          "name": {"type": "string"},
+          "location": {"type": "string"},
+          "db_food_code": {"type": ["string", "null"], "description": "nutrition_source가 db일 때 식약처 음식 코드"},
+          "eaters": {"type": "integer", "minimum": 1, "maximum": 20, "description": "같이 먹은 인원수(사용자 선택, 기본 1). 섭취 값을 이 수로 나눈다"},
+          "before_grams": {"type": "number", "minimum": 0},
+          "remaining_ratio": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+          "consumed_grams": {"type": "number", "minimum": 0},
+          "per_100g": {"oneOf": [{"$ref": "#/$defs/nutrients"}, {"type": "null"}], "description": "user_input일 때만 null 허용"},
+          "nutrition_source": {"enum": ["db", "search", "ai_estimate", "user_input"], "description": "화면 표시: DB / 검색 기반 / AI 추정 / 직접 입력"},
+          "consumed": {"$ref": "#/$defs/nutrients"},
+          "kcal_overridden": {"type": "boolean", "description": "사용자가 칼로리를 직접 고쳤으면 true"},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+          "needs_review": {"type": "boolean"},
+          "user_edited": {"type": "boolean", "description": "이름·중량·비율 중 하나라도 사용자가 고쳤으면 true"}
+        }
+      }
+    },
+    "totals": {
+      "type": "object",
+      "required": ["before_kcal", "consumed"],
+      "additionalProperties": false,
+      "properties": {
+        "before_kcal": {"type": "number", "minimum": 0},
+        "consumed": {"$ref": "#/$defs/nutrients"}
+      }
+    },
+    "warnings": {"type": "array", "items": {"type": "string"}},
+    "model": {"type": "string"},
+    "prompt_version": {"type": "string"}
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "_note": "개발·테스트용 대략값(kcal/100g). 앱의 영양 DB는 식약처 식품영양성분 DB 음식 표준데이터 전체를 변환한 JSON(예: web/public/data/mfds-foods.json)을 쓴다. 이 파일의 값으로 계산한 항목은 출처를 'DB'로 표시하지 않는다.",
+  "items": {
+    "rice_white": {"name": "쌀밥", "kcal_per_100g": 150, "source": "approx"},
+    "rice_multigrain": {"name": "잡곡밥", "kcal_per_100g": 155, "source": "approx"},
+    "kimchi": {"name": "배추김치", "kcal_per_100g": 20, "source": "approx"},
+    "kkakdugi": {"name": "깍두기", "kcal_per_100g": 30, "source": "approx"},
+    "soup_broth": {"name": "국물(맑은국/찌개 국물)", "kcal_per_100g": 15, "source": "approx"},
+    "doenjang_jjigae_solids": {"name": "된장찌개 건더기", "kcal_per_100g": 80, "source": "approx"},
+    "kimchi_jjigae_solids": {"name": "김치찌개 건더기", "kcal_per_100g": 90, "source": "approx"},
+    "bulgogi": {"name": "불고기", "kcal_per_100g": 200, "source": "approx"},
+    "jeyuk_bokkeum": {"name": "제육볶음", "kcal_per_100g": 220, "source": "approx"},
+    "japchae": {"name": "잡채", "kcal_per_100g": 150, "source": "approx"},
+    "gyeran_mari": {"name": "계란말이", "kcal_per_100g": 170, "source": "approx"},
+    "namul": {"name": "나물무침", "kcal_per_100g": 60, "source": "approx"},
+    "eomuk_bokkeum": {"name": "어묵볶음", "kcal_per_100g": 150, "source": "approx"},
+    "myeolchi_bokkeum": {"name": "멸치볶음", "kcal_per_100g": 300, "source": "approx"},
+    "tteokbokki": {"name": "떡볶이", "kcal_per_100g": 200, "source": "approx"},
+    "fried_chicken": {"name": "후라이드치킨", "kcal_per_100g": 290, "source": "approx"},
+    "grilled_fish": {"name": "생선구이", "kcal_per_100g": 180, "source": "approx"},
+    "tofu_jorim": {"name": "두부조림", "kcal_per_100g": 120, "source": "approx"},
+    "ramyeon_noodles": {"name": "라면 면(조리)", "kcal_per_100g": 180, "source": "approx"},
+    "salad_vegetables": {"name": "샐러드 채소", "kcal_per_100g": 20, "source": "approx"}
+  }
+}
