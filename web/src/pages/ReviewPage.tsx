@@ -105,6 +105,8 @@ export default function ReviewPage() {
   const [draft, setDraft] = useState<Draft | null>(null)
   const [reloadSeq, setReloadSeq] = useState(0)
   const [saving, setSaving] = useState(false)
+  // 편집기가 이름을 다시 계산하거나 "다시 계산할까요?"를 묻는 중이면 저장을 잠근다(바뀌기 전 값이 저장되지 않게)
+  const [editorBusy, setEditorBusy] = useState(false)
   const [slow, setSlow] = useState(false)
   const [saveError, setSaveError] = useState<SaveError | null>(null)
 
@@ -201,7 +203,7 @@ export default function ReviewPage() {
   }
 
   const itemCount = analysis?.items.length ?? 0
-  const canSave = !!uid && phase.kind === 'ready' && !!check?.ok && itemCount > 0 && !saving
+  const canSave = !!uid && phase.kind === 'ready' && !!check?.ok && itemCount > 0 && !saving && !editorBusy
 
   async function onSave() {
     if (!canSave || !uid || phase.kind !== 'ready' || !draft) return
@@ -329,7 +331,7 @@ export default function ReviewPage() {
 
             {/* 저장 중에는 편집을 잠근다(저장하는 값과 화면 값이 달라지지 않게) */}
             <fieldset disabled={saving} className="min-w-0">
-              <ReviewEditor analysis={draft.analysis} onChange={onAnalysis} />
+              <ReviewEditor analysis={draft.analysis} onChange={onAnalysis} onBusyChange={setEditorBusy} />
             </fieldset>
           </main>
 
@@ -348,6 +350,7 @@ export default function ReviewPage() {
                 {saveError.code === 'MEAL_SAVE_REJECTED' && <p className="text-xs text-red-500">{saveError.detail}</p>}
               </div>
             )}
+            {!saving && editorBusy && <p className="text-sm text-gray-500">음식 정보를 다시 계산하는 중이에요. 끝나면 저장할 수 있어요.</p>}
             {!saving && itemCount === 0 && <p className="text-sm text-gray-500">음식을 하나 이상 넣어 주세요.</p>}
             {!saving && itemCount > 0 && check && !check.ok && (
               <p className="text-sm text-amber-700">저장 전에 고칠 값이 있어요: {check.errors[0]}</p>

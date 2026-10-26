@@ -10,6 +10,8 @@ import FoodCard from './FoodCard'
 export interface ReviewEditorProps {
   analysis: MealIntakeAnalysis
   onChange: (a: MealIntakeAnalysis) => void
+  /** 이름을 바꾼 뒤 영양값을 다시 찾는 중이거나 "다시 계산할까요?"를 묻는 중이면 true. 그동안 저장을 잠근다. */
+  onBusyChange?: (busy: boolean) => void
 }
 
 const UNDO_MS = 3000
@@ -28,7 +30,7 @@ function omit<T>(rec: Record<string, T>, key: string): Record<string, T> {
 type Ask = { id: string; name: string; dbCode?: string }
 type Undo = { item: MealItem; index: number }
 
-export default function ReviewEditor({ analysis, onChange }: ReviewEditorProps) {
+export default function ReviewEditor({ analysis, onChange, onBusyChange }: ReviewEditorProps) {
   // 비동기 조회가 끝났을 때 최신 분석 위에 고치도록 ref로 들고 있는다
   const latest = useRef(analysis)
   const onChangeRef = useRef(onChange)
@@ -56,6 +58,15 @@ export default function ReviewEditor({ analysis, onChange }: ReviewEditorProps) 
       if (undoTimer.current) clearTimeout(undoTimer.current)
     }
   }, [])
+
+  const busy = Object.keys(pending).length > 0 || ask !== null
+  const onBusyChangeRef = useRef(onBusyChange)
+  useLayoutEffect(() => {
+    onBusyChangeRef.current = onBusyChange
+  }, [onBusyChange])
+  useEffect(() => {
+    onBusyChangeRef.current?.(busy)
+  }, [busy])
 
   const onKcalFocused = useCallback(() => setFocusKcalId(null), [])
 
