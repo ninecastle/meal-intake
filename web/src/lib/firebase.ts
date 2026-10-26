@@ -1,4 +1,5 @@
 import { initializeApp } from 'firebase/app'
+import { initializeAppCheck, ReCaptchaEnterpriseProvider, type AppCheck } from 'firebase/app-check'
 import { connectAuthEmulator, getAuth } from 'firebase/auth'
 import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore'
 
@@ -12,8 +13,35 @@ const firebaseConfig = {
   appId: '1:686292653830:web:87f810922b0016e244f087',
 }
 
+// 초기화 순서(스펙 5절): initializeApp → initializeAppCheck → getAuth·getFirestore·getAI(ai.ts).
 export const app = initializeApp(firebaseConfig)
-// App Check·AI Logic 초기화는 다음 작업에서 이 사이에 넣는다(스펙 5절 초기화 순서).
+
+// 개발 빌드에서만: App Check 초기화 전에 디버그 토큰 모드를 켠다.
+// 브라우저 콘솔에 찍힌 토큰을 App Check 콘솔 '디버그 토큰 관리'에 등록해야 AI 호출이 통과한다.
+if (import.meta.env.DEV) {
+  self.FIREBASE_APPCHECK_DEBUG_TOKEN = true
+}
+
+function initAppCheck(): AppCheck | null {
+  const siteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY
+  if (!siteKey) {
+    console.warn(
+      '[App Check] VITE_RECAPTCHA_SITE_KEY가 비어 있어 App Check를 초기화하지 않았습니다. AI 호출이 거부될 수 있습니다.',
+    )
+    return null
+  }
+  try {
+    return initializeAppCheck(app, {
+      provider: new ReCaptchaEnterpriseProvider(siteKey),
+      isTokenAutoRefreshEnabled: true,
+    })
+  } catch (e) {
+    console.warn('[App Check] 초기화 실패', e)
+    return null
+  }
+}
+
+export const appCheck = initAppCheck()
 export const auth = getAuth(app)
 export const db = getFirestore(app)
 

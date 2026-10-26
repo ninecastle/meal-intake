@@ -9,8 +9,14 @@ interface ImportMetaEnv {
   readonly VITE_SEARCH_GROUNDING?: 'on' | 'off'
   /** 'on'이면 개발 서버에서 Auth·Firestore 에뮬레이터에 연결 */
   readonly VITE_USE_EMULATORS?: 'on' | 'off'
+  /** App Check reCAPTCHA Enterprise 사이트 키(공개 값, web/.env.local에 넣는다) */
+  readonly VITE_RECAPTCHA_SITE_KEY?: string
 }
 
 interface ImportMeta {
   readonly env: ImportMetaEnv
 }
+
+// App Check 디버그 제공자: 개발 빌드에서 true로 두면 콘솔에 디버그 토큰을 찍는다.
+// eslint-disable-next-line no-var
+declare var FIREBASE_APPCHECK_DEBUG_TOKEN: boolean | string | undefined

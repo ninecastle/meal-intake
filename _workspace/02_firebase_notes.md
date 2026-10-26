@@ -57,3 +57,23 @@ firebase firestore:databases:create "(default)" --location asia-northeast3 --edi
 - Firestore 영구 캐시, 규칙 v1·규칙 테스트(`@firebase/rules-unit-testing`)는 2단계
 - 번들 크기: 화면이 생기면 firebase 모듈을 지연 로딩하거나 청크 분리 검토
 - npm 11이 설치 스크립트를 기본 차단한다(경고만, 빌드에는 영향 없음)
+
+## 콘솔 확인 결과 (2026-10-26, 사용자 보고)
+| 항목 | 결과 |
+| --- | --- |
+| App Check 제공자 | `meal-intake-web`에 reCAPTCHA Enterprise(Essentials, 무료) 사이트 키 등록. 결제 수단 요구 없음 → U8 불필요. 도메인: `meal-intake-2026.web.app`, `meal-intake-2026.firebaseapp.com`, `localhost` |
+| App Check 강제(AI Logic API) | **아직 끔.** 스파이크·디버그 토큰 확인 뒤, 첫 배포(2단계) 전에 켠다 |
+| AI 모니터링 | 켜져 있던 것을 끔(R3 충족) |
+| 모델별 무료 한도 | AI Studio 프로젝트 목록이 "permission denied"로 확인 불가. 시험 호출로 접근 가능 여부만 확인하고, 한도 값은 미확인으로 둔다 |
+
+## App Check 코드 (2026-10-26, firebase-engineer)
+- `web/src/lib/firebase.ts`: `initializeApp` → (DEV만) `self.FIREBASE_APPCHECK_DEBUG_TOKEN = true` → `initializeAppCheck(ReCaptchaEnterpriseProvider(VITE_RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true)` → `getAuth`·`getFirestore`. 사이트 키가 비면 콘솔 경고만 내고 App Check 없이 앱은 뜬다(`appCheck === null`).
+- `web/src/lib/ai.ts`: `getAI(app, GoogleAIBackend)` + `getModel(modelId = VITE_AI_MODEL)`만. 프롬프트·스키마는 `web/src/analysis/`(vision 담당).
+- `App.tsx`: DEV에서만 "AI 연결 시험" 버튼. 누를 때 1회 호출, 재시도 없음. 배포 빌드에서는 코드가 빠진다.
+- `.env.example`·`vite-env.d.ts`에 `VITE_RECAPTCHA_SITE_KEY` 추가(값 비움).
+
+### 사용자가 할 일 (디버그 토큰 등록, AI 호출 1회)
+1. `web/.env.example`을 `web/.env.local`로 복사(이미 있으면 줄만 추가)하고 `VITE_RECAPTCHA_SITE_KEY=`에 App Check 콘솔의 reCAPTCHA Enterprise 사이트 키를 넣는다.
+2. `npm --prefix web run dev` 실행 → 브라우저로 localhost 접속.
+3. 브라우저 개발자 도구 콘솔에 찍힌 "App Check debug token: ..." 값을 복사해 Firebase 콘솔 App Check → 앱(`meal-intake-web`) 메뉴 → '디버그 토큰 관리'에 등록한다. 같은 브라우저 프로필이면 토큰은 유지된다.
+4. 화면의 "AI 연결 시험" 버튼을 1회 누른다. "성공: 빨간색" 류가 나오면 완료. 401·403이면 토큰 등록·사이트 키를 확인하고, 다시 누르기 전에 원인을 먼저 본다.
