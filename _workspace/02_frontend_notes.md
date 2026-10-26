@@ -88,3 +88,27 @@
 ### 남은 이슈
 - 저장 성공은 `saveMeal`의 done → done 수정(`editedAt`)과 규칙 변경(firebase-engineer 동시 작업)에 달려 있다. 그전에는 `MEAL_SAVE_REJECTED`.
 - "수정했어요"는 history state라 상세에서 새로 고침하면 다시 3초 보인다.
+
+## 3단계 조각 2 (2026-10-27): 목표 설정 화면(S6)
+`pages/GoalPage.tsx`(새 파일, `/goal`, lazy), `App.tsx`(경로 1개), `pages/HomePage.tsx`(목표 구독·카드·안내). 계산은 `analysis/goal.ts`, 저장·구독은 `data/goals.ts`(firebase-engineer 구현) 그대로 쓴다. `tsc -b`·`npm run build` 통과, AI 호출 0회, 개발 서버 시험 안 함.
+
+### 화면 구성
+- 위에서부터 성별(남성·여성) → 나이(만)·키·몸무게(문자열로 들고 계산 때만 파싱, inputMode numeric·decimal, 칸 아래 이유) → 활동량 5개(세로 버튼) → 목표 감량·유지·증량 → 추천 목표 카드(기초대사량·하루 소모량, 목표 kcal·탄·단·지 입력칸) → 고지 문구 → 아래 고정 [저장].
+- 매 렌더 `validateGoalInput → computeGoal → applyOverride`로 바로 재계산. 입력이 다 차기 전에는 "성별·나이·키·몸무게를 넣으면 바로 계산해 드려요".
+- 직접 조정: 칸을 고치면 그 키가 override(문자열)로 남고 "직접 조정" 배지와 "추천 ○○"를 보인다. 조정이 하나라도 있으면 [추천값으로](override 전부 지우기). 목표 kcal 칸 아래에 "최소 ○○kcal(기초대사량|하루 소모량)"(`targetKcalFloor`). `applyOverride`의 errors는 카드 아래 빨간 글씨, 있으면 [저장] 비활성.
+- 만 18세 미만(나이 칸만 맞아도): 감량·증량 비활성, 선택 표시는 유지, 스펙 안내 문구. clamped면 스펙 문구.
+- 처음 열 때 `subscribeGoal` 첫 값으로만 폼을 채운다(`filled` ref). 오류면 빈 폼 + "저장된 목표를 불러오지 못했어요". 기본값: 성별 없음, 활동량 주 1~3회, 목표 유지.
+- 저장: `saveGoal(uid, 검사한 input, override)`. 10초(오프라인이면 1.5초) 넘으면 "연결이 느려요. 연결되면 자동으로 저장돼요." + [홈으로]. 오류 코드 3개별 문구(`GOAL_INVALID`는 이유도).
+- 방문 기록: 홈의 링크는 push + `state.fromHome`. 저장·‹는 `fromHome`이면 `navigate(-1)`, 아니면 `navigate('/', { replace: true })`. 안내는 `setFlash('goal:saved' | 'goal:pending')`.
+- 홈: `subscribeGoal` 구독. 첫 값 전에는 아무것도 안 보임. 목표 없음 → 합계 아래 "목표 설정하기" 카드(한 줄 설명), 있음 → 오른쪽 정렬 작은 줄 "하루 목표 ○○kcal · 수정". 구독 오류(첫 값 전) → "목표를 불러오지 못했어요 · 목표 설정". flash를 읽어 "목표를 저장했어요"(대기 중이면 "… 연결되면 올라가요.")를 3초.
+
+### 스펙과 다르게 정한 점
+1. 칸별 이유는 `validateGoalInput`의 문구를 칸에 나누지 않고 `INPUT_RANGE`로 화면에서 칸마다 따로 만든다(문구 앞 "나이는/키는"을 빼고 칸 아래에 둔다). 계산 여부는 여전히 `validateGoalInput` 결과로 정한다.
+2. 오프라인 대기 중 [홈으로]로 나가면 안내를 "목표를 저장했어요. 연결되면 올라가요."로 구분했다.
+3. [추천값으로]는 칸별이 아니라 하나(조정 전부 지우기)다.
+4. 홈의 목표 줄은 보고 있는 날짜와 관계없이 현재 목표를 보인다(지난 날 비교 목표는 다음 조각의 막대에서 `subscribeGoalForDate`로).
+
+### 남은 이슈
+- 홈 목표 영역의 고지 문구는 다음 조각(먹은 양/목표 막대)과 함께 넣는다.
+- `subscribeGoal`이 첫 값을 주지 않으면 S6은 "불러오는 중…"에 머문다(자리표시 상태일 때). 구현 뒤 브라우저 확인 필요.
+- 나가기 확인은 넣지 않았다(지시대로).

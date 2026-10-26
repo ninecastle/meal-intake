@@ -1,7 +1,8 @@
 // S1 홈 = 하루 요약(3단계 조각 1). 위에서부터 사용자 줄, 날짜 이동(◀ 전날 · 날짜(오늘이 아니면 [오늘로]) · 다음 날 ▶, ?date=YYYY-MM-DD), 저장·오프라인 안내,
 // 이어 할 기록 카드(awaiting_after·needs_review, 날짜와 무관하게 전부), 그날 합계 kcal·탄·단·지(subscribeDay, 클라이언트 합산),
 // 끼니별 기록 목록(누르면 S7 /meal/:mealId), 영양 정보 출처, 아래 고정 [식사 기록]·[직접 입력](보고 있는 날짜로).
-// 목표 비교 막대·목표 설정 카드는 3단계 조각 4에서 더한다.
+// 목표(3단계 조각 2): 합계 아래에 목표가 없으면 "목표 설정하기" 카드, 있으면 "하루 목표 ○○kcal · 수정" 줄(둘 다 /goal, push + state.fromHome).
+// 첫 값 전에는 아무것도 보이지 않는다(깜빡임 방지). 목표 비교 막대는 다음 조각에서 더한다.
 import { useEffect, useState } from 'react'
 import type { User } from 'firebase/auth'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
@@ -17,9 +18,11 @@ import {
   isDateKey,
   shiftDateKey,
 } from '../components/mealText'
+import { subscribeGoal, type StoredGoal } from '../data/goals'
 import { deleteMeal, subscribeDay, subscribePending, type MealWithId } from '../data/meals'
 import type { DaySummary } from '../data/summary'
 import { signOutAndClear } from '../lib/auth'
+import { clearFlash, peekFlash } from '../lib/flash'
 import { toDateKey } from '../lib/time'
 import { beforePhotoStore } from '../photos/beforePhotoStore'
 
@@ -81,6 +84,13 @@ export default function HomePage({ user }: { user: User }) {
   const [actionError, setActionError] = useState<string | null>(null)
   const [online, setOnline] = useState(() => navigator.onLine)
   const [loggingOut, setLoggingOut] = useState(false)
+  // 현재 목표(users/{uid}.goal). undefined = 첫 값 전
+  const [goal, setGoal] = useState<StoredGoal | null | undefined>(undefined)
+  const [goalError, setGoalError] = useState(false)
+  // 목표 설정(S6)에서 저장하고 돌아왔으면 3초 안내(lib/flash, 키는 GoalPage와 같다)
+  const [goalNotice, setGoalNotice] = useState<'saved' | 'pending' | null>(() =>
+    peekFlash('goal:saved') ? 'saved' : peekFlash('goal:pending') ? 'pending' : null,
+  )
   const today = toDateKey(new Date())
   // 보고 있는 날짜. 없거나 틀리거나 미래면 오늘.
   const rawDate = params.get('date')
@@ -105,6 +115,29 @@ export default function HomePage({ user }: { user: User }) {
     const t = setTimeout(() => setSaved(null), 3000)
     return () => clearTimeout(t)
   }, [saved])
+
+  useEffect(() => {
+    clearFlash('goal:saved')
+    clearFlash('goal:pending')
+  }, [])
+  useEffect(() => {
+    if (!goalNotice) return
+    const t = window.setTimeout(() => setGoalNotice(null), 3000)
+    return () => window.clearTimeout(t)
+  }, [goalNotice])
+
+  useEffect(
+    () =>
+      subscribeGoal(
+        uid,
+        (g) => {
+          setGoal(g)
+          setGoalError(false)
+        },
+        () => setGoalError(true),
+      ),
+    [uid],
+  )
 
   useEffect(
     () =>
@@ -227,6 +260,11 @@ export default function HomePage({ user }: { user: User }) {
           {saved.dateKey !== today && ` (${shortDate(saved.dateKey)})`}
         </p>
       )}
+      {goalNotice && (
+        <p role="status" className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
+          {goalNotice === 'saved' ? '목표를 저장했어요' : '목표를 저장했어요. 연결되면 올라가요.'}
+        </p>
+      )}
       {!online && (
         <p className="mt-3 rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-700">
           오프라인이에요. 기록은 연결되면 저장돼요.
@@ -300,6 +338,37 @@ export default function HomePage({ user }: { user: User }) {
             !dayError && <p className="text-sm text-gray-500">불러오는 중…</p>
           )}
         </section>
+
+        {goal === null && (
+          <Link
+            to="/goal"
+            state={{ fromHome: true }}
+            className="mt-3 block rounded-xl border border-emerald-200 bg-emerald-50 p-4"
+          >
+            <p className="font-semibold text-emerald-900">목표 설정하기 ›</p>
+            <p className="mt-1 text-sm text-emerald-800">
+              키·몸무게·활동량을 넣으면 하루 목표 칼로리와 탄·단·지를 추천해 드려요.
+            </p>
+          </Link>
+        )}
+        {goal && (
+          <Link
+            to="/goal"
+            state={{ fromHome: true }}
+            className="mt-1 flex min-h-11 items-center justify-end px-1 text-sm text-gray-600"
+          >
+            하루 목표 {formatKcal(goal.targets.target_kcal)}kcal ·<span className="ml-1 font-medium text-emerald-700">수정</span>
+          </Link>
+        )}
+        {goal === undefined && goalError && (
+          <Link
+            to="/goal"
+            state={{ fromHome: true }}
+            className="mt-1 flex min-h-11 items-center justify-end px-1 text-sm text-amber-800"
+          >
+            목표를 불러오지 못했어요 ·<span className="ml-1 font-medium underline">목표 설정</span>
+          </Link>
+        )}
 
         {summary &&
           (summary.meals.length === 0 ? (

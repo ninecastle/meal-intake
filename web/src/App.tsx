@@ -14,6 +14,7 @@ const CaptureBeforePage = lazy(() => import('./pages/CaptureBeforePage'))
 const CaptureAfterPage = lazy(() => import('./pages/CaptureAfterPage'))
 const ReviewPage = lazy(() => import('./pages/ReviewPage'))
 const MealDetailPage = lazy(() => import('./pages/MealDetailPage'))
+const GoalPage = lazy(() => import('./pages/GoalPage'))
 // 개발 빌드에서만 등록한다. 배포 빌드에서는 import.meta.env.DEV가 false로 바뀌어 이 import가 번들에서 빠진다.
 const DevPage = import.meta.env.DEV ? lazy(() => import('./pages/DevPage')) : null
 
@@ -57,6 +58,7 @@ const HomeRoute = () => <HomePage user={useUser()} />
 const CaptureBeforeRoute = () => <CaptureBeforePage uid={useUser().uid} />
 const CaptureAfterRoute = () => <CaptureAfterPage uid={useUser().uid} />
 const MealDetailRoute = () => <MealDetailPage uid={useUser().uid} />
+const GoalRoute = () => <GoalPage uid={useUser().uid} />
 
 const userRoutes: RouteObject[] = [
   { path: '/', element: <HomeRoute /> },
@@ -67,6 +69,8 @@ const userRoutes: RouteObject[] = [
   // S8 기록 수정(3단계 조각 1-2): 결과 확인 화면(편집기·저장·나가기 확인)을 수정 모드로 다시 쓴다
   { path: '/meal/:mealId/edit', element: <ReviewPage mode="edit" /> },
   { path: '/meal/:mealId', element: <MealDetailRoute /> },
+  // S6 목표 설정(3단계 조각 2). 홈에서는 push(state.fromHome)로 들어온다
+  { path: '/goal', element: <GoalRoute /> },
   ...(DevPage ? [{ path: '/dev', element: <DevPage /> }] : []),
   { path: '*', element: <Navigate to="/" replace /> },
 ]
