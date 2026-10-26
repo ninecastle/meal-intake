@@ -4,31 +4,12 @@ import { useEffect, useRef, useState, type FormEvent, type Ref } from 'react'
 import { MAX_EATERS } from '../../analysis/compute'
 import { listFoodVariants, searchFoodNames, type FoodSuggestion } from '../../analysis/nutrition'
 import type { MealItem } from '../../types/analysis'
+import SourceBadge from './SourceBadge'
 
 const AUTOCOMPLETE_DEBOUNCE_MS = 200
 const VARIANT_LIMIT = 50
 const MAX_GRAMS = 5000
 const MAX_KCAL = 20000
-
-const BADGE_CLASS: Record<MealItem['nutrition_source'], string> = {
-  db: 'bg-green-100 text-green-800',
-  search: 'bg-blue-100 text-blue-800',
-  ai_estimate: 'bg-amber-100 text-amber-800',
-  user_input: 'bg-gray-200 text-gray-800',
-}
-
-function sourceLabel(it: MealItem): string {
-  switch (it.nutrition_source) {
-    case 'db':
-      return it.db_ml_converted ? 'DB(환산)' : 'DB'
-    case 'search':
-      return '검색 기반'
-    case 'ai_estimate':
-      return 'AI 추정'
-    case 'user_input':
-      return '직접 입력'
-  }
-}
 
 const MATCH_NOTE = { name: null, group: '대표값', partial: '부분 일치' } as const
 
@@ -96,7 +77,7 @@ export default function FoodCard(p: FoodCardProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-1 text-xs">
-          <span className={`rounded px-2 py-0.5 font-medium ${BADGE_CLASS[item.nutrition_source]}`}>{sourceLabel(item)}</span>
+          <SourceBadge item={item} />
           {item.needs_review && <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-800">확인 필요</span>}
           {pending && <span className="font-medium text-blue-700">계산 중…</span>}
         </div>
