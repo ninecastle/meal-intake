@@ -115,3 +115,7 @@ firebase firestore:databases:create "(default)" --location asia-northeast3 --edi
 - 스펙 2.1절은 샘플 체험 문서에 `entry: "sample"`을 남긴다고 하지만 3.2절 허용 키 8개에는 없다. 지금 규칙은 `entry`를 거부한다. 샘플 체험을 구현할 때 3.2절에 넣기로 정하면 규칙에 `entry`(값 'sample')를 추가해 다시 배포한다.
 - done → done(저장된 식사 다시 수정)은 거부된다. 저장 뒤 수정 기능을 넣으면 전이를 추가한다.
 - 쓰기 Promise는 서버 확인 뒤에 끝난다. 오프라인에서는 화면이 기다리지 않게 한다(프런트).
+
+### 규칙 테스트 실행 결과 (2026-10-26, 리더)
+- 사용자가 JDK 21(Eclipse Adoptium)을 설치한 뒤 `cd firestore-tests && npm install && npm test` 실행 → **15개 통과, 실패 0**(에뮬레이터 `demo-meal-intake`). 로그의 `PERMISSION_DENIED`는 거부 시험에서 나오는 정상 로그다.
+- OAuth 동의 화면: 프로덕션(사용자 확인).

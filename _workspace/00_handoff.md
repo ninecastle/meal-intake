@@ -24,7 +24,7 @@
 | --- | --- | --- |
 | 1 | 결과 수정 화면: 이름·중량·남긴 비율·kcal 수정과 자동 재계산, DB 자동완성 + 세부 종류 목록, kcal 직접 수정 뒤 이름을 바꾸면 "다시 계산할까요?", 음식 추가·삭제, 인원수(기본 1), 같은 사진 안내, 흔한 이름 별칭 | 완료(`e96c8ed`, `a61ce7d`, 사용자 확인) |
 | 2 | 구글 로그인 | 완료(`5fbceea`, 사용자 확인). `web/src/lib/auth.ts`(`signInWithGoogle`·`signOutAndClear`·`useAuthUser`), `web/src/pages/LoginPage.tsx`. 배포 도메인에서는 authDomain을 그 도메인으로 바꾼다(`lib/firebase.ts`). 로그아웃 때 분석 결과 캐시는 지우지 않는다(사진 없음, 7일 만료) |
-| 3 | Firestore에 기록 저장 + 본인 기록만 읽고 쓰는 보안 규칙 | 구현 완료, 사용자 확인 대기. `862de06`(`web/src/data/meals.ts`, `firestore.rules` v1 **실제 프로젝트에 배포함**, `firestore-tests/`), 리더가 FlowTest에 저장 흐름 연결. 규칙 테스트는 작성만(이 PC에 Java 없음, `cd firestore-tests && npm install && npm test`, JDK 21+). 열린 판단: 샘플 체험 문서의 `entry` 키는 지금 규칙이 거부한다(샘플 체험 구현 때 3.2절·규칙에 추가), 저장한 식사 다시 저장(done→done)은 거부(저장 뒤 수정 P5를 넣으면 전이 추가) |
+| 3 | Firestore에 기록 저장 + 본인 기록만 읽고 쓰는 보안 규칙 | 구현 완료, 사용자 확인 대기. `862de06`(`web/src/data/meals.ts`, `firestore.rules` v1 **실제 프로젝트에 배포함**, `firestore-tests/`), 리더가 FlowTest에 저장 흐름 연결. 규칙 테스트 15개 통과(2026-10-26, 사용자가 JDK 21 설치 후 리더 실행: `cd firestore-tests && npm install && npm test`). 열린 판단: 샘플 체험 문서의 `entry` 키는 지금 규칙이 거부한다(샘플 체험 구현 때 3.2절·규칙에 추가), 저장한 식사 다시 저장(done→done)은 거부(저장 뒤 수정 P5를 넣으면 전이 추가) |
 | 4 | 실제 흐름 화면 연결(로그인 → 먹기 전 촬영 → 먹은 후 촬영 → 결과 수정 → 저장). 개발용 시험 패널은 개발 모드에서만. 모바일 우선 | - |
 | 5 | Firebase Hosting 첫 배포 → `https://meal-intake-2026.web.app`에서 확인 | - |
 
@@ -117,13 +117,14 @@
 - App Check: reCAPTCHA Enterprise(Essentials) 사이트 키 등록(결제 수단 요구 없음), 디버그 토큰 `kkamang-pc` 등록, **AI Logic 적용(Enforce)은 꺼져 있음**.
 - `web/.env.local`(git 제외): `VITE_RECAPTCHA_SITE_KEY`, `VITE_USE_EMULATORS=off`. `VITE_AI_MOCK`이 없으면 실제 호출이 기본이다.
 - 개발 서버: `npm --prefix web run dev` → http://localhost:5173 (흐름 시험 패널, "DB 검색 시험", "AI 연결 시험"). 폰에서 `http://192.168.x.x`로 열면 보안 컨텍스트가 아니라 SHA-256 캐시 등이 꺼진다. 폰 시험은 https 배포 뒤에 한다.
+- JDK 21(Eclipse Adoptium, `C:\Program Files\Eclipse Adoptium\jdk-21.0.12.101-hotspot`): Firestore 에뮬레이터·규칙 테스트용. 설치 전에 열린 셸에서는 PATH에 없으니 `JAVA_HOME`과 PATH를 직접 잡는다.
+- OAuth 동의 화면: 프로덕션(사용자 확인, 2026-10-26). 일반 Google 계정으로 로그인할 수 있다.
 - Node v24.22.1, firebase-tools 15.34.1, firebase SDK 13.1.0, Vite 8.3.4, React 19.3.1, TypeScript 6.0.3, Tailwind 4.3.3.
 - 시험 스크립트: `spike/`(설명은 `spike/README.md`). `tests/`는 AI 호출 없음, `live/`는 실제 호출.
 
 ## 9. 필요할 때 확인
 | 항목 | 언제 |
 | --- | --- |
-| OAuth 동의 화면 게시 상태(일반 계정 로그인 가능 여부) — 사용자 콘솔 확인 요청함 | 2단계 조각 2 |
 | Authentication 승인된 도메인(`localhost`, `meal-intake-2026.web.app`, `meal-intake-2026.firebaseapp.com`), OAuth 웹 클라이언트 리디렉션 URI `https://meal-intake-2026.web.app/__/auth/handler` — 없으면 배포본 로그인이 `redirect_uri_mismatch` | 2단계 조각 5 배포 전 |
 | AI Logic 사용자별 분당 요청 한도 설정 위치 | 4단계 |
 | Gemini 무료 등급 데이터 보관 기간 | 보류. 발표·고지 문구는 스펙 R2·U4처럼 보수적으로 |
