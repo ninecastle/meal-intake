@@ -1,14 +1,18 @@
 import { useEffect, useRef, useState } from 'react'
 import { analyzeAfter, analyzeBefore, getAnalysisMode, getAnalysisOrigin } from '../analysis/analyze'
+import { assembleAnalysis } from '../analysis/assemble'
+import { buildAnalysis, recomputeItem } from '../analysis/compute'
 import { AnalysisError } from '../analysis/errors'
+import { validateAnalysis } from '../analysis/validate'
 import { beforePhotoStore } from '../photos/beforePhotoStore'
 import { compressPhoto } from '../photos/compress'
-import type { AfterAnalysis, BeforeAnalysis } from '../types/analysis'
+import type { AfterAnalysis, BeforeAnalysis, MealIntakeAnalysis, MealItem } from '../types/analysis'
 
 // 개발용 흐름 시험 패널.
 // 조각 2: 먹기 전 사진 → 압축 → IndexedDB 보관 → 먹기 전 분석.
 // 조각 3: 먹은 후 사진(메모리에만) + 보관한 먹기 전 사진·결과 → 먹은 후 분석 → 성공하면 IndexedDB 사진 삭제.
-// 조각 4(영양값·섭취량)를 이어 붙인다. 사진 선택 1회 = 분석 1회, 자동 재호출 없음.
+// 조각 4: 먹은 후 분석이 끝나면 영양값 조회(DB → AI 추정) → 섭취량 계산 → 음식별 값·출처 표시. 인원수는 여기서 바꿔 볼 수 있다.
+// 사진 선택 1회 = 분석 1회, 자동 재호출 없음. 영양값 단계는 먹기 전 추정값이 없는 음식에만 AI 호출(호출 D)을 한다.
 
 type ErrInfo = { stage: string; code?: string; reason?: string; message: string }
 type PhotoInfo = { kb: number; width: number; height: number }
@@ -63,6 +67,8 @@ export default function FlowTest() {
   const [afterElapsedMs, setAfterElapsedMs] = useState<number | null>(null)
   const [afterSentBefore, setAfterSentBefore] = useState<boolean | null>(null)
   const [cleanupMsg, setCleanupMsg] = useState<string | null>(null)
+  const [meal, setMeal] = useState<MealIntakeAnalysis | null>(null)
+  const [mealElapsedMs, setMealElapsedMs] = useState<number | null>(null)
 
   // 화면을 떠나면 진행 중 요청을 끊고 미리보기 URL을 돌려준다.
   useEffect(() => () => abortRef.current?.abort(), [])
@@ -117,6 +123,8 @@ export default function FlowTest() {
     setAfterElapsedMs(null)
     setAfterSentBefore(null)
     setCleanupMsg(null)
+    setMeal(null)
+    setMealElapsedMs(null)
   }
 
   // 먹은 후 사진은 압축본을 이 함수 안에서만 들고 있다(어디에도 저장하지 않음).
@@ -153,6 +161,14 @@ export default function FlowTest() {
       setCleanupMsg(left ? '먹기 전 사진이 아직 남아 있음(삭제 실패)' : '먹기 전 사진 삭제됨 — 다시 꺼내 보니 없음')
       setPreview(null)
       setPreviewMsg(null)
+
+      stage = '영양값 계산'
+      const t1 = performance.now()
+      try {
+        setMeal(await assembleAnalysis(result, res, { signal: ac.signal }))
+      } finally {
+        setMealElapsedMs(Math.round(performance.now() - t1))
+      }
     } catch (e) {
       setAfterError(toErr(stage, e))
     } finally {
@@ -348,6 +364,24 @@ export default function FlowTest() {
           )}
         </div>
       )}
+
+      {meal && (
+        <MealResult
+          meal={meal}
+          elapsedMs={mealElapsedMs}
+          onEaters={(id, n) =>
+            setMeal((m) =>
+              m
+                ? buildAnalysis(
+                    m.items.map((it) => (it.id === id ? recomputeItem({ ...it, eaters: n }) : it)),
+                    m.warnings,
+                    { model: m.model, prompt_version: m.prompt_version },
+                  )
+                : m,
+            )
+          }
+        />
+      )}
     </div>
   )
 }
@@ -357,4 +391,132 @@ function showOrigin(o: ReturnType<typeof getAnalysisOrigin>): string {
   if (!o) return '–'
   const label = { live: '실제 호출', cache: '캐시(호출 안 함)', mock: '목업' }[o.source]
   return o.source === 'live' ? `${label}, 시도 ${o.attempts}회` : label
+}
+
+function sourceLabel(it: MealItem): string {
+  switch (it.nutrition_source) {
+    case 'db':
+      return it.db_ml_converted ? 'DB(환산)' : 'DB'
+    case 'search':
+      return '검색 기반'
+    case 'ai_estimate':
+      return 'AI 추정'
+    case 'user_input':
+      return '직접 입력'
+  }
+}
+
+// 100g당 탄·지: DB가 비어 있어 AI 추정으로 채웠으면 *, 끝내 없으면 –
+function per100(it: MealItem, k: 'kcal' | 'carbs_g' | 'protein_g' | 'fat_g'): string {
+  if (!it.per_100g) return '–'
+  const fill = k === 'carbs_g' || k === 'fat_g' ? it.per_100g_fill?.[k] : undefined
+  if (fill === 'missing') return '–'
+  const v = k === 'kcal' ? String(Math.round(it.per_100g[k])) : it.per_100g[k].toFixed(1)
+  return fill === 'ai_estimate' ? `${v}*` : v
+}
+
+const g1 = (v: number) => v.toFixed(1)
+
+function MealResult(props: {
+  meal: MealIntakeAnalysis
+  elapsedMs: number | null
+  onEaters: (id: string, n: number) => void
+}) {
+  const { meal, elapsedMs, onEaters } = props
+  const check = validateAnalysis(meal)
+  const t = meal.totals
+  return (
+    <div className="mt-3 border-t border-gray-200 pt-2">
+      <p className="font-semibold">영양값·섭취량 (조각 4)</p>
+      <p className="text-gray-700">
+        계산 소요: {elapsedMs == null ? '–' : `${elapsedMs} ms`} · 검증:{' '}
+        {check.ok ? (
+          <span className="text-green-700">통과</span>
+        ) : (
+          <span className="text-red-600">실패 — {check.errors.join(' / ')}</span>
+        )}
+      </p>
+      <div className="overflow-x-auto">
+        <table className="mt-1 w-full min-w-[40rem]">
+          <thead>
+            <tr className="text-gray-500">
+              <th className="text-left font-normal">이름</th>
+              <th className="text-left font-normal">출처</th>
+              <th className="text-right font-normal">100g당 kcal·탄·단·지</th>
+              <th className="text-right font-normal">먹기 전 g</th>
+              <th className="text-right font-normal">남김</th>
+              <th className="text-right font-normal">인원</th>
+              <th className="text-right font-normal">섭취 g</th>
+              <th className="text-right font-normal">섭취 kcal·탄·단·지</th>
+            </tr>
+          </thead>
+          <tbody>
+            {meal.items.map((it) => (
+              <tr key={it.id} className="border-t border-gray-100 align-top">
+                <td className="py-0.5">
+                  {it.name}
+                  {it.needs_review && <span className="ml-1 text-amber-700">(확인 필요)</span>}
+                  {it.nutrition_source === 'db' && it.db_name && (
+                    <div className="text-gray-500">
+                      DB: {it.db_name} ({it.db_match})
+                    </div>
+                  )}
+                  {it.db_reference && (
+                    <div className="text-gray-500">
+                      참고 DB 대표값 {Math.round(it.db_reference.kcal_per_100g)}kcal/100g ({it.db_reference.db_name},{' '}
+                      {it.db_reference.db_match})
+                    </div>
+                  )}
+                </td>
+                <td>{sourceLabel(it)}</td>
+                <td className="text-right">
+                  {per100(it, 'kcal')} · {per100(it, 'carbs_g')} · {per100(it, 'protein_g')} · {per100(it, 'fat_g')}
+                </td>
+                <td className="text-right">{g1(it.before_grams)}</td>
+                <td className="text-right">{it.remaining_ratio == null ? '?' : pct(it.remaining_ratio)}</td>
+                <td className="text-right">
+                  <input
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={it.eaters}
+                    onChange={(e) => {
+                      const n = Math.min(20, Math.max(1, Math.round(Number(e.target.value) || 1)))
+                      onEaters(it.id, n)
+                    }}
+                    className="w-12 rounded border border-gray-300 px-1 text-right"
+                  />
+                </td>
+                <td className="text-right">{g1(it.consumed_grams)}</td>
+                <td className="text-right">
+                  {Math.round(it.consumed.kcal)} · {g1(it.consumed.carbs_g)} · {g1(it.consumed.protein_g)} ·{' '}
+                  {g1(it.consumed.fat_g)}
+                </td>
+              </tr>
+            ))}
+            <tr className="border-t border-gray-300 font-semibold">
+              <td colSpan={7} className="py-0.5">
+                합계 (먹기 전 {Math.round(t.before_kcal)} kcal)
+              </td>
+              <td className="text-right">
+                {Math.round(t.consumed.kcal)} · {g1(t.consumed.carbs_g)} · {g1(t.consumed.protein_g)} ·{' '}
+                {g1(t.consumed.fat_g)}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-1 text-gray-500">
+        * 탄·지가 DB에 없어 AI 추정으로 채운 값 · – 값 없음 · ? 남긴 비율 모름(다 먹은 것으로 계산)
+      </p>
+      {meal.warnings.length > 0 && (
+        <ul className="mt-1 list-disc pl-4 text-amber-700">
+          {meal.warnings.map((w, i) => (
+            <li key={i}>{w}</li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-1 text-gray-500">prompt: {meal.prompt_version ?? '–'}</p>
+    </div>
+  )
 }

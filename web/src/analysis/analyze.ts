@@ -30,6 +30,8 @@ import { cacheGet, cachePut, sha256Hex, type CacheEntry } from './cache'
 import { AnalysisError } from './errors'
 
 export { AnalysisError } from './errors'
+// 스펙 4.3절 계약: assembleAnalysis도 analyze.ts에서 가져올 수 있다(구현은 assemble.ts)
+export { assembleAnalysis } from './assemble'
 
 const MOCK = import.meta.env.VITE_AI_MOCK === '1'
 /** 목업 결과의 model 값 */
