@@ -11,6 +11,9 @@
 | `resolve_test.mjs`, `extra.mjs` | `resolveNutrition` 조회 결과 표(종류 규칙, DB(환산), 빈 값 채우기) | `node spike/tests/resolve_test.mjs` |
 | `alias_test.mjs` | 별칭·단어 치환·`listFoodVariants` | `node spike/tests/alias_test.mjs [extra]` |
 | `search_test.mjs` | DB 이름 검색 | `node spike/tests/search_test.mjs` |
+| `summary_test.mjs` | 하루 합산 `summarizeDay`(done만, 끼니별, 날짜 섞임 없음) | `node spike/tests/summary_test.mjs .` |
+| `published_test.mjs` | 공개 중량(스펙 4.5.5)·프롬프트 a3 | `node spike/tests/published_test.mjs` |
+| `goal_test.mjs` | 목표 계산 `goal.ts`(스펙 4.7 손 계산, 미성년, 직접 조정 하한, 목표 비교) | `node spike/tests/goal_test.mjs .` |
 
 `assemble.ts`처럼 앱용 `nutrition/index.ts`·`lib/ai`(import.meta.env)를 따라가는 모듈은 Node에서 바로 못 불러온다.
 `piece4_integration.mjs`는 `module.registerHooks`로 두 모듈을 빈 모듈로 바꿔 돌린다. 10/29 측정 스크립트도 이 방식을 쓴다.

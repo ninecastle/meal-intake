@@ -570,6 +570,7 @@ export function summarizeDay(dateKey: string, meals: (MealDoc & { id: string })[
 | `MEAL_SAVE_REJECTED` | meals.ts의 쓰기 함수 | 규칙 거부(permission-denied) | 오류 표시, S4 내용 유지 |
 | `MEAL_NOT_FOUND` | `getMeal` | 문서 없음(삭제됨) | S1로 이동 |
 | `MEAL_STORE_UNAVAILABLE` | `subscribe*` | 네트워크·내부 오류 | 캐시 값 표시 + 배너 |
+| `GOAL_INVALID`, `GOAL_SAVE_REJECTED`, `GOAL_STORE_UNAVAILABLE` | `saveGoal`, `subscribeGoal*` | 입력·직접 조정 검사 실패, 규칙 거부, 네트워크·내부 오류 | 이유 표시, S6 입력 유지(3단계 조각 2) |
 | `AUTH_CANCELLED`, `AUTH_INAPP_BROWSER`, `AUTH_FAILED` | `signInWithGoogle` | 사용자 취소, 인앱 브라우저, 그 밖의 실패 | 안내 문구 |
 
 Firebase AI SDK 오류를 `reason`으로 바꾸는 표는 vision-ai-engineer가 구현하면서 `_workspace/03_vision_eval.md`에 남긴다.
@@ -730,6 +731,18 @@ export function applyOverride(result: GoalResult, o: GoalOverride | null):
 export function compareToGoal(consumed: Nutrients, targets: GoalTargets):   // 하루 요약 막대용
   Record<"kcal" | "carbs_g" | "protein_g" | "fat_g", { eaten: number; target: number; remaining: number; ratio: number }>;  // remaining<0이면 초과
 ```
+- 구현(리더, 2026-10-27): `computeGoal`은 반올림한 값을 돌려주고(내부 계산은 원래 정밀도), 직접 조정 하한(`targetKcalFloor`)도 반올림한 기초대사량·하루 소모량과 비교한다(화면에 보인 값과 같은 값을 넣으면 통과). `validateGoalInput`은 만 18세 미만이면 `goal`을 `maintain`으로 바꿔 돌려준다. 단위 시험 `spike/tests/goal_test.mjs`.
+
+**저장 함수(`web/src/data/goals.ts`, 2026-10-27 리더)**
+```ts
+export interface StoredGoal { input: GoalInput; override: GoalOverride | null; result: GoalResult; targets: GoalTargets; updatedAt: Timestamp | null }
+export interface DatedGoal { dateKey: string; targets: GoalTargets }
+/** 검사·계산(validateGoalInput → computeGoal → applyOverride) 후 users/{uid}.goal(mergeFields ['goal'])과 goals/{오늘}을 한 배치로. */
+export function saveGoal(uid: string, input: GoalInput, override: GoalOverride | null, now?: Date): Promise<GoalTargets>;
+export function subscribeGoal(uid: string, cb: (g: StoredGoal | null) => void, onError?: (code: GoalStoreErrorCode) => void): () => void;
+/** dateKey <= D 가운데 가장 늦은 기록. 없으면 null */
+export function subscribeGoalForDate(uid: string, dateKey: string, cb: (g: DatedGoal | null) => void, onError?: (code: GoalStoreErrorCode) => void): () => void;
+```
 
 **수정과 직접 조정(2026-10-26 사용자 추가)**
 - 키·몸무게·나이·활동량·목표(성별 포함)는 S6에서 언제든 고칠 수 있다. S1에서 S6으로 가는 링크를 둔다. 입력을 바꾸면 저장 전에도 화면의 추천값을 바로 다시 계산한다(`computeGoal`).
@@ -743,7 +756,7 @@ export function compareToGoal(consumed: Nutrients, targets: GoalTargets):   // �
   - 어떤 날 D의 비교 목표 = `dateKey <= D`인 기록 가운데 가장 늦은 것(`where("dateKey","<=",D)`, `orderBy("dateKey","desc")`, `limit(1)`, 단일 필드 인덱스). 그래서 나중에 목표를 바꿔도 지난 날은 그때 목표로 비교된다.
   - D 이전 기록이 없으면(목표를 처음 정하기 전의 날) 그날은 목표 없이 합계만 보인다.
   - 서버 집계 문서(`daily/*`)가 아니다. 목표 값만 날짜로 남긴다.
-- 규칙: 본인 uid만. `users/{uid}`는 키 `hasOnly(["goal"])`, `goal.input`의 열거값과 범위(위 표), `targets.target_kcal` 800~6000. `goals/{dateKey}`는 문서 id와 `dateKey` 필드가 같고 형식 `^\d{4}-\d{2}-\d{2}$`, 키 `hasOnly(["dateKey","targets","updatedAt"])`.
+- 규칙: 본인 uid만. `users/{uid}`는 키 `hasOnly(["goal"])`, `goal.input`의 열거값과 범위(위 표), `targets.target_kcal` 300~6000(2026-10-27 리더: 처음 800이었으나 앱이 정상으로 만드는 가장 낮은 값이 기초대사량 하한 약 390kcal(여 100세 30kg 120cm)이라 낮춤. 실제 하한은 앱이 기초대사량으로 지킨다), 탄·단·지 0~1000, 만 18세 미만이면 `goal == "maintain"`. `goals/{dateKey}`는 문서 id와 `dateKey` 필드가 같고 형식 `^\d{4}-\d{2}-\d{2}$`, 키 `hasOnly(["dateKey","targets","updatedAt"])`.
 - 목표가 없으면 하루 요약은 지금처럼 합계만 보이고 "목표 설정하기" 카드를 띄운다.
 
 **하루 요약(S1) 목표 비교**
@@ -1057,6 +1070,7 @@ U0·U3·U5는 결정 내용으로 바꿨다. 나머지(U1·U2·U4·U6·U7·U8)�
 | 날짜 | 변경 내용 | 절 | 영향을 받는 에이전트 |
 | --- | --- | --- | --- |
 | 2026-10-26 | 초안 작성(0단계). 리더 요청에 따라 식약처 DB 처리 규칙(100ml 행, 탄·지 빈 값, 같은 이름 중복, 이름 매칭, 앱 JSON 필드·크기)을 반영하고 analysis-schema v2(선택 필드 `per_100g_fill`·`db_name`·`db_match`)를 제안. 공식 문서 확인 결과(그라운딩 무료 등급 미제공, App Check 자동 강제, AI 모니터링 프롬프트 저장, 무료 등급 데이터 약관)를 7.2절 위험과 부록 A에 기록 | 전체 | vision-ai-engineer, frontend-dev, firebase-engineer, qa-integrator, pitch-writer |
+| 2026-10-27 | (리더) 3단계 조각 2: `goal.ts` 구현 메모(반올림 값 반환, 반올림 하한 비교, 미성년 goal 정규화), 저장 함수 `data/goals.ts` 시그니처, 오류 코드 `GOAL_*`, 규칙 `target_kcal` 하한 800 → 300(정상 값 거부 방지) | 4.4, 4.7 | firebase-engineer, frontend-dev, qa-integrator |
 | 2026-10-27 | (리더, 사용자 결정) 호출 A·B 시도당 제한 20초 → 40초, 시간 초과는 재시도하지 않음(네트워크·5xx·분당 429·형식 오류만 재시도). S8에서 브라우저 뒤로 가기도 S7로(상세에서 push로 들어와 나갈 때 한 칸 뒤로, 주소로 바로 열었으면 replace) | 2.2, 4.2, 5.1 | vision-ai-engineer, frontend-dev, qa-integrator |
 | 2026-10-26 | (리더, 사용자 결정) 공개 중량 4.5.5절: 업체 제공 식품중량(100g·100ml 제외)을 DB JSON `w`로 넣고, 통째로 보인 메뉴(`whole_count`)가 세부 종류까지 일치하면 먹기 전 무게 = 공개 중량 × 개수, `grams_source` 표시. 프롬프트 a3. 홈 날짜 이동 문구 ◀ 전날 / 다음 날 ▶, 오늘이 아니면 [오늘로] | 2.2, 3.3, 3.5, 4.3, 4.5.5 | vision-ai-engineer, frontend-dev, qa-integrator |
 | 2026-10-26 | (리더, 사용자 결정) 3단계 조각을 사용자 순서로 확정(1 홈 기록 보기 → 2 목표 설정 → 3 목표 대비 비교 → 4 주간 추이 → 5 배포). 주간 추이 M17·S9 `/week` 추가, 1.3절 "주간 통계 안 만듦"을 월간으로 좁힘, 프리미엄 기능(음식 추천·월간 그래프·리포트)은 3단계 뒤 따로. 축소안 0-1 | 1.1, 1.3, 2.2, 4.7, 6.1, 6.3 | firebase-engineer, frontend-dev, qa-integrator, pitch-writer |
