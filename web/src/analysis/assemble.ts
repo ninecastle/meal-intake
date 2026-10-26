@@ -10,6 +10,7 @@ import type {
   NutritionResult,
 } from '../types/analysis.ts'
 import { applyNutrition, buildAnalysis } from './compute.ts'
+import { normWholeCount } from './beforePrompt.ts'
 import { resolveNutrition } from './nutrition/index.ts'
 
 export type ResolveNutritionFn = (
@@ -60,6 +61,16 @@ function draftItem(b: BeforeItem, ratio: number | null, confidence: number): Mea
   }
 }
 
+/** 공개 중량(스펙 4.5.5): whole_count가 있고, DB 이름 일치(db_match === 'name')이고, 매칭된 행에 공개 중량이 있을 때만
+ *  { published_g, unit_count }. 하나라도 빠지면 null(AI 추정 무게를 그대로 쓴다). */
+export function publishedGrams(b: BeforeItem, r: NutritionResult): { published_g: number; unit_count: number } | null {
+  const n = normWholeCount(b.whole_count)
+  if (n === null || r.source !== 'db' || r.db_match !== 'name') return null
+  const w = r.published_g
+  if (typeof w !== 'number' || !Number.isFinite(w) || w <= 0) return null
+  return { published_g: w, unit_count: n }
+}
+
 function joinVersion(a: string | undefined, b: string | undefined): string | undefined {
   const parts = [a, b].filter((v): v is string => typeof v === 'string' && v !== '')
   return parts.length ? parts.join('-') : undefined
@@ -67,7 +78,8 @@ function joinVersion(a: string | undefined, b: string | undefined): string | und
 
 /** A·B를 id로 합치고 항목마다 resolveNutrition(name, { guess: per_100g_guess })(동시 최대 4개) → applyNutrition → buildAnalysis.
  *  after가 null이면 remaining_ratio를 모두 null로 둔다(남긴 비율 직접 고르기 경로). 항목 confidence는 A·B 중 낮은 값.
- *  조회가 실패(예외·중단)하면 guess가 있으면 AI 추정, 없으면 직접 입력으로 둔다. eaters는 1. 오류를 던지지 않는다. */
+ *  조회가 실패(예외·중단)하면 guess가 있으면 AI 추정, 없으면 직접 입력으로 둔다. eaters는 1. 오류를 던지지 않는다.
+ *  공개 중량 조건(publishedGrams)을 모두 만족하면 before_grams = published_g × whole_count, grams_source·published_g·unit_count를 넣는다. */
 export async function assembleAnalysis(
   before: BeforeAnalysis,
   after: AfterAnalysis | null,
@@ -111,7 +123,10 @@ export async function assembleAnalysis(
         if (guess && !signal?.aborted) warnings.push(`${b.name}: 영양값 조회에 실패해 AI 추정값을 썼습니다`)
       }
       if (r.source === 'user_input') warnings.push(`${b.name}: 영양값을 찾지 못했습니다. 칼로리를 직접 입력해 주세요`)
-      return applyNutrition(draftItem(b, ratio, confidence), r)
+      const draft = draftItem(b, ratio, confidence)
+      const pub = publishedGrams(b, r)
+      if (pub) Object.assign(draft, { before_grams: pub.published_g * pub.unit_count, grams_source: 'published' as const, ...pub })
+      return applyNutrition(draft, r)
     })
     return buildAnalysis(items, warnings, meta)
   } catch {

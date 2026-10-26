@@ -157,6 +157,8 @@ export function createNutritionResolver(deps: ResolverDeps) {
       db_name: f.n,
       db_match: m.match,
       ...(f.ml === 1 ? { ml_converted: true as const } : {}),
+      // 4.5.5: 공개 중량은 넘기기만 한다. 적용 여부(db_match === 'name', whole_count)는 assembleAnalysis가 정한다
+      ...(typeof f.w === 'number' && f.w > 0 ? { published_g: f.w } : {}),
     }
     return r
   }

@@ -20,7 +20,7 @@ const TOP_KEYS = new Set(["items", "totals", "warnings", "model", "prompt_versio
 const REQUIRED = ["id", "name", "db_food_code", "eaters", "before_grams", "remaining_ratio", "consumed_grams",
   "per_100g", "nutrition_source", "consumed", "kcal_overridden", "confidence", "needs_review"];
 const ITEM_KEYS = new Set([...REQUIRED, "location", "db_name", "db_match", "db_ml_converted", "db_reference",
-  "per_100g_fill", "user_edited"]);
+  "per_100g_fill", "user_edited", "grams_source", "published_g", "unit_count"]);
 const REF_KEYS = new Set(["db_food_code", "db_name", "db_match", "kcal_per_100g", "ml_converted"]);
 
 export function checkAnalysis(r) {
@@ -123,6 +123,20 @@ export function checkAnalysis(r) {
         if (!inRange(ref.kcal_per_100g, 0, 900)) errors.push(`${tag}: db_reference.kcal_per_100g 범위(0~900) 벗어남`);
         if ("ml_converted" in ref && typeof ref.ml_converted !== "boolean") errors.push(`${tag}: db_reference.ml_converted는 boolean`);
       }
+    }
+
+    // 공개 중량(스펙 4.5.5): grams_source·published_g·unit_count는 함께 있거나 함께 없다. published면 before_grams ≈ published_g × unit_count(±1g)
+    const pubKeys = ['grams_source', 'published_g', 'unit_count'].filter((k) => k in it);
+    if (pubKeys.length > 0 && pubKeys.length < 3) errors.push(`${tag}: grams_source·published_g·unit_count는 함께 넣는다(있는 것: ${pubKeys.join(', ')})`);
+    if (pubKeys.length === 3) {
+      const pw = it.published_g;
+      const uc = it.unit_count;
+      const pwOk = typeof pw === 'number' && Number.isFinite(pw) && pw > 0;
+      if (it.grams_source !== 'published') errors.push(`${tag}: grams_source는 "published"만 허용`);
+      if (!pwOk) errors.push(`${tag}: published_g는 0보다 큰 수`);
+      if (!(Number.isInteger(uc) && uc >= 1 && uc <= 10)) errors.push(`${tag}: unit_count는 정수 1~10`);
+      else if (pwOk && typeof it.before_grams === 'number' && Math.abs(it.before_grams - pw * uc) > 1)
+        errors.push(`${tag}: before_grams(${it.before_grams})가 published_g × unit_count(${pw * uc})와 1g 넘게 다르다`);
     }
 
     const consumedOk = isNutrients(it.consumed);

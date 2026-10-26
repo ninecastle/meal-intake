@@ -2,6 +2,7 @@
 // 사용자 결정으로 추가한 필드: MealItem.db_ml_converted, NutritionResult db 분기의 ml_converted(화면 출처 "DB(환산)").
 // MealItem.db_reference, NutritionResult ai_estimate 분기의 reference: 종류별 차이가 큰 음식이 DB 대표값·일반 이름에만
 // 맞았을 때 값은 AI 추정을 쓰고, 그 DB 값은 화면에 참고로만 보인다(2026-10-26 사용자 결정).
+// MealItem.grams_source·published_g·unit_count, BeforeItem.whole_count, NutritionResult db 분기의 published_g: 공개 중량(스펙 4.5.5).
 
 export type Nutrients = { kcal: number; carbs_g: number; protein_g: number; fat_g: number }
 /** 화면: DB / 검색 기반 / AI 추정 / 직접 입력 */
@@ -34,6 +35,13 @@ export interface MealItem {
   /** 같이 먹은 인원수. 정수 1~20, 기본 1 */
   eaters: number
   before_grams: number
+  /** 공개 중량(4.5.5)으로 before_grams = published_g × unit_count를 정했을 때만. 세 필드는 함께 있거나 함께 없다.
+   *  사용자가 무게를 고치면 setBeforeGrams가 지운다. 이름을 바꿔도 유지한다. 화면: "공개 중량 223g × 1" */
+  grams_source?: 'published'
+  /** 공개 중량(g, 식약처 DB 식품중량) */
+  published_g?: number
+  /** 통째로 보인 개수(호출 A whole_count, 정수 1~10) */
+  unit_count?: number
   /** 0~1, null = 매칭 실패 */
   remaining_ratio: number | null
   consumed_grams: number
@@ -68,6 +76,9 @@ export interface BeforeItem {
   confidence: number
   /** 범위 검사에 실패하면 null */
   per_100g_guess: Nutrients | null
+  /** a3: 한 개·한 마리·한 판·1인분이 통째로 보이는 개수(정수 1~10). 일부·조각·나눠 담김·정해진 크기 없음이면 null.
+   *  a2 이전에 저장된 먹기 전 결과에는 없을 수 있어 선택 필드로 둔다(없으면 null과 같다) */
+  whole_count?: number | null
 }
 export interface BeforeAnalysis { items: BeforeItem[]; warnings: string[]; model: string; prompt_version: string }
 export interface AfterItem { id: string; remaining_ratio: number | null; confidence: number }
@@ -90,6 +101,8 @@ export type NutritionResult =
       db_match: DbMatch
       /** 화면 출처 "DB(환산)" */
       ml_converted?: true
+      /** 매칭된 행의 공개 중량(g, 4.5.5). assembleAnalysis가 db_match === 'name'이고 whole_count가 있을 때만 쓴다 */
+      published_g?: number
     }
   | {
       source: 'search'

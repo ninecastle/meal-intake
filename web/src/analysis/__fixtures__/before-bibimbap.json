@@ -1,17 +1,17 @@
 {
   "items": [
     { "id": "i1", "name": "비빔밥", "location": "가운데 큰 흰 대접", "before_grams": 450, "confidence": 0.85,
-      "per_100g_guess": { "kcal": 150, "carbs_g": 24, "protein_g": 5, "fat_g": 4 } },
+      "per_100g_guess": { "kcal": 150, "carbs_g": 24, "protein_g": 5, "fat_g": 4 }, "whole_count": 1 },
     { "id": "i2", "name": "된장국 건더기", "location": "오른쪽 아래 국그릇 안 두부·애호박", "before_grams": 60, "confidence": 0.6,
-      "per_100g_guess": { "kcal": 60, "carbs_g": 5, "protein_g": 5, "fat_g": 2.5 } },
+      "per_100g_guess": { "kcal": 60, "carbs_g": 5, "protein_g": 5, "fat_g": 2.5 }, "whole_count": null },
     { "id": "i3", "name": "된장국 국물", "location": "오른쪽 아래 국그릇", "before_grams": 250, "confidence": 0.7,
-      "per_100g_guess": { "kcal": 15, "carbs_g": 1.5, "protein_g": 1, "fat_g": 0.5 } },
+      "per_100g_guess": { "kcal": 15, "carbs_g": 1.5, "protein_g": 1, "fat_g": 0.5 }, "whole_count": null },
     { "id": "i4", "name": "배추김치", "location": "왼쪽 위 작은 흰 접시", "before_grams": 50, "confidence": 0.9,
-      "per_100g_guess": { "kcal": 20, "carbs_g": 3.5, "protein_g": 1.5, "fat_g": 0.5 } },
+      "per_100g_guess": { "kcal": 20, "carbs_g": 3.5, "protein_g": 1.5, "fat_g": 0.5 }, "whole_count": null },
     { "id": "i5", "name": "콩나물무침", "location": "위쪽 가운데 작은 접시", "before_grams": 40, "confidence": 0.8,
-      "per_100g_guess": { "kcal": 45, "carbs_g": 4, "protein_g": 3, "fat_g": 2 } },
+      "per_100g_guess": { "kcal": 45, "carbs_g": 4, "protein_g": 3, "fat_g": 2 }, "whole_count": null },
     { "id": "i6", "name": "멸치볶음", "location": "오른쪽 위 작은 사각 접시", "before_grams": 25, "confidence": 0.5,
-      "per_100g_guess": { "kcal": 330, "carbs_g": 28, "protein_g": 30, "fat_g": 11 } }
+      "per_100g_guess": { "kcal": 330, "carbs_g": 28, "protein_g": 30, "fat_g": 11 }, "whole_count": null }
   ],
   "warnings": ["목업 응답입니다(VITE_AI_MOCK=1)"]
 }

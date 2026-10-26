@@ -124,10 +124,22 @@
     "죽 및 스프류"
   ],
   "serving_size_nonempty": 0,
+  "published_weight_raw": {
+    "g": {
+      "rows": 12625,
+      "not_100": 11897
+    },
+    "ml": {
+      "rows": 2600,
+      "not_100": 2599
+    },
+    "unparsable": 0
+  },
   "rows_after_filters": 19719,
   "merged_same_name": 6173,
   "foods": 11381,
   "foods_ml_converted": 1995,
+  "foods_with_w": 8668,
   "foods_carbs_null": 7511,
   "foods_fat_null": 7852,
   "foods_carbs_and_fat_null": 7437,
@@ -135,8 +147,8 @@
   "groups": 1225,
   "detail_keys": 9949,
   "file": "web/public/data/mfds-foods-20261006.json",
-  "file_bytes": 1818902,
-  "gzip_bytes": 298036,
-  "brotli_bytes": 224131,
+  "file_bytes": 1889359,
+  "gzip_bytes": 316523,
+  "brotli_bytes": 237715,
   "excluded_total": 2184
 }

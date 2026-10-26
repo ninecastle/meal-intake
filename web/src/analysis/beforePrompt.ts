@@ -1,12 +1,13 @@
-// 호출 A(먹기 전 분석) 프롬프트 a2·응답 스키마·응답 정리.
+// 호출 A(먹기 전 분석) 프롬프트 a3·응답 스키마·응답 정리.
 // 출처: .claude/skills/intake-calorie-estimation/references/prompt-template.md 호출 A.
 // a2(2026-10-26): a1 + 종류에 따라 칼로리 차이가 큰 음식은 보이는 특징까지 넣은 구체적인 이름, per_100g_guess는 보이는 구성을 따져 추정
 // (CLAUDE.md "칼로리 계산 순서"). 같은 사진 캐시는 prompt_version으로 구분되므로 a1 결과는 다시 쓰지 않는다.
+// a3(2026-10-26): a2 + whole_count(한 개·한 마리·한 판·1인분이 통째로 보이는 개수). 공개 중량(스펙 4.5.5)에 쓴다. a2 캐시는 다시 분석한다.
 // 이 파일은 import.meta.env를 쓰지 않는다(Node 시험 스크립트에서도 그대로 불러 쓴다).
 import { Schema, ThinkingLevel, type GenerationConfig } from 'firebase/ai'
 import type { BeforeItem, Nutrients } from '../types/analysis'
 
-export const PROMPT_VERSION_A = 'a2'
+export const PROMPT_VERSION_A = 'a3'
 
 export const SYSTEM_INSTRUCTION_A = `당신은 식사 사진을 분석하는 영양 보조 도구다. 먹기 전 식탁 사진 한 장이 주어진다.
 
@@ -18,6 +19,7 @@ export const SYSTEM_INSTRUCTION_A = `당신은 식사 사진을 분석하는 영
 4. 각 음식의 먹기 전 중량(g)을 추정한다. 수저, 표준 밥공기(밥 약 210g), 접시 크기를 단서로 쓴다.
 5. 국·찌개는 건더기와 국물을 별도 항목으로 나눈다.
 6. per_100g_guess에 100g당 kcal, 탄수화물·단백질·지방(g) 추정값을 적는다. 일반적인 값을 그대로 쓰지 말고 보이는 구성(패티 수, 치즈·소스·토핑, 튀김옷, 크림·시럽 등)을 따져 그 음식에 맞게 추정한다. DB에 없거나, 종류 차이가 큰 음식이 DB 대표값에만 맞을 때 쓰인다.
+7. whole_count: 버거, 피자 한 판, 치킨 한 마리, 도시락, 컵 음료처럼 한 개·한 마리·한 판·1인분이 손대지 않은 모양 그대로 통째로 보이면 그 개수를 정수(1~10)로 적는다. 일부만 덜어 왔거나, 잘라 놓은 조각(피자 몇 조각 등)이거나, 여러 그릇에 나눠 담겼거나, 반찬·나물·국물처럼 정해진 크기가 없는 음식이면 null로 적는다. 판단이 어려우면 null. before_grams는 whole_count와 상관없이 그대로 추정한다.
 
 규칙:
 - 섭취량이나 총 칼로리를 계산하지 않는다.
@@ -47,6 +49,7 @@ export const RESPONSE_SCHEMA_A = Schema.object({
           before_grams: Schema.number(),
           confidence: Schema.number(),
           per_100g_guess: PER100_SCHEMA,
+          whole_count: Schema.integer({ nullable: true }),
         },
       }),
     }),
@@ -105,6 +108,13 @@ function normConfidence(v: unknown): number {
   return Math.round(Math.min(1, Math.max(0, c)) * 100) / 100
 }
 
+export const WHOLE_COUNT_MAX = 10
+/** whole_count 정리: 정수 1~10만 남기고 나머지(범위 밖·소수·문자열·누락)는 null */
+export function normWholeCount(v: unknown): number | null {
+  const n = num(v)
+  return n !== null && Number.isInteger(n) && n >= 1 && n <= WHOLE_COUNT_MAX ? n : null
+}
+
 /** 모델 원본(JSON 객체) → 정리된 항목. id는 i1부터 다시 매긴다. */
 export function normalizeBeforeResponse(raw: unknown): NormalizeBeforeResult {
   if (!isObj(raw) || !Array.isArray(raw.items)) return { ok: false, kind: 'invalid', detail: 'items 배열이 없습니다' }
@@ -148,6 +158,7 @@ export function normalizeBeforeResponse(raw: unknown): NormalizeBeforeResult {
       before_grams,
       confidence,
       per_100g_guess: checkPer100(it.per_100g_guess),
+      whole_count: normWholeCount(it.whole_count),
     })
   }
   if (items.length === 0) return { ok: false, kind: 'invalid', detail: '형식에 맞는 항목이 없습니다' }

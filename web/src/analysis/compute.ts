@@ -118,6 +118,15 @@ export function applyNutrition(item: MealItem, r: NutritionResult): MealItem {
   return recomputeItem(next)
 }
 
+/** 먹기 전 무게를 사용자 값으로 바꾼다. 공개 중량 표시(grams_source·published_g·unit_count, 4.5.5)를 지우고 다시 계산한다 */
+export function setBeforeGrams(item: MealItem, g: number): MealItem {
+  const next: MealItem = { ...item, before_grams: Math.max(0, num(g, 0)) }
+  delete next.grams_source
+  delete next.published_g
+  delete next.unit_count
+  return recomputeItem(next)
+}
+
 /** 숫자면 칼로리 직접 입력(kcal_overridden=true), null이면 해제 후 공식대로 다시 계산.
  *  per_100g=null(직접 입력 출처)은 해제할 수 없어 그대로 둔다. */
 export function setKcalOverride(item: MealItem, kcal: number | null): MealItem {
@@ -163,6 +172,16 @@ export function computeTotals(items: MealItem[]): MealIntakeAnalysis['totals'] {
   return { before_kcal: round1(before), consumed: roundNutrients(sum) }
 }
 
+/** 공개 중량 표시 세 필드(4.5.5). 함께 있고 before_grams ≈ published_g × unit_count(±1g)일 때만 남긴다 */
+function publishedFields(it: MealItem): Pick<MealItem, 'grams_source' | 'published_g' | 'unit_count'> {
+  const w = it.published_g
+  const n = it.unit_count
+  if (it.grams_source !== 'published' || typeof w !== 'number' || !Number.isFinite(w) || w <= 0) return {}
+  if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > 10) return {}
+  if (Math.abs(num(it.before_grams, 0) - w * n) > 1) return {}
+  return { grams_source: 'published', published_g: w, unit_count: n }
+}
+
 /** 저장용 항목: 스키마에 있는 키만, 출처에 맞는 필드만, undefined 없이(Firestore가 undefined를 거부한다). */
 function toStoredItem(it: MealItem): MealItem {
   const src = it.nutrition_source
@@ -178,6 +197,7 @@ function toStoredItem(it: MealItem): MealItem {
     ...(src === 'ai_estimate' && it.db_reference ? { db_reference: copyReference(it.db_reference) } : {}),
     eaters: it.eaters,
     before_grams: round1(it.before_grams),
+    ...publishedFields(it),
     remaining_ratio: it.remaining_ratio,
     consumed_grams: round1(it.consumed_grams),
     per_100g: it.per_100g ? { ...it.per_100g } : null,

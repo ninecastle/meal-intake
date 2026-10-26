@@ -13,6 +13,7 @@ export interface MfdsFood {
   f: number | null // 지방 g/100g, 원본이 비어 있으면 null
   ml?: 1 // 원본 기준량 100ml를 밀도 1.0으로 환산한 행
   s?: number // 1인(회)분량 참고량(g)
+  w?: number // 공개 중량(g, 스펙 4.5.5). 업체 제공 행의 식품중량이 100g·100ml가 아닐 때만, ml은 1ml=1g
 }
 
 export interface MfdsDb {
@@ -227,6 +228,7 @@ export interface DbMatchResult {
   food: MfdsFood
   match: DbMatch
   key: string // 실제로 맞은 키
+  w?: number // 매칭된 행의 공개 중량(food.w, 스펙 4.5.5)
 }
 
 function exactKey(idx: NutritionDbIndex, q: string): { i: number; match: DbMatch } | null {
@@ -238,7 +240,10 @@ function exactKey(idx: NutritionDbIndex, q: string): { i: number; match: DbMatch
 
 /** 색인이 이미 있을 때 쓰는 동기 버전. */
 export function matchFood(idx: NutritionDbIndex, name: string, dbCode?: string): DbMatchResult | null {
-  const hit = (i: number, match: DbMatch, key: string): DbMatchResult => ({ index: i, food: idx.db.foods[i], match, key })
+  const hit = (i: number, match: DbMatch, key: string): DbMatchResult => {
+    const food = idx.db.foods[i]
+    return { index: i, food, match, key, ...(food.w != null ? { w: food.w } : {}) }
+  }
   if (dbCode) {
     const i = idx.byCode.get(dbCode)
     if (i !== undefined) return hit(i, 'name', dbCode)

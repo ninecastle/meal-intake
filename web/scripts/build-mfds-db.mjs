@@ -1,4 +1,4 @@
-// 식약처 전국통합식품영양성분정보(음식)표준데이터 원본 → 앱용 DB JSON (스펙 3.5절, 4.5.2~4.5.4)
+// 식약처 전국통합식품영양성분정보(음식)표준데이터 원본 → 앱용 DB JSON (스펙 3.5절, 4.5.2~4.5.5)
 // 실행: node web/scripts/build-mfds-db.mjs [원본 JSON 경로]
 // 출력: web/public/data/mfds-foods-20261006.json, web/scripts/build-mfds-db.stats.json
 import fs from 'node:fs'
@@ -75,6 +75,24 @@ function groupBy(xs, keyOf) {
 
 const inc = (o, k, n = 1) => (o[k] = (o[k] ?? 0) + n)
 
+// 4.5.5 공개 중량: 식품기원이 업체 제공이고 식품중량이 100g·100ml가 아닌 값만 쓴다(100이면 영양값 기준량과 같은 값이라
+// 메뉴 크기가 아니다. 예: 닭튀김_허니콤보 치킨 100g). ml은 1ml=1g. 가정식·급식·외식 분석 행의 식품중량은 시료 무게라 쓰지 않는다.
+const VENDOR_ORIGIN = '외식(프랜차이즈 등 업체 제공 영양정보)'
+function publishedWeight(rec, st) {
+  if (String(rec['식품기원명'] ?? '').trim() !== VENDOR_ORIGIN) return undefined
+  const m = /^(\d+(?:\.\d+)?)\s*(g|ml)$/i.exec(String(rec['식품중량'] ?? '').trim().replace(/,/g, ''))
+  if (!m) {
+    st.unparsable++
+    return undefined
+  }
+  const unit = m[2].toLowerCase()
+  const v = Number(m[1])
+  st[unit].rows++
+  if (!(v > 0) || v === 100) return undefined
+  st[unit].not_100++
+  return v
+}
+
 // ── 읽기 ──
 const { records } = JSON.parse(fs.readFileSync(RAW, 'utf8'))
 const stats = {
@@ -96,6 +114,7 @@ const stats = {
   ml_only_names_by_category: {},
   liquid_categories: [...LIQUID_CATEGORIES],
   serving_size_nonempty: 0,
+  published_weight_raw: { g: { rows: 0, not_100: 0 }, ml: { rows: 0, not_100: 0 }, unparsable: 0 },
 }
 
 // ── 1~3: 숫자 변환, 기준량, 범위 ──
@@ -103,6 +122,7 @@ const rows = []
 for (const rec of records) {
   const basis = String(rec['영양성분함량기준량'] ?? '').trim()
   inc(stats.by_basis, basis || '(빈 값)')
+  const w = publishedWeight(rec, stats.published_weight_raw)
   const cb = num(rec['탄수화물(g)'])
   const f = num(rec['지방(g)'])
   if (cb == null) stats.raw_null.carbs++
@@ -144,6 +164,7 @@ for (const rec of records) {
     f,
     ml: basis === '100ml',
     s: sm ? Number(sm[1]) : undefined,
+    w,
     cat: rec['식품대분류명'] ?? '',
     origin: originRank(rec['식품기원명']),
     date: rec['데이터기준일자'] ?? '',
@@ -198,6 +219,7 @@ const foods = reps.map((r) => {
   const o = { c: r.c, n: r.n, r: r.r, k: r.k, p: r.p, cb: r.cb, f: r.f }
   if (r.ml) o.ml = 1
   if (r.s != null) o.s = r.s
+  if (r.w != null) o.w = r.w
   return o
 })
 const text = JSON.stringify({ v: VERSION, src: SRC_LABEL, foods, groups, d })
@@ -211,6 +233,7 @@ Object.assign(stats, {
   merged_same_name: merged,
   foods: foods.length,
   foods_ml_converted: foods.filter((x) => x.ml).length,
+  foods_with_w: foods.filter((x) => x.w != null).length,
   foods_carbs_null: foods.filter((x) => x.cb == null).length,
   foods_fat_null: foods.filter((x) => x.f == null).length,
   foods_carbs_and_fat_null: foods.filter((x) => x.cb == null && x.f == null).length,
