@@ -1,21 +1,26 @@
 import { useEffect, useRef, useState } from 'react'
 import { analyzeAfter, analyzeBefore, getAnalysisMode, getAnalysisOrigin } from '../analysis/analyze'
 import { assembleAnalysis } from '../analysis/assemble'
-import { buildAnalysis, recomputeItem } from '../analysis/compute'
+import { buildAnalysis } from '../analysis/compute'
 import { AnalysisError } from '../analysis/errors'
 import { validateAnalysis } from '../analysis/validate'
+import ReviewEditor from '../components/review/ReviewEditor'
 import { beforePhotoStore } from '../photos/beforePhotoStore'
 import { compressPhoto } from '../photos/compress'
-import type { AfterAnalysis, BeforeAnalysis, MealIntakeAnalysis, MealItem } from '../types/analysis'
+import { isSamePhoto } from '../photos/samePhoto'
+import type { AfterAnalysis, BeforeAnalysis, MealIntakeAnalysis } from '../types/analysis'
 
 // 개발용 흐름 시험 패널.
 // 조각 2: 먹기 전 사진 → 압축 → IndexedDB 보관 → 먹기 전 분석.
 // 조각 3: 먹은 후 사진(메모리에만) + 보관한 먹기 전 사진·결과 → 먹은 후 분석 → 성공하면 IndexedDB 사진 삭제.
-// 조각 4: 먹은 후 분석이 끝나면 영양값 조회(DB → AI 추정) → 섭취량 계산 → 음식별 값·출처 표시. 인원수는 여기서 바꿔 볼 수 있다.
+// 조각 4: 먹은 후 분석이 끝나면 영양값 조회(DB → AI 추정) → 섭취량 계산.
+// 2단계 조각 1: 먹은 후 분석 전에 같은 사진인지 확인(같으면 사용자가 고를 때까지 호출 안 함),
+//   결과는 편집기(ReviewEditor)로 고친다. "직접 입력으로 시작"은 사진 없이 빈 분석으로 편집기를 연다.
 // 사진 선택 1회 = 분석 1회, 자동 재호출 없음. 영양값 단계는 먹기 전 추정값이 없는 음식에만 AI 호출(호출 D)을 한다.
 
 type ErrInfo = { stage: string; code?: string; reason?: string; message: string }
 type PhotoInfo = { kb: number; width: number; height: number }
+type StoredBefore = Awaited<ReturnType<typeof beforePhotoStore.get>>
 
 // http://192.168.x.x 개발 서버(보안 컨텍스트 아님)에서는 crypto.randomUUID가 없다.
 function newMealId(): string {
@@ -54,6 +59,7 @@ export default function FlowTest() {
   const [busy, setBusy] = useState(false)
   const busyRef = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
+  const afterInputRef = useRef<HTMLInputElement>(null)
   const [mealId, setMealId] = useState<string | null>(null)
   const [photo, setPhoto] = useState<PhotoInfo | null>(null)
   const [where, setWhere] = useState<'idb' | 'memory' | null>(null)
@@ -67,8 +73,12 @@ export default function FlowTest() {
   const [afterElapsedMs, setAfterElapsedMs] = useState<number | null>(null)
   const [afterSentBefore, setAfterSentBefore] = useState<boolean | null>(null)
   const [cleanupMsg, setCleanupMsg] = useState<string | null>(null)
+  // 먹기 전과 같은 사진: 사용자가 고를 때까지 압축본을 메모리에만 들고 있는다(저장하지 않음)
+  const [samePending, setSamePending] = useState<{ beforePhoto: Blob; afterPhoto: Blob } | null>(null)
   const [meal, setMeal] = useState<MealIntakeAnalysis | null>(null)
   const [mealElapsedMs, setMealElapsedMs] = useState<number | null>(null)
+  // 새 분석이 들어오면 편집기 상태(순서·되돌리기)를 새로 시작한다
+  const [editorKey, setEditorKey] = useState(0)
 
   // 화면을 떠나면 진행 중 요청을 끊고 미리보기 URL을 돌려준다.
   useEffect(() => () => abortRef.current?.abort(), [])
@@ -123,13 +133,16 @@ export default function FlowTest() {
     setAfterElapsedMs(null)
     setAfterSentBefore(null)
     setCleanupMsg(null)
+    setSamePending(null)
     setMeal(null)
     setMealElapsedMs(null)
   }
 
-  // 먹은 후 사진은 압축본을 이 함수 안에서만 들고 있다(어디에도 저장하지 않음).
+  // 먹은 후 사진은 압축본을 메모리에만 들고 있다(어디에도 저장하지 않음).
   async function onPickAfter(file: File) {
     if (busyRef.current || !mealId || !result) return
+    const id = mealId
+    const before = result
     busyRef.current = true
     setBusy(true)
     resetAfter()
@@ -139,36 +152,15 @@ export default function FlowTest() {
       const afterPhoto = await compressPhoto(file)
 
       stage = '먹기 전 사진 꺼내기'
-      const beforePhoto = await beforePhotoStore.get(mealId)
-      setAfterSentBefore(beforePhoto != null)
+      const beforePhoto = await beforePhotoStore.get(id)
 
-      stage = '먹은 후 분석'
-      const ac = new AbortController()
-      abortRef.current = ac
-      const t0 = performance.now()
-      let res: AfterAnalysis
-      try {
-        res = await analyzeAfter({ before: result, beforePhoto, afterPhoto }, { signal: ac.signal })
-      } finally {
-        setAfterElapsedMs(Math.round(performance.now() - t0))
+      // 분석 호출 전에 비교한다. 같으면 [그대로 분석]을 누르기 전에는 호출하지 않는다(한도 절약).
+      stage = '같은 사진 확인'
+      if (beforePhoto && (await isSamePhoto(beforePhoto, afterPhoto))) {
+        setSamePending({ beforePhoto, afterPhoto })
+        return
       }
-      setAfter(res)
-
-      // 분석이 성공했을 때만 먹기 전 사진을 지운다(실패하면 다시 시도할 수 있게 남긴다).
-      stage = '먹기 전 사진 삭제'
-      await beforePhotoStore.remove(mealId)
-      const left = await beforePhotoStore.get(mealId)
-      setCleanupMsg(left ? '먹기 전 사진이 아직 남아 있음(삭제 실패)' : '먹기 전 사진 삭제됨 — 다시 꺼내 보니 없음')
-      setPreview(null)
-      setPreviewMsg(null)
-
-      stage = '영양값 계산'
-      const t1 = performance.now()
-      try {
-        setMeal(await assembleAnalysis(result, res, { signal: ac.signal }))
-      } finally {
-        setMealElapsedMs(Math.round(performance.now() - t1))
-      }
+      await runAfter(id, before, beforePhoto, afterPhoto)
     } catch (e) {
       setAfterError(toErr(stage, e))
     } finally {
@@ -176,6 +168,71 @@ export default function FlowTest() {
       busyRef.current = false
       setBusy(false)
     }
+  }
+
+  async function analyzeSameAnyway() {
+    const p = samePending
+    if (!p || busyRef.current || !mealId || !result) return
+    busyRef.current = true
+    setBusy(true)
+    setSamePending(null)
+    try {
+      await runAfter(mealId, result, p.beforePhoto, p.afterPhoto)
+    } finally {
+      abortRef.current = null
+      busyRef.current = false
+      setBusy(false)
+    }
+  }
+
+  function pickOtherAfter() {
+    setSamePending(null)
+    afterInputRef.current?.click()
+  }
+
+  // 먹은 후 분석 → 성공하면 먹기 전 사진 삭제 → 영양값 계산. 오류는 afterError로 보인다. busy는 호출한 쪽이 잡는다.
+  async function runAfter(id: string, before: BeforeAnalysis, beforePhoto: StoredBefore, afterPhoto: Blob) {
+    setAfterSentBefore(beforePhoto != null)
+    let stage = '먹은 후 분석'
+    try {
+      const ac = new AbortController()
+      abortRef.current = ac
+      const t0 = performance.now()
+      let res: AfterAnalysis
+      try {
+        res = await analyzeAfter({ before, beforePhoto, afterPhoto }, { signal: ac.signal })
+      } finally {
+        setAfterElapsedMs(Math.round(performance.now() - t0))
+      }
+      setAfter(res)
+
+      // 분석이 성공했을 때만 먹기 전 사진을 지운다(실패하면 다시 시도할 수 있게 남긴다).
+      stage = '먹기 전 사진 삭제'
+      await beforePhotoStore.remove(id)
+      const left = await beforePhotoStore.get(id)
+      setCleanupMsg(left ? '먹기 전 사진이 아직 남아 있음(삭제 실패)' : '먹기 전 사진 삭제됨 — 다시 꺼내 보니 없음')
+      setPreview(null)
+      setPreviewMsg(null)
+
+      stage = '영양값 계산'
+      const t1 = performance.now()
+      try {
+        setMeal(await assembleAnalysis(before, res, { signal: ac.signal }))
+        setEditorKey((k) => k + 1)
+      } finally {
+        setMealElapsedMs(Math.round(performance.now() - t1))
+      }
+    } catch (e) {
+      setAfterError(toErr(stage, e))
+    }
+  }
+
+  // 사진 없이 빈 분석으로 편집기를 연다(AI 호출 없음)
+  function startManual() {
+    if (busyRef.current) return
+    resetAfter()
+    setMeal(buildAnalysis([], []))
+    setEditorKey((k) => k + 1)
   }
 
   async function showStored() {
@@ -197,9 +254,20 @@ export default function FlowTest() {
     setPreviewMsg('보관 사진 지움')
   }
 
+  const check = meal ? validateAnalysis(meal) : null
+
   return (
     <div className="mt-2 w-full rounded border border-dashed border-gray-300 p-3 text-left text-xs">
       <p className="font-semibold">흐름 시험 (DEV) · 분석 모드: {showMode(getAnalysisMode())}</p>
+
+      <button
+        type="button"
+        onClick={startManual}
+        disabled={busy}
+        className="mt-2 min-h-11 rounded border border-gray-400 px-3 disabled:opacity-50"
+      >
+        직접 입력으로 시작 (사진 없이 편집기 시험)
+      </button>
 
       <label className="mt-2 block text-gray-600">
         먹기 전 사진 (선택 1회 = 분석 1회)
@@ -295,6 +363,7 @@ export default function FlowTest() {
           <label className="block text-gray-600">
             먹은 후 사진 (선택 1회 = 분석 1회, 사진은 저장하지 않음)
             <input
+              ref={afterInputRef}
               type="file"
               accept="image/*"
               capture="environment"
@@ -307,6 +376,30 @@ export default function FlowTest() {
               className="mt-1 block w-full text-xs disabled:opacity-50"
             />
           </label>
+
+          {samePending && (
+            <div className="mt-2 rounded border border-amber-400 bg-amber-50 p-2 text-sm">
+              <p className="font-semibold text-amber-800">먹기 전과 같은 사진이에요</p>
+              <p className="text-xs text-amber-800">다 먹은 뒤의 접시를 찍었는지 확인해 주세요. 아직 분석을 호출하지 않았어요.</p>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={pickOtherAfter}
+                  className="min-h-11 flex-1 rounded bg-gray-900 px-2 text-white"
+                >
+                  다른 사진 고르기
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void analyzeSameAnyway()}
+                  disabled={busy}
+                  className="min-h-11 flex-1 rounded border border-gray-400 px-2 disabled:opacity-50"
+                >
+                  그대로 분석
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="mt-2 space-y-0.5 break-all text-gray-700">
             <p>
@@ -365,22 +458,31 @@ export default function FlowTest() {
         </div>
       )}
 
-      {meal && (
-        <MealResult
-          meal={meal}
-          elapsedMs={mealElapsedMs}
-          onEaters={(id, n) =>
-            setMeal((m) =>
-              m
-                ? buildAnalysis(
-                    m.items.map((it) => (it.id === id ? recomputeItem({ ...it, eaters: n }) : it)),
-                    m.warnings,
-                    { model: m.model, prompt_version: m.prompt_version },
-                  )
-                : m,
-            )
-          }
-        />
+      {meal && check && (
+        <div className="mt-3 border-t border-gray-200 pt-2">
+          <p className="font-semibold">결과 확인·수정 (2단계 조각 1)</p>
+          <p className="text-gray-700">
+            계산 소요: {mealElapsedMs == null ? '–' : `${mealElapsedMs} ms`} · 검증:{' '}
+            {check.ok ? (
+              <span className="text-green-700">
+                통과{check.warnings.length > 0 && ` (경고 ${check.warnings.length}개)`}
+              </span>
+            ) : (
+              <span className="text-red-600">실패 — {check.errors.join(' / ')}</span>
+            )}
+          </p>
+          <div className="mt-2">
+            <ReviewEditor key={editorKey} analysis={meal} onChange={setMeal} />
+          </div>
+          {meal.warnings.length > 0 && (
+            <ul className="mt-2 list-disc pl-4 text-amber-700">
+              {meal.warnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          )}
+          <p className="mt-1 text-gray-500">prompt: {meal.prompt_version ?? '–'}</p>
+        </div>
       )}
     </div>
   )
@@ -391,132 +493,4 @@ function showOrigin(o: ReturnType<typeof getAnalysisOrigin>): string {
   if (!o) return '–'
   const label = { live: '실제 호출', cache: '캐시(호출 안 함)', mock: '목업' }[o.source]
   return o.source === 'live' ? `${label}, 시도 ${o.attempts}회` : label
-}
-
-function sourceLabel(it: MealItem): string {
-  switch (it.nutrition_source) {
-    case 'db':
-      return it.db_ml_converted ? 'DB(환산)' : 'DB'
-    case 'search':
-      return '검색 기반'
-    case 'ai_estimate':
-      return 'AI 추정'
-    case 'user_input':
-      return '직접 입력'
-  }
-}
-
-// 100g당 탄·지: DB가 비어 있어 AI 추정으로 채웠으면 *, 끝내 없으면 –
-function per100(it: MealItem, k: 'kcal' | 'carbs_g' | 'protein_g' | 'fat_g'): string {
-  if (!it.per_100g) return '–'
-  const fill = k === 'carbs_g' || k === 'fat_g' ? it.per_100g_fill?.[k] : undefined
-  if (fill === 'missing') return '–'
-  const v = k === 'kcal' ? String(Math.round(it.per_100g[k])) : it.per_100g[k].toFixed(1)
-  return fill === 'ai_estimate' ? `${v}*` : v
-}
-
-const g1 = (v: number) => v.toFixed(1)
-
-function MealResult(props: {
-  meal: MealIntakeAnalysis
-  elapsedMs: number | null
-  onEaters: (id: string, n: number) => void
-}) {
-  const { meal, elapsedMs, onEaters } = props
-  const check = validateAnalysis(meal)
-  const t = meal.totals
-  return (
-    <div className="mt-3 border-t border-gray-200 pt-2">
-      <p className="font-semibold">영양값·섭취량 (조각 4)</p>
-      <p className="text-gray-700">
-        계산 소요: {elapsedMs == null ? '–' : `${elapsedMs} ms`} · 검증:{' '}
-        {check.ok ? (
-          <span className="text-green-700">통과</span>
-        ) : (
-          <span className="text-red-600">실패 — {check.errors.join(' / ')}</span>
-        )}
-      </p>
-      <div className="overflow-x-auto">
-        <table className="mt-1 w-full min-w-[40rem]">
-          <thead>
-            <tr className="text-gray-500">
-              <th className="text-left font-normal">이름</th>
-              <th className="text-left font-normal">출처</th>
-              <th className="text-right font-normal">100g당 kcal·탄·단·지</th>
-              <th className="text-right font-normal">먹기 전 g</th>
-              <th className="text-right font-normal">남김</th>
-              <th className="text-right font-normal">인원</th>
-              <th className="text-right font-normal">섭취 g</th>
-              <th className="text-right font-normal">섭취 kcal·탄·단·지</th>
-            </tr>
-          </thead>
-          <tbody>
-            {meal.items.map((it) => (
-              <tr key={it.id} className="border-t border-gray-100 align-top">
-                <td className="py-0.5">
-                  {it.name}
-                  {it.needs_review && <span className="ml-1 text-amber-700">(확인 필요)</span>}
-                  {it.nutrition_source === 'db' && it.db_name && (
-                    <div className="text-gray-500">
-                      DB: {it.db_name} ({it.db_match})
-                    </div>
-                  )}
-                  {it.db_reference && (
-                    <div className="text-gray-500">
-                      참고 DB 대표값 {Math.round(it.db_reference.kcal_per_100g)}kcal/100g ({it.db_reference.db_name},{' '}
-                      {it.db_reference.db_match})
-                    </div>
-                  )}
-                </td>
-                <td>{sourceLabel(it)}</td>
-                <td className="text-right">
-                  {per100(it, 'kcal')} · {per100(it, 'carbs_g')} · {per100(it, 'protein_g')} · {per100(it, 'fat_g')}
-                </td>
-                <td className="text-right">{g1(it.before_grams)}</td>
-                <td className="text-right">{it.remaining_ratio == null ? '?' : pct(it.remaining_ratio)}</td>
-                <td className="text-right">
-                  <input
-                    type="number"
-                    min={1}
-                    max={20}
-                    value={it.eaters}
-                    onChange={(e) => {
-                      const n = Math.min(20, Math.max(1, Math.round(Number(e.target.value) || 1)))
-                      onEaters(it.id, n)
-                    }}
-                    className="w-12 rounded border border-gray-300 px-1 text-right"
-                  />
-                </td>
-                <td className="text-right">{g1(it.consumed_grams)}</td>
-                <td className="text-right">
-                  {Math.round(it.consumed.kcal)} · {g1(it.consumed.carbs_g)} · {g1(it.consumed.protein_g)} ·{' '}
-                  {g1(it.consumed.fat_g)}
-                </td>
-              </tr>
-            ))}
-            <tr className="border-t border-gray-300 font-semibold">
-              <td colSpan={7} className="py-0.5">
-                합계 (먹기 전 {Math.round(t.before_kcal)} kcal)
-              </td>
-              <td className="text-right">
-                {Math.round(t.consumed.kcal)} · {g1(t.consumed.carbs_g)} · {g1(t.consumed.protein_g)} ·{' '}
-                {g1(t.consumed.fat_g)}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <p className="mt-1 text-gray-500">
-        * 탄·지가 DB에 없어 AI 추정으로 채운 값 · – 값 없음 · ? 남긴 비율 모름(다 먹은 것으로 계산)
-      </p>
-      {meal.warnings.length > 0 && (
-        <ul className="mt-1 list-disc pl-4 text-amber-700">
-          {meal.warnings.map((w, i) => (
-            <li key={i}>{w}</li>
-          ))}
-        </ul>
-      )}
-      <p className="mt-1 text-gray-500">prompt: {meal.prompt_version ?? '–'}</p>
-    </div>
-  )
 }
