@@ -231,7 +231,14 @@ function FoodRow({ it }: { it: MealItem }) {
         </p>
       )}
       <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-sm">
-        <Field label="먹기 전 무게" value={`${formatGrams(it.before_grams)}g`} />
+        <Field
+          label="먹기 전 무게"
+          value={
+            it.grams_source === 'published' && it.published_g != null
+              ? `${formatGrams(it.before_grams)}g (공개 중량 ${formatGrams(it.published_g)}g × ${it.unit_count ?? 1})`
+              : `${formatGrams(it.before_grams)}g`
+          }
+        />
         <Field
           label="남긴 비율"
           value={it.remaining_ratio === null ? '확인 안 됨' : `${Math.round(it.remaining_ratio * 100)}%`}

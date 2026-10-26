@@ -2,7 +2,7 @@
 // 계산은 모두 analysis/compute.ts 함수로 한다(화면에서 공식을 다시 구현하지 않는다). 사진은 다시 분석하지 않는다.
 // 규칙: 스펙 2.3절 표, CLAUDE.md "결과 수정 규칙".
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { applyNutrition, buildAnalysis, newUserItem, recomputeItem, setKcalOverride } from '../../analysis/compute'
+import { applyNutrition, buildAnalysis, newUserItem, recomputeItem, setBeforeGrams, setKcalOverride } from '../../analysis/compute'
 import { resolveNutrition } from '../../analysis/nutrition'
 import type { MealIntakeAnalysis, MealItem, NutritionResult } from '../../types/analysis'
 import FoodCard from './FoodCard'
@@ -16,6 +16,9 @@ export interface ReviewEditorProps {
 
 const UNDO_MS = 3000
 const LATER = 1_000_000
+
+/** 이름이 바뀌면 다른 메뉴이므로 "공개 중량" 표시만 지운다(무게는 그대로, 스펙 4.5.5) */
+const dropPublished = (it: MealItem) => (it.grams_source ? setBeforeGrams(it, it.before_grams) : it)
 
 /** needs_review 또는 AI 추정: 먼저, 노란 테두리로 */
 const isFlagged = (it: MealItem) => it.needs_review || it.nutrition_source === 'ai_estimate'
@@ -96,7 +99,7 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange }: Revie
     controllers.current.delete(id)
     setPending((p) => omit(p, id))
     if (!find(id)) return
-    update(id, (it) => applyNutrition({ ...it, name, user_edited: true }, r))
+    update(id, (it) => dropPublished(applyNutrition({ ...it, name, user_edited: true }, r)))
     const html = r.source === 'search' ? r.searchSuggestionHtml : null
     setSuggestions((s) => (html ? { ...s, [id]: html } : omit(s, id)))
     if (r.source === 'user_input') setFocusKcalId(id)
@@ -120,7 +123,7 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange }: Revie
     setAsk(null)
     if (!a || !find(a.id)) return
     if (yes) void resolveFor(a.id, a.name, a.dbCode)
-    else update(a.id, (it) => ({ ...it, name: a.name, user_edited: true }))
+    else update(a.id, (it) => dropPublished({ ...it, name: a.name, user_edited: true }))
   }
 
   function cancelEdit(id: string) {
@@ -206,7 +209,7 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange }: Revie
             onCancelEdit={() => cancelEdit(it.id)}
             onConfirmName={(name, dbCode) => confirmName(it.id, name, dbCode)}
             onAnswerAsk={answer}
-            onGrams={(g) => update(it.id, (x) => recomputeItem({ ...x, before_grams: g, user_edited: true }))}
+            onGrams={(g) => update(it.id, (x) => setBeforeGrams({ ...x, user_edited: true }, g))}
             onRatio={(r) => update(it.id, (x) => recomputeItem({ ...x, remaining_ratio: r, user_edited: true }))}
             onEaters={(n) => update(it.id, (x) => recomputeItem({ ...x, eaters: n }))}
             onKcal={(k) => update(it.id, (x) => setKcalOverride(x, k))}

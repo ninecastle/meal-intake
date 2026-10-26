@@ -123,6 +123,11 @@ export default function FoodCard(p: FoodCardProps) {
           <label className="block">
             <span className="text-xs text-gray-600">중량(g, 먹기 전)</span>
             <NumField value={item.before_grams} min={0} max={MAX_GRAMS} onCommit={p.onGrams} label="중량(g)" />
+            {item.grams_source === 'published' && item.published_g != null && (
+              <span className="mt-0.5 block text-xs text-emerald-700">
+                공개 중량 {Math.round(item.published_g)}g × {item.unit_count ?? 1}
+              </span>
+            )}
           </label>
           <div>
             <label className="block">
