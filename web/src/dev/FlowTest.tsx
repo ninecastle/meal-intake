@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
-import { analyzeBefore, getAnalysisMode, getAnalysisOrigin } from '../analysis/analyze'
+import { analyzeAfter, analyzeBefore, getAnalysisMode, getAnalysisOrigin } from '../analysis/analyze'
 import { AnalysisError } from '../analysis/errors'
 import { beforePhotoStore } from '../photos/beforePhotoStore'
 import { compressPhoto } from '../photos/compress'
-import type { BeforeAnalysis } from '../types/analysis'
+import type { AfterAnalysis, BeforeAnalysis } from '../types/analysis'
 
-// 개발용 흐름 시험 패널(1단계 조각 2: 먹기 전 사진 → 압축 → IndexedDB 보관 → 먹기 전 분석).
-// 조각 3·4(먹은 후 분석, 영양값·섭취량)를 이 패널에 이어 붙인다. 사진 선택 1회 = 분석 1회, 자동 재호출 없음.
+// 개발용 흐름 시험 패널.
+// 조각 2: 먹기 전 사진 → 압축 → IndexedDB 보관 → 먹기 전 분석.
+// 조각 3: 먹은 후 사진(메모리에만) + 보관한 먹기 전 사진·결과 → 먹은 후 분석 → 성공하면 IndexedDB 사진 삭제.
+// 조각 4(영양값·섭취량)를 이어 붙인다. 사진 선택 1회 = 분석 1회, 자동 재호출 없음.
 
 type ErrInfo = { stage: string; code?: string; reason?: string; message: string }
 type PhotoInfo = { kb: number; width: number; height: number }
@@ -56,6 +58,11 @@ export default function FlowTest() {
   const [error, setError] = useState<ErrInfo | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [previewMsg, setPreviewMsg] = useState<string | null>(null)
+  const [after, setAfter] = useState<AfterAnalysis | null>(null)
+  const [afterError, setAfterError] = useState<ErrInfo | null>(null)
+  const [afterElapsedMs, setAfterElapsedMs] = useState<number | null>(null)
+  const [afterSentBefore, setAfterSentBefore] = useState<boolean | null>(null)
+  const [cleanupMsg, setCleanupMsg] = useState<string | null>(null)
 
   // 화면을 떠나면 진행 중 요청을 끊고 미리보기 URL을 돌려준다.
   useEffect(() => () => abortRef.current?.abort(), [])
@@ -74,6 +81,7 @@ export default function FlowTest() {
     setError(null)
     setPreview(null)
     setPreviewMsg(null)
+    resetAfter()
 
     const id = newMealId()
     setMealId(id)
@@ -96,6 +104,57 @@ export default function FlowTest() {
       }
     } catch (e) {
       setError(toErr(stage, e))
+    } finally {
+      abortRef.current = null
+      busyRef.current = false
+      setBusy(false)
+    }
+  }
+
+  function resetAfter() {
+    setAfter(null)
+    setAfterError(null)
+    setAfterElapsedMs(null)
+    setAfterSentBefore(null)
+    setCleanupMsg(null)
+  }
+
+  // 먹은 후 사진은 압축본을 이 함수 안에서만 들고 있다(어디에도 저장하지 않음).
+  async function onPickAfter(file: File) {
+    if (busyRef.current || !mealId || !result) return
+    busyRef.current = true
+    setBusy(true)
+    resetAfter()
+
+    let stage = '먹은 후 압축'
+    try {
+      const afterPhoto = await compressPhoto(file)
+
+      stage = '먹기 전 사진 꺼내기'
+      const beforePhoto = await beforePhotoStore.get(mealId)
+      setAfterSentBefore(beforePhoto != null)
+
+      stage = '먹은 후 분석'
+      const ac = new AbortController()
+      abortRef.current = ac
+      const t0 = performance.now()
+      let res: AfterAnalysis
+      try {
+        res = await analyzeAfter({ before: result, beforePhoto, afterPhoto }, { signal: ac.signal })
+      } finally {
+        setAfterElapsedMs(Math.round(performance.now() - t0))
+      }
+      setAfter(res)
+
+      // 분석이 성공했을 때만 먹기 전 사진을 지운다(실패하면 다시 시도할 수 있게 남긴다).
+      stage = '먹기 전 사진 삭제'
+      await beforePhotoStore.remove(mealId)
+      const left = await beforePhotoStore.get(mealId)
+      setCleanupMsg(left ? '먹기 전 사진이 아직 남아 있음(삭제 실패)' : '먹기 전 사진 삭제됨 — 다시 꺼내 보니 없음')
+      setPreview(null)
+      setPreviewMsg(null)
+    } catch (e) {
+      setAfterError(toErr(stage, e))
     } finally {
       abortRef.current = null
       busyRef.current = false
@@ -214,6 +273,81 @@ export default function FlowTest() {
       </div>
       {previewMsg && <p className="mt-1 text-gray-600">{previewMsg}</p>}
       {preview && <img src={preview} alt="보관된 먹기 전 사진" className="mt-1 max-h-32 rounded" />}
+
+      {result && (
+        <div className="mt-3 border-t border-gray-200 pt-2">
+          <label className="block text-gray-600">
+            먹은 후 사진 (선택 1회 = 분석 1회, 사진은 저장하지 않음)
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              disabled={busy}
+              onChange={(e) => {
+                const f = e.target.files?.[0]
+                e.target.value = ''
+                if (f) void onPickAfter(f)
+              }}
+              className="mt-1 block w-full text-xs disabled:opacity-50"
+            />
+          </label>
+
+          <div className="mt-2 space-y-0.5 break-all text-gray-700">
+            <p>
+              먹기 전 사진 함께 보냄: {afterSentBefore == null ? '–' : afterSentBefore ? '예' : '아니요(텍스트만)'}
+              {after && ` · 모델 응답 used_before_photo: ${after.used_before_photo}`}
+            </p>
+            <p>분석 소요: {afterElapsedMs == null ? '–' : `${afterElapsedMs} ms`}</p>
+            <p>결과 출처: {showOrigin(after ? getAnalysisOrigin(after) : null)}</p>
+            {cleanupMsg && <p className="text-green-700">{cleanupMsg}</p>}
+            {afterError && (
+              <p className="text-red-600">
+                오류({afterError.stage}): {afterError.code ?? '-'} / {afterError.reason ?? '-'} — {afterError.message}
+              </p>
+            )}
+          </div>
+
+          {after && (
+            <>
+              <table className="mt-2 w-full">
+                <thead>
+                  <tr className="text-gray-500">
+                    <th className="text-left font-normal">이름</th>
+                    <th className="text-right font-normal">먹기 전 g</th>
+                    <th className="text-right font-normal">남긴 비율</th>
+                    <th className="text-right font-normal">신뢰도</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.items.map((it) => {
+                    const a = after.items.find((x) => x.id === it.id)
+                    return (
+                      <tr key={it.id} className="border-t border-gray-100">
+                        <td className="py-0.5">{it.name}</td>
+                        <td className="text-right">{Math.round(it.before_grams)}</td>
+                        <td className="text-right">
+                          {a?.remaining_ratio == null ? <span className="text-amber-700">확인 필요</span> : pct(a.remaining_ratio)}
+                        </td>
+                        <td className="text-right">{a ? pct(a.confidence) : '–'}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+              {after.warnings.length > 0 && (
+                <ul className="mt-1 list-disc pl-4 text-amber-700">
+                  {after.warnings.map((w, i) => (
+                    <li key={i}>{w}</li>
+                  ))}
+                </ul>
+              )}
+              <p className="mt-1 text-gray-500">
+                model: {after.model} · prompt: {after.prompt_version}
+              </p>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
