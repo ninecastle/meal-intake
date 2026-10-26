@@ -37,7 +37,7 @@ export interface MealDoc {
   consumedKcal?: number
   createdAt: Timestamp | null
   updatedAt: Timestamp | null
-  /** done 기록을 고친 마지막 시각(M16, 스펙 3.2절). 규칙 허용은 3단계 조각 2 */
+  /** done 기록을 고친 마지막 시각(M16, 스펙 3.2절). 규칙: done → done일 때만 request.time */
   editedAt?: Timestamp | null
 }
 
@@ -187,23 +187,30 @@ export async function saveReview(uid: string, mealId: string, analysis: MealInta
   }
 }
 
-/** 캐시 → 서버 순으로 문서가 있는지 본다. 오프라인이고 캐시에도 없으면 새 식사(직접 입력)로 본다. */
-async function mealExists(ref: DocumentReference): Promise<boolean> {
+/**
+ * 캐시 → 서버 순으로 문서 상태를 본다. 문서가 없으면 null.
+ * 오프라인이고 캐시에도 없으면 새 식사(직접 입력)로 본다.
+ */
+async function mealStatus(ref: DocumentReference): Promise<MealStatus | null> {
   try {
-    if ((await getDocFromCache(ref)).exists()) return true
+    const c = await getDocFromCache(ref)
+    if (c.exists()) return (c.data() as MealDoc).status
   } catch {
     // 캐시에 없음
   }
   try {
-    return (await getDoc(ref)).exists()
+    const s = await getDoc(ref)
+    return s.exists() ? (s.data() as MealDoc).status : null
   } catch {
-    return false
+    return null
   }
 }
 
 /**
  * S4 저장: awaiting_after·needs_review → done, 문서가 없으면 done으로 만든다(직접 입력).
- * consumedKcal = analysis.totals.consumed.kcal. 이미 done인 문서는 규칙이 거부한다(done → done 전이 없음).
+ * S8 기록 수정(M16): 이미 done이면 done → done으로 dateKey·mealType·analysis·consumedKcal을 바꾸고 editedAt을 기록한다
+ * (규칙은 done → done일 때만 editedAt = request.time을 허용하고 createdAt은 그대로 둔다).
+ * consumedKcal = analysis.totals.consumed.kcal.
  */
 export async function saveMeal(
   uid: string,
@@ -222,7 +229,9 @@ export async function saveMeal(
     updatedAt: serverTimestamp(),
   }
   try {
-    if (await mealExists(ref)) await updateDoc(ref, fields)
+    const status = await mealStatus(ref)
+    if (status === 'done') await updateDoc(ref, { ...fields, editedAt: serverTimestamp() })
+    else if (status) await updateDoc(ref, fields)
     else await setDoc(ref, { ...fields, createdAt: serverTimestamp() })
   } catch (e) {
     throw writeError(e)

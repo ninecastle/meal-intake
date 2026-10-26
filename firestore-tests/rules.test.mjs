@@ -1,4 +1,4 @@
-// firestore.rules v1 테스트(@firebase/rules-unit-testing + node:test).
+// firestore.rules v2 테스트(@firebase/rules-unit-testing + node:test).
 // 실행: firestore-tests 폴더에서 `npm test` (Firestore 에뮬레이터를 띄워 실행, JDK 21+ 필요, firebase-tools 15 기준).
 // 이미 에뮬레이터가 떠 있으면 `npm run test:running`.
 // 실제 프로젝트는 건드리지 않는다(demo- 프로젝트 ID). AI 호출 없음.
@@ -184,11 +184,10 @@ describe('형식 검사', () => {
     await assertFails(setDoc(doc(alice(), MEAL), awaitingDoc({ beforeAnalysis: b })))
   })
 
-  test('잘못된 전이 거부: done → awaiting_after, needs_review로 생성, done → done', async () => {
+  test('잘못된 전이 거부: done → awaiting_after, needs_review로 생성', async () => {
     await seed(MEAL, doneDoc(analysis(), { beforeAnalysis: beforeAnalysis() }))
     const ref = doc(alice(), MEAL)
-    await assertFails(updateDoc(ref, { status: 'awaiting_after', updatedAt: serverTimestamp() }))
-    await assertFails(updateDoc(ref, { mealType: 'dinner', updatedAt: serverTimestamp() }))
+    await assertFails(updateDoc(ref, { status: 'awaiting_after', updatedAt: serverTimestamp(), editedAt: serverTimestamp() }))
     await assertFails(setDoc(doc(alice(), 'users/alice/meals/m2'), { ...doneDoc(), status: 'needs_review' }))
   })
 
@@ -212,5 +211,61 @@ describe('형식 검사', () => {
     await assertFails(
       updateDoc(doc(alice(), MEAL), { ...reviewFields(), createdAt: new Date('2020-01-01') }),
     )
+  })
+})
+
+describe('저장한 기록 수정(M16, done → done)', () => {
+  const editFields = (a = analysis({ kcal: 300 }), extra = {}) => ({
+    dateKey: '2026-10-26',
+    mealType: 'dinner',
+    status: 'done',
+    analysis: a,
+    consumedKcal: a.totals.consumed.kcal,
+    updatedAt: serverTimestamp(),
+    editedAt: serverTimestamp(),
+    ...extra,
+  })
+  const seedDone = () => seed(MEAL, doneDoc(analysis(), { beforeAnalysis: beforeAnalysis() }))
+
+  test('정상 수정: dateKey·mealType·analysis 변경 허용, 다시 수정해도 허용', async () => {
+    await seedDone()
+    const ref = doc(alice(), MEAL)
+    await assertSucceeds(updateDoc(ref, editFields()))
+    await assertSucceeds(updateDoc(ref, editFields(analysis({ kcal: 410 }), { mealType: 'snack' })))
+  })
+
+  test('잘못된 값으로 수정 거부: consumedKcal 불일치, dateKey 형식, 사진 키', async () => {
+    await seedDone()
+    const ref = doc(alice(), MEAL)
+    await assertFails(updateDoc(ref, editFields(analysis({ kcal: 300 }), { consumedKcal: 999 })))
+    await assertFails(updateDoc(ref, editFields(undefined, { dateKey: '2026-10-6' })))
+    await assertFails(updateDoc(ref, editFields(undefined, { photo: 'data:image/jpeg;base64,AAAA' })))
+  })
+
+  test('done → needs_review 거부', async () => {
+    await seedDone()
+    await assertFails(updateDoc(doc(alice(), MEAL), editFields(undefined, { status: 'needs_review' })))
+  })
+
+  test('수정할 때 createdAt 변경 거부', async () => {
+    await seedDone()
+    await assertFails(updateDoc(doc(alice(), MEAL), editFields(undefined, { createdAt: new Date('2020-01-01') })))
+  })
+
+  test('editedAt이 request.time이 아니거나 없으면 거부', async () => {
+    await seedDone()
+    const ref = doc(alice(), MEAL)
+    await assertFails(updateDoc(ref, editFields(undefined, { editedAt: new Date('2026-10-27T12:00:00Z') })))
+    const { editedAt: _omit, ...noEdited } = editFields()
+    await assertFails(updateDoc(ref, noEdited))
+  })
+
+  test('수정이 아닌 쓰기에 editedAt 넣으면 거부: 생성, awaiting_after → needs_review', async () => {
+    await assertFails(setDoc(doc(alice(), MEAL), doneDoc(analysis(), { editedAt: serverTimestamp() })))
+    await assertFails(setDoc(doc(alice(), 'users/alice/meals/m2'), awaitingDoc({ editedAt: serverTimestamp() })))
+    const m3 = doc(alice(), 'users/alice/meals/m3')
+    await seed('users/alice/meals/m3', awaitingDoc())
+    await assertFails(updateDoc(m3, { ...reviewFields(), editedAt: serverTimestamp() }))
+    await assertSucceeds(updateDoc(m3, reviewFields()))
   })
 })

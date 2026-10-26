@@ -137,3 +137,10 @@ firebase firestore:databases:create "(default)" --location asia-northeast3 --edi
 ### 배포본 로그인 문제 해결 (2026-10-26, 사용자)
 - 증상: 배포본 로그인 `redirect_uri_mismatch`.
 - 조치: Google Cloud 콘솔 OAuth 웹 클라이언트에 승인된 JavaScript 원본 `https://meal-intake-2026.web.app`과 승인된 리디렉션 URI `https://meal-intake-2026.web.app/__/auth/handler` 추가. 이후 배포본 로그인·저장 정상(사용자 확인). 2단계 완료.
+
+## 기록 수정 규칙 (3단계 조각 1-2 데이터 쪽, M16, 2026-10-26, firebase-engineer)
+- `firestore.rules` v2: `done → done`(저장한 기록 수정) 허용. 검사는 새로 저장할 때와 같다(문서 키 `hasOnly`에 `editedAt` 추가, analysis 하위 키, 열거값, dateKey 형식, items ≤ 30, consumedKcal 0~10000·합계 일치). `done → done`이면 `editedAt == request.time`, `createdAt` 불변, `updatedAt == request.time`. `done`에서 다른 상태로는 계속 거부. 생성과 그 밖의 전이에서는 `editedAt`을 새로 넣지 못한다(기존 값 유지만 허용).
+- 규칙 테스트: 수정 시험 6개 추가(정상 수정, 잘못된 값, done → needs_review, createdAt 변경, editedAt 위조·누락, 생성·다른 전이의 editedAt), 기존 "done → done 거부" 줄은 뺐다 → **21개 통과, 실패 0**.
+- `saveMeal`(`web/src/data/meals.ts`): 문서 상태를 캐시 → 서버 순으로 보고, `done`이면 dateKey·mealType·analysis·consumedKcal·updatedAt과 `editedAt: serverTimestamp()`로 갱신한다. 시그니처는 그대로(화면은 같은 함수로 수정 저장).
+- 배포: 2026-10-26 `firebase deploy --only firestore:rules --project meal-intake-2026` 성공(규칙만).
+- 남은 이슈: 다른 기기에서 done으로 저장했는데 이 기기 캐시가 아직 needs_review이면 editedAt 없이 보내 규칙이 거부한다(MEAL_SAVE_REJECTED). 드문 경우라 그대로 둔다. 2단계 "남은 이슈"의 done → done 거부 항목은 이 절로 해결됐다.

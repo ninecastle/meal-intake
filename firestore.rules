@@ -1,10 +1,11 @@
 rules_version = '2';
 
-// 규칙 v1 (2단계, 2026-10-26). 스펙 _workspace/01_architect_spec.md 2.1절(상태 전이)·3.2절(meals 필드).
+// 규칙 v2 (3단계 조각 1-2, 2026-10-26). 스펙 _workspace/01_architect_spec.md 2.1절(상태 전이)·3.2절(meals 필드).
 // - 로그인한 본인만 users/{uid}/meals/* 를 읽고 쓴다.
 // - 그 밖의 경로는 모두 거부한다. users/{uid} 문서와 하위 goals는 3단계에 규칙을 더한다.
 // - 사진이 들어오지 않게 문서 키와 analysis·beforeAnalysis 하위 키를 허용 목록으로 제한한다.
 // - 칼로리는 클라이언트가 쓰므로 형식·범위만 검사한다. 항목(items) 안의 필드는 검사하지 않는다(스펙 1.4절).
+// - v2: 저장한 기록 수정(M16)으로 done → done 허용. 이때만 editedAt = request.time(v1은 done → done 거부).
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -36,7 +37,7 @@ service cloud.firestore {
 
     function validMeal(m) {
       return m.keys().hasOnly(['dateKey', 'mealType', 'status', 'beforeAnalysis', 'analysis',
-                               'consumedKcal', 'createdAt', 'updatedAt'])
+                               'consumedKcal', 'createdAt', 'updatedAt', 'editedAt'])
         && m.keys().hasAll(['dateKey', 'mealType', 'status', 'createdAt', 'updatedAt'])
         && m.dateKey is string
         && m.dateKey.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
@@ -44,6 +45,7 @@ service cloud.firestore {
         && m.status in ['awaiting_after', 'needs_review', 'done']
         && m.createdAt is timestamp
         && m.updatedAt is timestamp
+        && (!('editedAt' in m) || m.editedAt is timestamp)
         && (!('beforeAnalysis' in m) || validBefore(m.beforeAnalysis))
         && (('analysis' in m) == ('consumedKcal' in m))
         && (!('analysis' in m) || validAnalysis(m))
@@ -52,10 +54,19 @@ service cloud.firestore {
         && (m.status == 'awaiting_after' || ('analysis' in m));
     }
 
-    // 2.1절: awaiting_after → needs_review·done, needs_review → done (같은 상태 유지·되돌리기 없음)
+    // 2.1절: awaiting_after → needs_review·done, needs_review → done, done → done(저장한 기록 수정, M16).
+    // done에서 다른 상태로 되돌리지 않는다. awaiting_after·needs_review는 같은 상태 유지도 없다.
     function validTransition(from, to) {
       return (from == 'awaiting_after' && to in ['needs_review', 'done'])
-        || (from == 'needs_review' && to == 'done');
+        || (from == 'needs_review' && to == 'done')
+        || (from == 'done' && to == 'done');
+    }
+
+    // editedAt: done → done(수정)이면 이번 요청 시각. 그 밖의 전이에서는 기존 값 그대로(없으면 계속 없음).
+    // validTransition이 done에서는 done → done만 허용하므로 이전 상태만 보면 된다.
+    function validEditedAt(before, after) {
+      return (before.status == 'done' && after.get('editedAt', null) == request.time)
+        || (before.status != 'done' && after.get('editedAt', null) == before.get('editedAt', null));
     }
 
     match /users/{uid}/meals/{mealId} {
@@ -65,6 +76,7 @@ service cloud.firestore {
       allow create: if signedInAs(uid)
         && validMeal(request.resource.data)
         && request.resource.data.status in ['awaiting_after', 'done']
+        && !('editedAt' in request.resource.data) // editedAt은 수정(done → done)에서만 생긴다
         && request.resource.data.createdAt == request.time
         && request.resource.data.updatedAt == request.time;
 
@@ -72,6 +84,7 @@ service cloud.firestore {
         && validMeal(request.resource.data)
         && validTransition(resource.data.status, request.resource.data.status)
         && request.resource.data.createdAt == resource.data.createdAt
+        && validEditedAt(resource.data, request.resource.data)
         && request.resource.data.updatedAt == request.time;
 
       allow delete: if signedInAs(uid);
