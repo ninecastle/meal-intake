@@ -1,9 +1,9 @@
 // S7 기록 상세(3단계 조각 1, /meal/:mealId, 보기 전용). subscribeMeal로 불러와 날짜·끼니·저장 시각, 끼니 합계,
 // 음식별 값(먹기 전 무게·남긴 비율·같이 먹은 인원·먹은 양·kcal·탄단지·출처)을 보인다. 사진은 없다(서버 미저장).
 // [삭제]는 확인 뒤 deleteMeal → 그 날짜 홈(replace). done이 아니면 이어 할 화면으로 안내한다.
-// [수정](S8 /meal/:mealId/edit)은 3단계 조각 2에서 더한다.
+// [수정]은 S8 기록 수정(/meal/:mealId/edit, 3단계 조각 1-2)으로 간다. 수정 저장 뒤 state { edited: true }면 "수정했어요"를 3초 보인다.
 import { useEffect, useState, type ReactNode } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import SourceBadge from '../components/review/SourceBadge'
 import {
   MEAL_TYPE_LABEL,
@@ -55,6 +55,14 @@ export default function MealDetailPage({ uid }: { uid: string }) {
   const [errorId, setErrorId] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
   const today = toDateKey(new Date())
+  // 기록 수정(S8)에서 저장하고 돌아왔으면 "수정했어요"를 3초 보인다
+  const location = useLocation()
+  const [editedNotice, setEditedNotice] = useState(() => (location.state as { edited?: unknown } | null)?.edited === true)
+  useEffect(() => {
+    if (!editedNotice) return
+    const t = window.setTimeout(() => setEditedNotice(false), 3000)
+    return () => window.clearTimeout(t)
+  }, [editedNotice])
 
   useEffect(
     () =>
@@ -123,6 +131,11 @@ export default function MealDetailPage({ uid }: { uid: string }) {
           ‹ 홈
         </Link>
       </header>
+      {editedNotice && (
+        <p role="status" className="mt-1 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
+          수정했어요
+        </p>
+      )}
       {body}
     </main>
   )
@@ -180,14 +193,24 @@ function DoneMeal({ meal, deleting, onDelete }: { meal: MealWithId; deleting: bo
 
       <p className="mt-4 text-xs text-gray-500">{NUTRITION_SOURCE_NOTE}. DB에 없는 음식은 AI 추정값이에요.</p>
 
-      <button
-        type="button"
-        onClick={onDelete}
-        disabled={deleting}
-        className="mt-6 min-h-12 w-full rounded-xl border border-red-300 font-medium text-red-600 disabled:opacity-50"
-      >
-        삭제
-      </button>
+      <div className="mt-6 grid grid-cols-2 gap-2">
+        {/* replace: 수정 화면이 저장·‹ 뒤 상세로 replace하므로 기록이 [홈, 상세]로 남는다 */}
+        <Link
+          to={`/meal/${meal.id}/edit`}
+          replace
+          className="flex min-h-12 items-center justify-center rounded-xl border border-gray-300 font-medium text-gray-800"
+        >
+          수정
+        </Link>
+        <button
+          type="button"
+          onClick={onDelete}
+          disabled={deleting}
+          className="min-h-12 rounded-xl border border-red-300 font-medium text-red-600 disabled:opacity-50"
+        >
+          삭제
+        </button>
+      </div>
     </>
   )
 }

@@ -1,6 +1,8 @@
 // S4 결과 확인·수정 화면(/meal/:mealId/review, 직접 입력 /meal/new/review?date=YYYY-MM-DD). 스펙 2.2·2.3절.
 // 화면 사이 계약: 들어올 때 state { analysis, dateKey, mealType }(없으면 getMeal), 저장 뒤 '/'에 state { saved: { dateKey, consumedKcal } }.
 // 계산·합계·출처 문구는 ReviewEditor가 보여 준다(여기서 다시 만들지 않는다). AI 호출은 이 화면에서 하지 않는다.
+// 수정 모드(mode="edit", S8 /meal/:mealId/edit, 3단계 조각 1-2): 저장한(done) 기록을 getMeal로 1회 읽어 같은 편집기로 연다.
+// 끼니와 날짜(오늘과 지난 날짜만)도 바꿀 수 있다. 사진 재분석 없음. 저장 뒤·‹는 상세(/meal/:mealId)로, 저장 뒤 state { edited: true }.
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   UNSAFE_DataRouterContext,
@@ -44,7 +46,8 @@ type Phase =
   | { kind: 'awaiting'; mealId: string }
   | { kind: 'load_error' }
   | { kind: 'ready'; initial: Loaded; initialJson: string }
-type Draft = { analysis: MealIntakeAnalysis; mealType: MealType }
+type Draft = { analysis: MealIntakeAnalysis; mealType: MealType; dateKey: string }
+type Saved = { dateKey: string; consumedKcal: number }
 type SaveError = { code: MealStoreErrorCode; detail: string }
 
 const isMealType = (v: unknown): v is MealType => MEAL_TYPES.some((m) => m.value === v)
@@ -83,7 +86,8 @@ function LeaveGuard({ shouldBlock }: { shouldBlock: () => boolean }) {
   return null
 }
 
-export default function ReviewPage() {
+export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edit' }) {
+  const isEdit = mode === 'edit'
   const params = useParams()
   const routeId = params.mealId && params.mealId !== 'new' ? params.mealId : null
   const location = useLocation()
@@ -113,7 +117,7 @@ export default function ReviewPage() {
   const alive = useRef(true)
   const allowLeave = useRef(false)
   const dirtyRef = useRef(false)
-  const pendingSave = useRef<{ mealId: string; dateKey: string; consumedKcal: number } | null>(null)
+  const pendingSave = useRef<({ mealId: string } & Saved) | null>(null)
 
   useEffect(() => {
     alive.current = true
@@ -131,10 +135,15 @@ export default function ReviewPage() {
     let live = true
     const ready = (m: Loaded) => {
       setPhase({ kind: 'ready', initial: m, initialJson: JSON.stringify(m.analysis) })
-      setDraft({ analysis: m.analysis, mealType: m.mealType })
+      setDraft({ analysis: m.analysis, mealType: m.mealType, dateKey: m.dateKey })
     }
-    const fromState = readEntryState(entryState.current)
+    // 수정 모드는 넘겨받은 state를 쓰지 않고 항상 저장된 문서를 읽는다
+    const fromState = isEdit ? null : readEntryState(entryState.current)
 
+    if (routeId === null && isEdit) {
+      navRef.current('/', { replace: true })
+      return
+    }
     if (routeId === null) {
       // 직접 입력: 빈 분석, 날짜는 ?date(틀리면 오늘), 끼니는 지금 시각
       const now = new Date()
@@ -156,7 +165,14 @@ export default function ReviewPage() {
     getMeal(uid, routeId).then(
       (m) => {
         if (!live) return
-        if (m?.status === 'needs_review' && m.analysis) {
+        if (isEdit) {
+          // 수정은 저장한(done) 기록만. 아니면 상세가 이어 할 화면(먹은 후 촬영·결과 확인)을 안내한다.
+          if (m?.status === 'done' && m.analysis) {
+            ready({ mealId: routeId, dateKey: m.dateKey, mealType: m.mealType, analysis: m.analysis, isNew: false })
+          } else {
+            navRef.current(`/meal/${routeId}`, { replace: true })
+          }
+        } else if (m?.status === 'needs_review' && m.analysis) {
           ready({ mealId: routeId, dateKey: m.dateKey, mealType: m.mealType, analysis: m.analysis, isNew: false })
         } else if (m?.status === 'awaiting_after') {
           setPhase({ kind: 'awaiting', mealId: routeId })
@@ -172,13 +188,15 @@ export default function ReviewPage() {
     return () => {
       live = false
     }
-  }, [loading, uid, routeId, reloadSeq])
+  }, [loading, uid, routeId, reloadSeq, isEdit])
 
   const analysis = draft?.analysis ?? null
   const analysisJson = useMemo(() => (analysis ? JSON.stringify(analysis) : ''), [analysis])
   const check = useMemo(() => (analysis ? validateAnalysis(analysis) : null), [analysis])
   const dirty =
-    phase.kind === 'ready' && draft !== null && (draft.mealType !== phase.initial.mealType || analysisJson !== phase.initialJson)
+    phase.kind === 'ready' &&
+    draft !== null &&
+    (draft.mealType !== phase.initial.mealType || draft.dateKey !== phase.initial.dateKey || analysisJson !== phase.initialJson)
   useEffect(() => {
     dirtyRef.current = dirty
   }, [dirty])
@@ -192,23 +210,27 @@ export default function ReviewPage() {
 
   const onAnalysis = useCallback((a: MealIntakeAnalysis) => setDraft((d) => (d ? { ...d, analysis: a } : d)), [])
 
-  function goHome(state?: { saved: { dateKey: string; consumedKcal: number } }) {
+  /** 화면을 떠난다. 결과 확인·직접 입력은 홈(저장했으면 state.saved), 수정 모드는 기록 상세(저장했으면 state.edited). */
+  function leave(saved?: Saved) {
     allowLeave.current = true
-    navigate('/', { replace: true, state })
+    if (isEdit && routeId) navigate(`/meal/${routeId}`, { replace: true, state: saved ? { edited: true } : undefined })
+    else navigate('/', { replace: true, state: saved ? { saved } : undefined })
   }
 
   function onBack() {
     if (dirty && !window.confirm(LEAVE_MSG)) return
-    goHome()
+    leave()
   }
 
+  const today = toDateKey(new Date())
   const itemCount = analysis?.items.length ?? 0
-  const canSave = !!uid && phase.kind === 'ready' && !!check?.ok && itemCount > 0 && !saving && !editorBusy
+  const dateOk = !!draft && draft.dateKey <= today
+  const canSave = !!uid && phase.kind === 'ready' && !!check?.ok && itemCount > 0 && dateOk && !saving && !editorBusy
 
   async function onSave() {
     if (!canSave || !uid || phase.kind !== 'ready' || !draft) return
-    const { mealId, dateKey } = phase.initial
-    const { analysis: a, mealType } = draft
+    const { mealId } = phase.initial
+    const { analysis: a, mealType, dateKey } = draft
     const consumedKcal = a.totals.consumed.kcal
     pendingSave.current = { mealId, dateKey, consumedKcal }
     setSaving(true)
@@ -222,8 +244,8 @@ export default function ReviewPage() {
     )
     try {
       await saveMeal(uid, mealId, { dateKey, mealType, analysis: a })
-      await beforePhotoStore.remove(mealId) // 먹은 후 분석이 실패했던 식사면 남아 있을 수 있다
-      if (alive.current) goHome({ saved: { dateKey, consumedKcal } })
+      if (!isEdit) await beforePhotoStore.remove(mealId) // 먹은 후 분석이 실패했던 식사면 남아 있을 수 있다
+      if (alive.current) leave({ dateKey, consumedKcal })
     } catch (e) {
       console.warn('[review] 저장 실패', e)
       if (!alive.current) return // 연결 대기 중 홈으로 나간 뒤 거부된 경우(화면에 알릴 곳이 없다)
@@ -240,17 +262,18 @@ export default function ReviewPage() {
   function leaveWhilePending() {
     const p = pendingSave.current
     if (!p) return
-    void beforePhotoStore.remove(p.mealId)
-    goHome({ saved: { dateKey: p.dateKey, consumedKcal: p.consumedKcal } })
+    if (!isEdit) void beforePhotoStore.remove(p.mealId)
+    leave({ dateKey: p.dateKey, consumedKcal: p.consumedKcal })
   }
 
-  const title = phase.kind === 'ready' && phase.initial.isNew ? '직접 입력' : '결과 확인'
+  const title = isEdit ? '기록 수정' : phase.kind === 'ready' && phase.initial.isNew ? '직접 입력' : '결과 확인'
+  const exitLabel = isEdit ? '기록으로' : '홈으로'
 
   return (
     <div className="mx-auto flex h-dvh max-w-md flex-col bg-white text-gray-900">
       {dataRouter && <LeaveGuard shouldBlock={shouldBlock} />}
       <header className="flex shrink-0 items-center gap-1 border-b border-gray-200 px-2">
-        <button type="button" onClick={onBack} aria-label="홈으로" className="min-h-11 min-w-11 px-2 text-lg">
+        <button type="button" onClick={onBack} aria-label={exitLabel} className="min-h-11 min-w-11 px-2 text-lg">
           ‹
         </button>
         <h1 className="text-base font-semibold">{title}</h1>
@@ -270,7 +293,7 @@ export default function ReviewPage() {
           >
             남은 음식 찍기
           </button>
-          <button type="button" onClick={() => goHome()} className="min-h-11 text-gray-600">
+          <button type="button" onClick={() => leave()} className="min-h-11 text-gray-600">
             홈으로
           </button>
         </main>
@@ -286,8 +309,8 @@ export default function ReviewPage() {
           >
             다시 시도
           </button>
-          <button type="button" onClick={() => goHome()} className="min-h-11 text-gray-600">
-            홈으로
+          <button type="button" onClick={() => leave()} className="min-h-11 text-gray-600">
+            {exitLabel}
           </button>
         </main>
       )}
@@ -296,7 +319,26 @@ export default function ReviewPage() {
         <>
           <main className="flex-1 space-y-4 overflow-y-auto px-4 py-3">
             <section aria-label="날짜와 끼니" className="space-y-2">
-              <p className="text-sm font-medium text-gray-600">{dateLabel(phase.initial.dateKey)}</p>
+              {isEdit ? (
+                // 날짜 바꾸기는 수정 모드만. 오늘과 지난 날짜만(max=오늘, 직접 타이핑한 미래 날짜도 받지 않는다)
+                <label className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-medium text-gray-600">{dateLabel(draft.dateKey)}</span>
+                  <input
+                    type="date"
+                    required
+                    value={draft.dateKey}
+                    max={today}
+                    disabled={saving}
+                    onChange={(e) => {
+                      const v = parseDateKey(e.target.value)
+                      if (v && v <= today) setDraft((d) => (d ? { ...d, dateKey: v } : d))
+                    }}
+                    className="min-h-11 rounded-lg border border-gray-300 bg-white px-3 text-base"
+                  />
+                </label>
+              ) : (
+                <p className="text-sm font-medium text-gray-600">{dateLabel(phase.initial.dateKey)}</p>
+              )}
               <div className="grid grid-cols-4 gap-2">
                 {MEAL_TYPES.map((m) => {
                   const on = draft.mealType === m.value
@@ -340,7 +382,7 @@ export default function ReviewPage() {
               <div className="flex items-center justify-between gap-2 rounded-lg bg-sky-50 p-2 text-sm text-sky-900">
                 <span>연결이 느려요. 연결되면 자동으로 저장돼요.</span>
                 <button type="button" onClick={leaveWhilePending} className="min-h-11 shrink-0 px-2 font-semibold">
-                  홈으로
+                  {exitLabel}
                 </button>
               </div>
             )}
@@ -351,7 +393,11 @@ export default function ReviewPage() {
               </div>
             )}
             {!saving && editorBusy && <p className="text-sm text-gray-500">음식 정보를 다시 계산하는 중이에요. 끝나면 저장할 수 있어요.</p>}
-            {!saving && itemCount === 0 && <p className="text-sm text-gray-500">음식을 하나 이상 넣어 주세요.</p>}
+            {!saving && itemCount === 0 && (
+              <p className="text-sm text-gray-500">
+                {isEdit ? '음식을 모두 지웠다면 상세에서 기록을 삭제해 주세요.' : '음식을 하나 이상 넣어 주세요.'}
+              </p>
+            )}
             {!saving && itemCount > 0 && check && !check.ok && (
               <p className="text-sm text-amber-700">저장 전에 고칠 값이 있어요: {check.errors[0]}</p>
             )}
@@ -361,7 +407,7 @@ export default function ReviewPage() {
               disabled={!canSave}
               className="min-h-12 w-full rounded-xl bg-emerald-600 text-base font-semibold text-white disabled:bg-gray-300 disabled:text-gray-500"
             >
-              {saving ? '저장 중…' : saveError ? '다시 시도' : '저장'}
+              {saving ? '저장 중…' : saveError ? '다시 시도' : isEdit ? '수정 저장' : '저장'}
             </button>
           </footer>
         </>

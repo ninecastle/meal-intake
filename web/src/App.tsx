@@ -64,6 +64,8 @@ const userRoutes: RouteObject[] = [
   { path: '/meal/:mealId/after', element: <CaptureAfterRoute /> },
   { path: '/meal/new/review', element: <ReviewPage /> },
   { path: '/meal/:mealId/review', element: <ReviewPage /> },
+  // S8 기록 수정(3단계 조각 1-2): 결과 확인 화면(편집기·저장·나가기 확인)을 수정 모드로 다시 쓴다
+  { path: '/meal/:mealId/edit', element: <ReviewPage mode="edit" /> },
   { path: '/meal/:mealId', element: <MealDetailRoute /> },
   ...(DevPage ? [{ path: '/dev', element: <DevPage /> }] : []),
   { path: '*', element: <Navigate to="/" replace /> },

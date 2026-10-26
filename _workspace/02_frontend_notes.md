@@ -74,3 +74,17 @@
 - 상세에서 삭제가 서버에서 거부되면(규칙) 콘솔에만 남고 홈에 기록이 다시 나타난다.
 - "◀ 어제"/"내일 ▶" 문구는 지난 날짜를 볼 때도 같다(뜻은 전날·다음 날).
 - 자정을 넘겨 화면을 켜 두면 다음 렌더 때에야 오늘이 바뀐다(타이머 없음).
+
+## 3단계 조각 1-2 (2026-10-26): 기록 수정(S8) 화면
+`pages/ReviewPage.tsx`(수정 모드 `mode="edit"` 추가, 새 페이지 없음), `App.tsx`(`/meal/:mealId/edit` 1개), `pages/MealDetailPage.tsx`([수정] 버튼, "수정했어요" 3초). `tsc -b`·`npm run build` 통과, AI 호출 0회, 개발 서버 시험 안 함.
+
+### 구조
+- 수정 모드: 넘겨받은 state는 쓰지 않고 `getMeal` 1회 → `done`이면 편집기, 아니면(없음 포함) 상세로 replace. 편집기·`onBusyChange` 잠금·검증·오프라인 안내·나가기 확인은 결과 확인과 같은 코드. 다른 점만 분기: 제목 "기록 수정", 날짜 입력(`type=date`, `max=오늘`, 미래 값은 onChange에서 버림), 음식 0개 문구, [수정 저장], 나가기·저장 뒤 목적지가 상세(`state.edited`), `beforePhotoStore.remove` 생략. dirty에 날짜 변경 포함.
+- 상세: [수정]·[삭제] 2칸. [수정]은 `replace`로 이동(수정 화면도 상세로 replace하므로 기록이 [홈, 상세]로 남는다).
+
+### 스펙과 다르게 정한 점
+1. [수정]이 replace라 수정 화면에서 브라우저 뒤로 가기는 상세가 아니라 홈으로 간다(바뀐 값이 있으면 확인 창). ‹ 버튼은 상세로.
+
+### 남은 이슈
+- 저장 성공은 `saveMeal`의 done → done 수정(`editedAt`)과 규칙 변경(firebase-engineer 동시 작업)에 달려 있다. 그전에는 `MEAL_SAVE_REJECTED`.
+- "수정했어요"는 history state라 상세에서 새로 고침하면 다시 3초 보인다.
