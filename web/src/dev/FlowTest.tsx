@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { analyzeBefore, getAnalysisMode } from '../analysis/analyze'
+import { analyzeBefore, getAnalysisMode, getAnalysisOrigin } from '../analysis/analyze'
 import { AnalysisError } from '../analysis/errors'
 import { beforePhotoStore } from '../photos/beforePhotoStore'
 import { compressPhoto } from '../photos/compress'
@@ -149,6 +149,7 @@ export default function FlowTest() {
           압축본: {photo ? `${photo.kb} KB · ${photo.width}×${photo.height}` : '–'} · 저장 위치: {where ?? '–'}
         </p>
         <p>분석 소요: {elapsedMs == null ? '–' : `${elapsedMs} ms`}</p>
+        <p>결과 출처: {showOrigin(result ? getAnalysisOrigin(result) : null)}</p>
         {error && (
           <p className="text-red-600">
             오류({error.stage}): {error.code ?? '-'} / {error.reason ?? '-'} — {error.message}
@@ -215,4 +216,11 @@ export default function FlowTest() {
       {preview && <img src={preview} alt="보관된 먹기 전 사진" className="mt-1 max-h-32 rounded" />}
     </div>
   )
+}
+
+// 같은 사진을 다시 고르면 'cache'가 나와야 한다(AI 호출 없음)
+function showOrigin(o: ReturnType<typeof getAnalysisOrigin>): string {
+  if (!o) return '–'
+  const label = { live: '실제 호출', cache: '캐시(호출 안 함)', mock: '목업' }[o.source]
+  return o.source === 'live' ? `${label}, 시도 ${o.attempts}회` : label
 }
