@@ -5,6 +5,20 @@ import { buildAnalysis } from '../analysis/compute'
 import { AnalysisError } from '../analysis/errors'
 import { validateAnalysis } from '../analysis/validate'
 import ReviewEditor from '../components/review/ReviewEditor'
+import {
+  createAwaitingMeal,
+  deleteMeal,
+  getMeal,
+  listRecentMeals,
+  newMealId as newMealDocId,
+  saveMeal,
+  saveReview,
+  subscribePending,
+  type MealType,
+  type MealWithId,
+} from '../data/meals'
+import { auth } from '../lib/firebase'
+import { guessMealType, toDateKey } from '../lib/time'
 import { beforePhotoStore } from '../photos/beforePhotoStore'
 import { compressPhoto } from '../photos/compress'
 import { isSamePhoto } from '../photos/samePhoto'
@@ -16,14 +30,23 @@ import type { AfterAnalysis, BeforeAnalysis, MealIntakeAnalysis } from '../types
 // 조각 4: 먹은 후 분석이 끝나면 영양값 조회(DB → AI 추정) → 섭취량 계산.
 // 2단계 조각 1: 먹은 후 분석 전에 같은 사진인지 확인(같으면 사용자가 고를 때까지 호출 안 함),
 //   결과는 편집기(ReviewEditor)로 고친다. "직접 입력으로 시작"은 사진 없이 빈 분석으로 편집기를 연다.
+// 2단계 조각 3: 로그인한 사용자 기록으로 Firestore에 저장한다. 먹기 전 분석 성공 → awaiting_after,
+//   먹은 후 분석·조립 성공 → needs_review, [저장] → done. 대기 목록·최근 기록·다른 사람 기록 읽기 시도(거부 확인).
 // 사진 선택 1회 = 분석 1회, 자동 재호출 없음. 영양값 단계는 먹기 전 추정값이 없는 음식에만 AI 호출(호출 D)을 한다.
 
 type ErrInfo = { stage: string; code?: string; reason?: string; message: string }
 type PhotoInfo = { kb: number; width: number; height: number }
 type StoredBefore = Awaited<ReturnType<typeof beforePhotoStore.get>>
+type MealMeta = { dateKey: string; mealType: MealType }
+
+// 로그인했으면 Firestore 문서 id(IndexedDB 키와 같다), 아니면 로컬 id
+function newMealId(): string {
+  const uid = auth.currentUser?.uid
+  return uid ? newMealDocId(uid) : newLocalId()
+}
 
 // http://192.168.x.x 개발 서버(보안 컨텍스트 아님)에서는 crypto.randomUUID가 없다.
-function newMealId(): string {
+function newLocalId(): string {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
   const b = crypto.getRandomValues(new Uint8Array(16))
   b[6] = (b[6] & 0x0f) | 0x40
@@ -79,9 +102,35 @@ export default function FlowTest() {
   const [mealElapsedMs, setMealElapsedMs] = useState<number | null>(null)
   // 새 분석이 들어오면 편집기 상태(순서·되돌리기)를 새로 시작한다
   const [editorKey, setEditorKey] = useState(0)
+  // Firestore 저장(조각 3)
+  const [mealMeta, setMealMeta] = useState<MealMeta | null>(null)
+  const [storeLog, setStoreLog] = useState<string[]>([])
+  const [saving, setSaving] = useState(false)
+  const [pending, setPending] = useState<MealWithId[] | null>(null)
+  const [recent, setRecent] = useState<MealWithId[] | null>(null)
+  const [otherReadMsg, setOtherReadMsg] = useState<string | null>(null)
+  const uid = auth.currentUser?.uid ?? null
 
   // 화면을 떠나면 진행 중 요청을 끊고 미리보기 URL을 돌려준다.
   useEffect(() => () => abortRef.current?.abort(), [])
+  useEffect(() => {
+    if (!uid) return
+    return subscribePending(uid, setPending, (code) => log(`대기 목록 구독 오류: ${code}`))
+  }, [uid])
+
+  function log(msg: string) {
+    const t = new Date().toLocaleTimeString('ko-KR', { hour12: false })
+    setStoreLog((l) => [`${t} ${msg}`, ...l].slice(0, 8))
+  }
+
+  // 쓰기 Promise는 서버가 확인해야 끝난다(오프라인이면 대기). 화면은 기다리지 않고 결과만 기록한다.
+  function track(label: string, p: Promise<void>) {
+    log(`${label} 보냄`)
+    p.then(
+      () => log(`${label} 완료`),
+      (e: unknown) => log(`${label} 실패: ${e instanceof Error ? e.message : String(e)}`),
+    )
+  }
   useEffect(() => () => {
     if (preview) URL.revokeObjectURL(preview)
   }, [preview])
@@ -101,6 +150,10 @@ export default function FlowTest() {
 
     const id = newMealId()
     setMealId(id)
+    // dateKey·끼니는 먹기 전 촬영 시각 기준(스펙 2.2절)
+    const now = new Date()
+    const meta: MealMeta = { dateKey: toDateKey(now), mealType: guessMealType(now) }
+    setMealMeta(meta)
     let stage = '압축'
     try {
       const compressed = await compressPhoto(file)
@@ -113,11 +166,14 @@ export default function FlowTest() {
       const ac = new AbortController()
       abortRef.current = ac
       const t0 = performance.now()
+      let res: BeforeAnalysis
       try {
-        setResult(await analyzeBefore(compressed, { signal: ac.signal }))
+        res = await analyzeBefore(compressed, { signal: ac.signal })
       } finally {
         setElapsedMs(Math.round(performance.now() - t0))
       }
+      setResult(res)
+      if (uid) track('먹기 전 기록(awaiting_after)', createAwaitingMeal(uid, id, { ...meta, beforeAnalysis: res }))
     } catch (e) {
       setError(toErr(stage, e))
     } finally {
@@ -217,8 +273,10 @@ export default function FlowTest() {
       stage = '영양값 계산'
       const t1 = performance.now()
       try {
-        setMeal(await assembleAnalysis(before, res, { signal: ac.signal }))
+        const assembled = await assembleAnalysis(before, res, { signal: ac.signal })
+        setMeal(assembled)
         setEditorKey((k) => k + 1)
+        if (uid) track('먹은 후 결과(needs_review)', saveReview(uid, id, assembled))
       } finally {
         setMealElapsedMs(Math.round(performance.now() - t1))
       }
@@ -231,8 +289,64 @@ export default function FlowTest() {
   function startManual() {
     if (busyRef.current) return
     resetAfter()
+    setResult(null)
+    setError(null)
+    setPhoto(null)
+    setWhere(null)
+    setElapsedMs(null)
+    setMealId(newMealId())
+    const now = new Date()
+    setMealMeta({ dateKey: toDateKey(now), mealType: guessMealType(now) })
     setMeal(buildAnalysis([], []))
     setEditorKey((k) => k + 1)
+  }
+
+  // [저장] → done. 직접 입력이면 문서를 새로 만든다.
+  async function saveDone() {
+    if (!uid || !mealId || !mealMeta || !meal || saving) return
+    setSaving(true)
+    log('저장(done) 보냄')
+    try {
+      await saveMeal(uid, mealId, { ...mealMeta, analysis: meal })
+      log('저장(done) 완료')
+      void loadRecent()
+    } catch (e) {
+      log(`저장(done) 실패: ${e instanceof Error ? e.message : String(e)}`)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function loadRecent() {
+    if (!uid) return
+    try {
+      setRecent(await listRecentMeals(uid, 5))
+    } catch (e) {
+      log(`최근 기록 불러오기 실패: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+
+  async function removeMeal(id: string) {
+    if (!uid) return
+    try {
+      await deleteMeal(uid, id)
+      await beforePhotoStore.remove(id)
+      log(`삭제 완료: ${id.slice(0, 8)}`)
+      void loadRecent()
+    } catch (e) {
+      log(`삭제 실패: ${e instanceof Error ? e.message : String(e)}`)
+    }
+  }
+
+  // 보안 규칙 확인: 다른 사람 경로를 읽으면 거부돼야 한다
+  async function tryReadOthers() {
+    setOtherReadMsg('읽는 중…')
+    try {
+      const m = await getMeal(`not-me-${Date.now()}`, 'probe')
+      setOtherReadMsg(`⚠ 읽기가 허용됨(규칙 문제): ${m ? '문서 있음' : '문서 없음'}`)
+    } catch (e) {
+      setOtherReadMsg(`거부됨(정상): ${e instanceof Error ? e.message : String(e)}`)
+    }
   }
 
   async function showStored() {
@@ -482,8 +596,81 @@ export default function FlowTest() {
             </ul>
           )}
           <p className="mt-1 text-gray-500">prompt: {meal.prompt_version ?? '–'}</p>
+          <button
+            type="button"
+            onClick={() => void saveDone()}
+            disabled={!uid || !mealId || !mealMeta || saving || !check.ok || meal.items.length === 0}
+            className="mt-2 min-h-11 w-full rounded bg-gray-900 px-3 text-sm text-white disabled:opacity-50"
+          >
+            {saving ? '저장 중…' : `저장 (done · ${mealMeta?.dateKey ?? '–'} · ${mealMeta?.mealType ?? '–'})`}
+          </button>
         </div>
       )}
+
+      <div className="mt-3 border-t border-gray-200 pt-2 text-gray-700">
+        <p className="font-semibold">Firestore 기록 (2단계 조각 3)</p>
+        {!uid && <p className="text-red-600">로그인하지 않아 저장하지 않습니다.</p>}
+        <ul className="mt-1 space-y-0.5 break-all">
+          {storeLog.map((l, i) => (
+            <li key={i}>{l}</li>
+          ))}
+        </ul>
+
+        <p className="mt-2 font-semibold">대기 중 (awaiting_after · needs_review, 실시간)</p>
+        {pending == null ? (
+          <p>–</p>
+        ) : pending.length === 0 ? (
+          <p>없음</p>
+        ) : (
+          <ul>
+            {pending.map((m) => (
+              <li key={m.id}>
+                {m.id.slice(0, 8)} · {m.status} · {m.dateKey} · {m.mealType}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void loadRecent()}
+            disabled={!uid}
+            className="min-h-11 rounded border border-gray-400 px-3 disabled:opacity-50"
+          >
+            내 최근 기록 5건
+          </button>
+          <button
+            type="button"
+            onClick={() => void tryReadOthers()}
+            className="min-h-11 rounded border border-gray-400 px-3"
+          >
+            다른 사람 기록 읽기 시도
+          </button>
+        </div>
+        {otherReadMsg && <p className="mt-1">{otherReadMsg}</p>}
+        {recent && (
+          <ul className="mt-1 space-y-1">
+            {recent.length === 0 && <li>기록 없음</li>}
+            {recent.map((m) => (
+              <li key={m.id} className="flex items-center justify-between gap-2 border-t border-gray-100 pt-1">
+                <span className="break-all">
+                  {m.id.slice(0, 8)} · {m.status} · {m.dateKey} · {m.mealType} ·{' '}
+                  {m.consumedKcal != null ? `${Math.round(m.consumedKcal)}kcal` : '–'} ·{' '}
+                  {(m.analysis?.items ?? m.beforeAnalysis?.items ?? []).map((it) => it.name).join(', ') || '음식 없음'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void removeMeal(m.id)}
+                  className="min-h-11 shrink-0 rounded border border-red-300 px-2 text-red-700"
+                >
+                  삭제
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   )
 }
