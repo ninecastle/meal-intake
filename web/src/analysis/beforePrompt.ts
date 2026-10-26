@@ -1,20 +1,23 @@
-// 호출 A(먹기 전 분석) 프롬프트 a1·응답 스키마·응답 정리.
+// 호출 A(먹기 전 분석) 프롬프트 a2·응답 스키마·응답 정리.
 // 출처: .claude/skills/intake-calorie-estimation/references/prompt-template.md 호출 A.
+// a2(2026-10-26): a1 + 종류에 따라 칼로리 차이가 큰 음식은 보이는 특징까지 넣은 구체적인 이름, per_100g_guess는 보이는 구성을 따져 추정
+// (CLAUDE.md "칼로리 계산 순서"). 같은 사진 캐시는 prompt_version으로 구분되므로 a1 결과는 다시 쓰지 않는다.
 // 이 파일은 import.meta.env를 쓰지 않는다(Node 시험 스크립트에서도 그대로 불러 쓴다).
 import { Schema, ThinkingLevel, type GenerationConfig } from 'firebase/ai'
 import type { BeforeItem, Nutrients } from '../types/analysis'
 
-export const PROMPT_VERSION_A = 'a1'
+export const PROMPT_VERSION_A = 'a2'
 
 export const SYSTEM_INSTRUCTION_A = `당신은 식사 사진을 분석하는 영양 보조 도구다. 먹기 전 식탁 사진 한 장이 주어진다.
 
 할 일:
 1. 보이는 음식을 그릇 단위로 모두 나열하고 i1, i2 … 순서로 id를 붙인다.
 2. name은 한국 식품영양성분 DB에 있을 법한 일반 음식명으로 쓴다(예: "김치찌개", "제육볶음", "쌀밥").
+   단, 종류에 따라 칼로리 차이가 큰 음식(햄버거·샌드위치, 치킨, 피자, 떡볶이·라면, 마라탕·샐러드, 카페 음료, 케이크·디저트)은 사진에 보이는 특징까지 넣은 구체적인 이름으로 쓴다(예: "더블 치즈버거", "양념치킨 순살", "페퍼로니 피자", "로제 떡볶이", "아이스 카페라떼", "생크림 딸기 케이크"). 사진에서 보이지 않는 특징은 지어내지 않는다.
 3. location에 그릇 위치와 모양을 짧게 적는다(예: "왼쪽 위 흰 밥공기"). 나중에 먹은 후 사진에서 같은 그릇을 찾는 데 쓴다.
 4. 각 음식의 먹기 전 중량(g)을 추정한다. 수저, 표준 밥공기(밥 약 210g), 접시 크기를 단서로 쓴다.
 5. 국·찌개는 건더기와 국물을 별도 항목으로 나눈다.
-6. per_100g_guess에 100g당 kcal, 탄수화물·단백질·지방(g) 추정값을 적는다. DB에 없을 때만 쓰이는 예비값이다.
+6. per_100g_guess에 100g당 kcal, 탄수화물·단백질·지방(g) 추정값을 적는다. 일반적인 값을 그대로 쓰지 말고 보이는 구성(패티 수, 치즈·소스·토핑, 튀김옷, 크림·시럽 등)을 따져 그 음식에 맞게 추정한다. DB에 없거나, 종류 차이가 큰 음식이 DB 대표값에만 맞을 때 쓰인다.
 
 규칙:
 - 섭취량이나 총 칼로리를 계산하지 않는다.
@@ -24,7 +27,8 @@ export const SYSTEM_INSTRUCTION_A = `당신은 식사 사진을 분석하는 영
 export const USER_TEXT_A = 'BEFORE 사진'
 
 // 응답 스키마 A. 템플릿에서 모든 필드가 필수라 optionalProperties는 없다.
-const per100Schema = Schema.object({
+/** 100g당 값 스키마. 호출 D(d1)도 같은 스키마를 쓴다 */
+export const PER100_SCHEMA = Schema.object({
   properties: {
     kcal: Schema.number(),
     carbs_g: Schema.number(),
@@ -42,7 +46,7 @@ export const RESPONSE_SCHEMA_A = Schema.object({
           location: Schema.string(),
           before_grams: Schema.number(),
           confidence: Schema.number(),
-          per_100g_guess: per100Schema,
+          per_100g_guess: PER100_SCHEMA,
         },
       }),
     }),

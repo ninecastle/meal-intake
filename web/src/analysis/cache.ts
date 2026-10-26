@@ -1,10 +1,11 @@
 // 같은 사진 결과 캐시(스펙 5.2.2). 키: 압축본 Blob의 SHA-256(hex). 값: 결과 JSON·시각·모델·프롬프트 버전.
 // 사진 자체는 넣지 않는다. 해시는 Firestore에 넣지 않는다. IndexedDB가 실패하면 캐시 없이 동작한다.
 const DB_NAME = 'meal-analysis-cache'
-const DB_VERSION = 1
-export type CacheStoreName = 'before' | 'after'
-// 'after'는 조각 3(호출 B)용으로 미리 만든다(DB 버전 올리기를 피한다).
-const STORES: CacheStoreName[] = ['before', 'after']
+// v2(조각 4): 호출 D 결과 저장소 'nutrition'(키: 정규화한 음식 이름)을 더했다. 업그레이드는 없는 저장소만 만들어
+// v1의 'before'·'after' 항목은 그대로 남는다.
+const DB_VERSION = 2
+export type CacheStoreName = 'before' | 'after' | 'nutrition'
+const STORES: CacheStoreName[] = ['before', 'after', 'nutrition']
 const OP_TIMEOUT_MS = 1_500
 /** 이보다 오래된 항목은 쓰지 않고, 쓰기 때 지운다 */
 export const CACHE_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000

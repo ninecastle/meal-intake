@@ -1,4 +1,4 @@
-// 호출 A·B 공통: 시도당 시간 제한, 2초 뒤 1회 재시도, SDK 오류 → AnalysisError 변환(스펙 4.2·4.4절).
+// 호출 A·B·D 공통: 시도당 시간 제한(기본 20초, 호출 D는 10초), 2초 뒤 1회 재시도, SDK 오류 → AnalysisError 변환(스펙 4.2·4.4절).
 import {
   AIError,
   AIErrorCode,
@@ -94,18 +94,23 @@ function readText(r: EnhancedGenerateContentResponse): string {
   return text
 }
 
-async function attemptOnce(model: GenerativeModel, parts: Part[], signal?: AbortSignal): Promise<string> {
+async function attemptOnce(
+  model: GenerativeModel,
+  parts: Part[],
+  signal?: AbortSignal,
+  timeoutMs: number = ATTEMPT_TIMEOUT_MS,
+): Promise<string> {
   const ctl = new AbortController()
   let timedOut = false
   const timer = setTimeout(() => {
     timedOut = true
     ctl.abort(new DOMException('시간 초과', 'AbortError'))
-  }, ATTEMPT_TIMEOUT_MS)
+  }, timeoutMs)
   const onAbort = () => ctl.abort(abortError(signal))
   signal?.addEventListener('abort', onAbort, { once: true })
   try {
     // SDK 자체 시간 제한은 안전망으로 조금 길게 둔다. 실제 제한은 위 타이머다.
-    const call = model.generateContent(parts, { signal: ctl.signal, timeout: ATTEMPT_TIMEOUT_MS + 1_000 })
+    const call = model.generateContent(parts, { signal: ctl.signal, timeout: timeoutMs + 1_000 })
     const res = await raceAbort(call, ctl.signal)
     return readText(res.response)
   } catch (e) {
@@ -114,7 +119,7 @@ async function attemptOnce(model: GenerativeModel, parts: Part[], signal?: Abort
       throw new AttemptError({
         reason: 'timeout',
         retryable: true,
-        message: `응답이 ${ATTEMPT_TIMEOUT_MS / 1000}초 안에 오지 않았습니다`,
+        message: `응답이 ${timeoutMs / 1000}초 안에 오지 않았습니다`,
         cause: e,
       })
     }
@@ -166,9 +171,10 @@ async function tryOnce<T>(
   parts: Part[],
   parse: (text: string) => ParseOutcome<T>,
   signal?: AbortSignal,
+  timeoutMs?: number,
 ): Promise<{ ok: true; value: T } | { ok: false; failure: AttemptFailure }> {
   try {
-    const out = parse(await attemptOnce(model, parts, signal))
+    const out = parse(await attemptOnce(model, parts, signal, timeoutMs))
     if (out.ok) return out
     return { ok: false, failure: { reason: 'invalid_response', retryable: true, message: `응답 형식 오류: ${out.detail}` } }
   } catch (e) {
@@ -185,13 +191,15 @@ export async function generateWithRetry<T>(input: {
   parse: (text: string) => ParseOutcome<T>
   signal?: AbortSignal
   label: string
+  /** 시도당 시간 제한. 기본 ATTEMPT_TIMEOUT_MS(20초) */
+  timeoutMs?: number
 }): Promise<{ value: T; attempts: number }> {
-  const { model, parts, parse, signal, label } = input
+  const { model, parts, parse, signal, label, timeoutMs } = input
   let failure: AttemptFailure | undefined
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     if (attempt > 1) await delay(RETRY_DELAY_MS, signal)
     throwIfAborted(signal)
-    const r = await tryOnce(model, parts, parse, signal)
+    const r = await tryOnce(model, parts, parse, signal, timeoutMs)
     if (r.ok) return { value: r.value, attempts: attempt }
     failure = r.failure
     if (import.meta.env.DEV) console.warn(`[analysis] ${label} 시도 ${attempt} 실패: ${failure.reason}`, failure.message)
