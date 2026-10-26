@@ -23,7 +23,7 @@
 | 조각 | 내용 | 상태 |
 | --- | --- | --- |
 | 1 | 결과 수정 화면: 이름·중량·남긴 비율·kcal 수정과 자동 재계산, DB 자동완성 + 세부 종류 목록, kcal 직접 수정 뒤 이름을 바꾸면 "다시 계산할까요?", 음식 추가·삭제, 인원수(기본 1), 같은 사진 안내, 흔한 이름 별칭 | 완료(`e96c8ed`, `a61ce7d`, 사용자 확인) |
-| 2 | 구글 로그인 | 진행 중(firebase-engineer) |
+| 2 | 구글 로그인 | 구현 완료(`5fbceea`). 사용자 확인 대기. `web/src/lib/auth.ts`(`signInWithGoogle`·`signOutAndClear`·`useAuthUser`), `web/src/pages/LoginPage.tsx`. 배포 도메인에서는 authDomain을 그 도메인으로 바꾼다(`lib/firebase.ts`). 로그아웃 때 분석 결과 캐시는 지우지 않는다(사진 없음, 7일 만료) |
 | 3 | Firestore에 기록 저장 + 본인 기록만 읽고 쓰는 보안 규칙 | - |
 | 4 | 실제 흐름 화면 연결(로그인 → 먹기 전 촬영 → 먹은 후 촬영 → 결과 수정 → 저장). 개발용 시험 패널은 개발 모드에서만. 모바일 우선 | - |
 | 5 | Firebase Hosting 첫 배포 → `https://meal-intake-2026.web.app`에서 확인 | - |
@@ -114,7 +114,8 @@
 ## 9. 필요할 때 확인
 | 항목 | 언제 |
 | --- | --- |
-| OAuth 동의 화면 게시 상태(일반 계정 로그인 가능 여부) | 2단계 조각 2 |
+| OAuth 동의 화면 게시 상태(일반 계정 로그인 가능 여부) — 사용자 콘솔 확인 요청함 | 2단계 조각 2 |
+| Authentication 승인된 도메인(`localhost`, `meal-intake-2026.web.app`, `meal-intake-2026.firebaseapp.com`), OAuth 웹 클라이언트 리디렉션 URI `https://meal-intake-2026.web.app/__/auth/handler` — 없으면 배포본 로그인이 `redirect_uri_mismatch` | 2단계 조각 5 배포 전 |
 | AI Logic 사용자별 분당 요청 한도 설정 위치 | 4단계 |
 | Gemini 무료 등급 데이터 보관 기간 | 보류. 발표·고지 문구는 스펙 R2·U4처럼 보수적으로 |
 
