@@ -1,11 +1,21 @@
 // 분석 결과 타입(스펙 4.3절, analysis-schema.json v2와 1:1). 타입만 둔다. 구현은 web/src/analysis/.
 // 사용자 결정으로 추가한 필드: MealItem.db_ml_converted, NutritionResult db 분기의 ml_converted(화면 출처 "DB(환산)").
+// MealItem.db_reference, NutritionResult ai_estimate 분기의 reference: 종류별 차이가 큰 음식이 DB 대표값·일반 이름에만
+// 맞았을 때 값은 AI 추정을 쓰고, 그 DB 값은 화면에 참고로만 보인다(2026-10-26 사용자 결정).
 
 export type Nutrients = { kcal: number; carbs_g: number; protein_g: number; fat_g: number }
 /** 화면: DB / 검색 기반 / AI 추정 / 직접 입력 */
 export type NutritionSource = 'db' | 'search' | 'ai_estimate' | 'user_input'
 export type FillSource = 'ai_estimate' | 'missing'
 export type DbMatch = 'name' | 'group' | 'partial'
+/** 값으로 쓰지 않고 화면에 참고로만 보이는 DB 행 */
+export type DbReference = {
+  db_food_code: string
+  db_name: string
+  db_match: 'group' | 'partial'
+  kcal_per_100g: number
+  ml_converted?: boolean
+}
 
 export interface MealItem {
   /** 모델 항목 "i1"…, 사용자 추가 "u1"… */
@@ -19,6 +29,8 @@ export interface MealItem {
   db_match?: DbMatch
   /** true면 100ml 기준 DB 값을 1ml=1g으로 환산해 썼다. 화면 출처 "DB(환산)" */
   db_ml_converted?: boolean
+  /** nutrition_source가 ai_estimate일 때만. 참고로 보이는 DB 대표값(값 계산에는 쓰지 않음) */
+  db_reference?: DbReference
   /** 같이 먹은 인원수. 정수 1~20, 기본 1 */
   eaters: number
   before_grams: number
@@ -86,6 +98,6 @@ export type NutritionResult =
       searchSuggestionHtml: string | null
       groundingSources: { title?: string; uri: string }[]
     }
-  | { source: 'ai_estimate'; per_100g: Nutrients; via: 'guess' | 'call_d' }
+  | { source: 'ai_estimate'; per_100g: Nutrients; via: 'guess' | 'call_d'; reference?: DbReference }
   /** 3단계가 모두 실패 */
   | { source: 'user_input'; per_100g: null }
