@@ -3,11 +3,24 @@ import { initializeAppCheck, ReCaptchaEnterpriseProvider, type AppCheck } from '
 import { connectAuthEmulator, getAuth } from 'firebase/auth'
 import { connectFirestoreEmulator, getFirestore } from 'firebase/firestore'
 
+// authDomain: Hosting 기본 도메인에서 열렸으면 지금 주소와 같은 도메인을 쓴다.
+// 로그인(팝업·리디렉션)은 authDomain의 /__/auth/handler를 거치는데, 앱 출처와 다르면
+// 서드 파티 저장소 차단(Chrome 115+, Safari 16.1+, Firefox 109+) 때문에 리디렉션 결과를 못 읽는다.
+// Hosting은 web.app·firebaseapp.com 모두에서 /__/auth/*를 제공한다(공식 문서 redirect-best-practices 옵션 1).
+// 전제: Google OAuth 클라이언트 승인된 리디렉션 URI에 https://meal-intake-2026.web.app/__/auth/handler가 있어야 한다.
+// localhost(Vite)는 /__/auth/*가 없으므로 기본값을 쓴다(개발은 팝업 위주).
+const DEFAULT_AUTH_DOMAIN = 'meal-intake-2026.firebaseapp.com'
+const HOSTING_DOMAINS = ['meal-intake-2026.web.app', DEFAULT_AUTH_DOMAIN]
+const authDomain =
+  typeof location !== 'undefined' && HOSTING_DOMAINS.includes(location.hostname)
+    ? location.hostname
+    : DEFAULT_AUTH_DOMAIN
+
 // 웹 앱 설정 값은 공개 값이다(_workspace/02_firebase_notes.md).
 // Cloud Storage를 쓰지 않으므로 storageBucket은 넣지 않는다.
 const firebaseConfig = {
   apiKey: 'AIzaSyA6KZYiJiGbBjX_qJVcLhWn-4b6U3Jk1_s',
-  authDomain: 'meal-intake-2026.firebaseapp.com',
+  authDomain,
   projectId: 'meal-intake-2026',
   messagingSenderId: '686292653830',
   appId: '1:686292653830:web:87f810922b0016e244f087',

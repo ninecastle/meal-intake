@@ -81,3 +81,15 @@ firebase firestore:databases:create "(default)" --location asia-northeast3 --edi
 ## 디버그 토큰·연결 확인 (2026-10-26, 사용자 보고)
 - 개발 PC 디버그 토큰을 App Check 콘솔에 등록함(이름 `kkamang-pc`).
 - localhost "AI 연결 시험" → "성공: 빨강". 단, AI Logic 강제가 꺼져 있어 토큰 유효성은 미검증. 강제는 10/29 측정 뒤, 첫 배포 전에 켜고 버튼으로 다시 확인.
+
+## 구글 로그인 (2026-10-26, 2단계 조각 2, firebase-engineer)
+- 코드: `web/src/lib/auth.ts`(`signInWithGoogle`·`signOutAndClear`·`useAuthUser`·`consumeRedirectResult`·`isInAppBrowser`·`AuthError{code, originalCode}`), `web/src/pages/LoginPage.tsx`(S0), `App.tsx`(로그인 전 S0, 로그인 후 "로그인: 이름(이메일) [로그아웃]" 한 줄. DEV에서 로그아웃하면 콘솔에 먹기 전 사진 IndexedDB 장수 전→후).
+- 흐름: 인앱 브라우저 UA면 호출 전 `AUTH_INAPP_BROWSER` → 팝업 → `auth/popup-blocked`면 리디렉션. 닫기·취소는 `AUTH_CANCELLED`, 그 밖은 `AUTH_FAILED`(원래 코드 보존). 리디렉션 결과는 앱 시작 때 한 번 처리.
+- 로그아웃: `beforePhotoStore.clearAll()` → `signOut`. 분석 결과 캐시 `meal-analysis-cache`는 지우지 않는다(사진 없음, 사진 해시·음식 이름 키, 7일 만료, 재로그인 때 호출 절약).
+- authDomain: `location.hostname`이 `meal-intake-2026.web.app`·`meal-intake-2026.firebaseapp.com`이면 그 도메인, 아니면(localhost) `meal-intake-2026.firebaseapp.com`(`lib/firebase.ts`). 근거: 공식 문서 "redirect-best-practices" 옵션 1. 출처가 다르면 서드 파티 저장소 차단(Chrome 115+, Safari 16.1+, Firefox 109+)으로 리디렉션 결과를 못 읽는다. Hosting은 두 도메인 모두 `/__/auth/*`를 제공한다.
+- CLI 확인(읽기만, 2026-10-26): 로그인 계정 `kkamang2362@gmail.com`, 웹 앱 SDK 설정 authDomain = `meal-intake-2026.firebaseapp.com`, Hosting 사이트 `meal-intake-2026` → `https://meal-intake-2026.web.app`. 승인된 도메인·OAuth 동의 화면은 CLI로 볼 수 없다.
+
+### 사용자 콘솔 확인 (조각 5 배포 전)
+1. Firebase 콘솔 → Authentication → 설정 → 승인된 도메인에 `localhost`, `meal-intake-2026.web.app`, `meal-intake-2026.firebaseapp.com`이 있는지.
+2. Google Cloud 콘솔 → API 및 서비스 → 사용자 인증 정보 → "Web client (auto created by Google Service)" → 승인된 리디렉션 URI에 `https://meal-intake-2026.web.app/__/auth/handler`가 있는지(없으면 추가). **없으면 배포본에서 팝업·리디렉션 로그인이 모두 `redirect_uri_mismatch`로 실패한다.**
+3. OAuth 동의 화면(Google 인증 플랫폼 → 대상)이 "프로덕션"인지. "테스트"면 등록한 테스트 사용자만 로그인된다(심사위원 불가).

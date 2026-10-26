@@ -1,6 +1,9 @@
 import { lazy, Suspense, useRef, useState } from 'react'
 import type { FoodHit } from './analysis/nutrition/db'
+import type { User } from 'firebase/auth'
+import { signOutAndClear, useAuthUser } from './lib/auth'
 import { usingEmulators } from './lib/firebase'
+import LoginPage from './pages/LoginPage'
 
 // 개발 빌드에서만 흐름 시험 패널을 불러온다(배포 번들에는 들어가지 않는다).
 const FlowTest = import.meta.env.DEV ? lazy(() => import('./dev/FlowTest')) : null
@@ -107,9 +110,88 @@ function DbSearchTest() {
   )
 }
 
+// 개발용: 먹기 전 사진 IndexedDB(meal-photos/before) 항목 수. DB가 없으면 만들지 않고 0을 돌려준다.
+async function devCountBeforePhotos(): Promise<number | null> {
+  try {
+    const list = await indexedDB.databases()
+    if (!list.some((d) => d.name === 'meal-photos')) return 0
+    return await new Promise<number | null>((resolve) => {
+      const req = indexedDB.open('meal-photos')
+      req.onerror = () => resolve(null)
+      req.onsuccess = () => {
+        const db = req.result
+        if (!db.objectStoreNames.contains('before')) {
+          db.close()
+          resolve(0)
+          return
+        }
+        const c = db.transaction('before', 'readonly').objectStore('before').count()
+        c.onsuccess = () => {
+          db.close()
+          resolve(c.result)
+        }
+        c.onerror = () => {
+          db.close()
+          resolve(null)
+        }
+      }
+    })
+  } catch {
+    return null
+  }
+}
+
+// 확인용 한 줄(라우팅·실제 화면은 조각 4).
+function UserBar({ user }: { user: User }) {
+  const [busy, setBusy] = useState(false)
+
+  async function onLogout() {
+    if (busy) return
+    setBusy(true)
+    const before = import.meta.env.DEV ? await devCountBeforePhotos() : null
+    try {
+      await signOutAndClear()
+    } catch (e) {
+      console.warn('[auth] 로그아웃 실패', e)
+      setBusy(false)
+      return
+    }
+    if (import.meta.env.DEV) {
+      const after = await devCountBeforePhotos()
+      console.info(`[DEV] 로그아웃: 먹기 전 사진 IndexedDB ${before ?? '?'}장 → ${after ?? '?'}장`)
+    }
+  }
+
+  return (
+    <div className="flex w-full items-center justify-between gap-2 text-left text-xs text-gray-600">
+      <span className="truncate">
+        로그인: {user.displayName ?? '이름 없음'}({user.email ?? '이메일 없음'})
+      </span>
+      <button
+        type="button"
+        onClick={() => void onLogout()}
+        disabled={busy}
+        className="shrink-0 rounded border border-gray-300 px-2 py-1 disabled:opacity-50"
+      >
+        로그아웃
+      </button>
+    </div>
+  )
+}
+
 export default function App() {
+  const { user, loading } = useAuthUser()
+
+  if (loading) {
+    return (
+      <main className="flex min-h-dvh items-center justify-center p-4 text-sm text-gray-500">불러오는 중…</main>
+    )
+  }
+  if (!user) return <LoginPage />
+
   return (
     <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-2 p-4 text-center">
+      <UserBar user={user} />
       <h1 className="text-2xl font-bold">식단 기록</h1>
       <p className="text-sm text-gray-500">저장소 골격 — 화면은 다음 단계에서 구현</p>
       {usingEmulators && <p className="text-xs text-amber-600">에뮬레이터 연결됨</p>}
