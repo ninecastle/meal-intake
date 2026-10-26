@@ -1,0 +1,11 @@
+{
+  "items": [
+    { "id": "i1", "remaining_ratio": 0.3, "confidence": 0.8 },
+    { "id": "i2", "remaining_ratio": 0, "confidence": 0.7 },
+    { "id": "i3", "remaining_ratio": 1.0, "confidence": 0.75 },
+    { "id": "i4", "remaining_ratio": null, "confidence": 0.3 },
+    { "id": "i5", "remaining_ratio": 0, "confidence": 0.8 },
+    { "id": "i6", "remaining_ratio": 1.0, "confidence": 0.6 }
+  ],
+  "warnings": ["목업 응답입니다(VITE_AI_MOCK=1)", "배추김치: 먹은 후 사진에서 어느 그릇인지 판단할 수 없습니다"]
+}

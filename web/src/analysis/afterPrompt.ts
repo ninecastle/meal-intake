@@ -1,0 +1,155 @@
+// 호출 B(먹은 후 분석) 프롬프트 b1·응답 스키마·응답 정리.
+// 출처: .claude/skills/intake-calorie-estimation/references/prompt-template.md 호출 B.
+// 이 파일은 import.meta.env를 쓰지 않고, 값 import는 firebase/ai만 한다(Node 시험 스크립트에서도 그대로 불러 쓴다).
+import { Schema, ThinkingLevel, type GenerationConfig } from 'firebase/ai'
+import type { AfterItem, BeforeItem } from '../types/analysis'
+
+export const PROMPT_VERSION_B = 'b1'
+
+export const SYSTEM_INSTRUCTION_B = `당신은 식사 사진을 분석하는 영양 보조 도구다.
+먹기 전에 분석한 음식 목록(JSON), 먹기 전 사진, 먹은 후 같은 식탁 사진이 주어진다. 먹기 전 사진이 빠질 수도 있다.
+
+할 일:
+1. 목록의 각 id에 대해 먹은 후 사진에서 같은 그릇을 location을 단서로 찾는다.
+2. 남은 비율 remaining_ratio를 추정한다(0=다 먹음, 1=그대로).
+
+규칙:
+- 칼로리를 계산하지 않는다. 비율만 추정한다.
+- 먹은 후 사진에서 그릇이 안 보이면 remaining_ratio=0, confidence를 0.5 이하로 두고 warnings에 적는다.
+- 어느 그릇인지 판단할 수 없으면 remaining_ratio=null로 두고 warnings에 적는다.
+- 목록에 없는데 먹은 후 사진에만 있는 음식은 결과에 넣지 말고 warnings에 적는다.
+- 확신이 없으면 confidence를 낮게 준다.`
+
+/** 이미지 앞에 붙이는 텍스트 파트. 순서: 목록 → "BEFORE 사진" → 먹기 전 이미지(없으면 둘 다 생략) → "AFTER 사진" → 먹은 후 이미지 */
+export const USER_TEXT_BEFORE_PHOTO = 'BEFORE 사진'
+export const USER_TEXT_AFTER_PHOTO = 'AFTER 사진'
+/** 먹기 전 사진이 없을 때 warnings 맨 앞에 넣는 문구(스펙 4.3절) */
+export const WARNING_NO_BEFORE_PHOTO = '먹기 전 사진 없이 분석'
+
+/** 모델에 보내는 먹기 전 목록 JSON(id·이름·위치·중량). 같은 사진 캐시 키에도 이 문자열의 해시를 쓴다. */
+export function buildBeforeItemsJson(items: readonly BeforeItem[]): string {
+  return JSON.stringify(
+    items.map((it) => ({ id: it.id, name: it.name, location: it.location, before_grams: it.before_grams })),
+  )
+}
+export function buildBeforeItemsText(itemsJson: string): string {
+  return `먹기 전 음식 목록: ${itemsJson}`
+}
+
+// 응답 스키마 B. 템플릿상 모든 필드 필수, remaining_ratio만 nullable.
+export const RESPONSE_SCHEMA_B = Schema.object({
+  properties: {
+    items: Schema.array({
+      items: Schema.object({
+        properties: {
+          id: Schema.string(),
+          remaining_ratio: Schema.number({ nullable: true }),
+          confidence: Schema.number(),
+        },
+      }),
+    }),
+    warnings: Schema.array({ items: Schema.string() }),
+  },
+})
+
+export const GENERATION_CONFIG_B: GenerationConfig = {
+  responseMimeType: 'application/json',
+  responseSchema: RESPONSE_SCHEMA_B,
+  thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+  maxOutputTokens: 4096,
+}
+
+// ── 응답 정리(형식 검증) ──
+const MAX_MODEL_WARNINGS = 10
+
+export interface AfterParsed { items: AfterItem[]; warnings: string[] }
+export type NormalizeAfterResult = ({ ok: true } & AfterParsed) | { ok: false; detail: string }
+
+function isObj(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+function num(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? v : null
+}
+/** beforePrompt.ts와 같은 규칙: 빠지면 0.3, 1 초과 100 이하이면 0~100 척도로 보고 나눈다 */
+function normConfidence(v: unknown): number {
+  let c = num(v)
+  if (c === null) return 0.3
+  if (c > 1 && c <= 100) c = c / 100
+  return Math.round(Math.min(1, Math.max(0, c)) * 100) / 100
+}
+
+/**
+ * 모델 원본(JSON 객체) → 먹기 전 목록 순서의 AfterItem[].
+ * - before에 없는 id·중복 id는 버리고 경고한다.
+ * - 응답에 빠진 id는 remaining_ratio=null, confidence=0으로 채우고 경고한다.
+ * - remaining_ratio가 0~1 밖이거나 숫자가 아니면 잘라 넣지 않고 null로 두고 경고한다(모델의 null은 경고 없이 그대로).
+ * - 형식 오류(재시도 대상): items 배열 없음, 응답 항목이 있는데 before id와 하나도 맞지 않음.
+ */
+export function normalizeAfterResponse(raw: unknown, before: readonly BeforeItem[]): NormalizeAfterResult {
+  if (!isObj(raw) || !Array.isArray(raw.items)) return { ok: false, detail: 'items 배열이 없습니다' }
+  const warnings: string[] = Array.isArray(raw.warnings)
+    ? raw.warnings
+        .filter((w): w is string => typeof w === 'string')
+        .map((w) => w.trim())
+        .filter((w) => w.length > 0)
+        .slice(0, MAX_MODEL_WARNINGS)
+    : []
+
+  const nameOf = new Map(before.map((b) => [b.id, b.name]))
+  const got = new Map<string, AfterItem>()
+  const unknownIds: string[] = []
+  let malformed = 0
+  for (const it of raw.items) {
+    const id = isObj(it) && typeof it.id === 'string' ? it.id.trim() : ''
+    if (!id) {
+      malformed++
+      continue
+    }
+    if (!nameOf.has(id)) {
+      unknownIds.push(id)
+      continue
+    }
+    if (got.has(id)) {
+      warnings.push(`${nameOf.get(id)}: 같은 항목이 두 번 와서 첫 번째만 썼습니다`)
+      continue
+    }
+    const r = (it as Record<string, unknown>).remaining_ratio
+    let remaining_ratio: number | null = null
+    if (r !== null) {
+      const n = num(r)
+      if (n !== null && n >= 0 && n <= 1) remaining_ratio = Math.round(n * 100) / 100
+      else warnings.push(`${nameOf.get(id)}: 남긴 비율 값(${String(r)})이 0~1 밖이라 직접 골라 주세요`)
+    }
+    got.set(id, { id, remaining_ratio, confidence: normConfidence((it as Record<string, unknown>).confidence) })
+  }
+
+  if (raw.items.length > 0 && got.size === 0) {
+    return { ok: false, detail: '먹기 전 목록의 id와 맞는 항목이 없습니다' }
+  }
+  if (unknownIds.length > 0) warnings.push(`먹기 전 목록에 없는 항목(${unknownIds.slice(0, 5).join(', ')})을 뺐습니다`)
+  if (malformed > 0) warnings.push(`먹은 후 결과 중 ${malformed}개 항목을 형식 오류로 뺐습니다`)
+
+  const items: AfterItem[] = before.map((b) => {
+    const hit = got.get(b.id)
+    if (hit) return hit
+    warnings.push(`${b.name}: 먹은 후 결과가 없어 남긴 비율을 직접 골라 주세요`)
+    return { id: b.id, remaining_ratio: null, confidence: 0 }
+  })
+  return { ok: true, items, warnings }
+}
+
+/** 모델 응답 텍스트 → JSON 파싱 → 정리 */
+export function parseAfterText(text: string, before: readonly BeforeItem[]): NormalizeAfterResult {
+  const body = text
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/, '')
+  let raw: unknown
+  try {
+    raw = JSON.parse(body)
+  } catch {
+    return { ok: false, detail: 'JSON 파싱 실패' }
+  }
+  return normalizeAfterResponse(raw, before)
+}

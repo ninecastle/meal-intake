@@ -64,3 +64,16 @@
 5. 같은 사진 캐시: IndexedDB `meal-analysis-cache`, 저장소 `before`(조각 3용 `after`도 v1에서 같이 만듦). 키는 SHA-256(hex), 값은 `{ key, value(결과 JSON), at, model, prompt_version }`. 모델·프롬프트 버전이 다르거나 7일이 지나면 쓰지 않고, 쓰기 때 7일 지난 항목을 지운다. IndexedDB 작업은 1.5초 안에 안 끝나면 캐시 없이 진행. 세션 메모리 캐시도 함께 둔다. `crypto.subtle`이 없으면(비보안 컨텍스트) 캐시를 건너뛴다. 출처는 `getAnalysisOrigin(result)` → `{ source: 'live'|'cache'|'mock', analyzedAt, attempts }`(WeakMap, 반환 타입 그대로).
 6. 목업: `VITE_AI_MOCK === '1'`이면 `__fixtures__/before-*.json`(지연 import, 배포 번들에 안 섞임) 중 이름순 첫 파일을 0.6초 뒤 같은 정리 함수로 돌려준다. `model: 'mock'`. 캐시는 쓰지 않는다. `getAnalysisMode()` → `{ mode: 'mock'|'live', model, promptVersions }`.
 7. firebase 13.1의 `Part`는 `type` 구분 필드(`'text'`, `'inlineData'`)가 필수다. 앱 코드와 시험 호출 모두 이 필드를 넣었고 호출이 통과했다.
+
+## 프롬프트 b1 (2026-10-26, 1단계 조각 3: 먹은 후 분석 `analyzeAfter`)
+- 프롬프트: `prompt-template.md` 시스템 지시 B 원문 그대로(`web/src/analysis/afterPrompt.ts`, `PROMPT_VERSION_B = 'b1'`). 파트 순서: `먹기 전 음식 목록: [{id,name,location,before_grams}…]` → `BEFORE 사진` → 먹기 전 이미지 → `AFTER 사진` → 먹은 후 이미지. 먹기 전 사진이 없거나 읽지 못하면 BEFORE 두 파트를 빼고 `used_before_photo=false`, warnings 맨 앞에 "먹기 전 사진 없이 분석". 응답 스키마 B(`remaining_ratio`만 nullable), `thinkingLevel: LOW`, `maxOutputTokens: 4096`. 20초 제한·재시도·오류 변환은 `aiCall.ts` 그대로.
+- 남긴 비율 정의(b1): `remaining_ratio` = 먹기 전 대비 **남은** 양, 0 = 다 먹음, 1 = 그대로. 그릇이 안 보이면 0(+confidence 0.5 이하), 그릇을 특정 못 하면 null.
+- 시험 호출 1회(19:52 KST, Node, 먹기 전·먹은 후 모두 `spike/bibimbap.jpg` 같은 사진, 목록은 a1 결과 `i1 돌솥비빔밥 450g`(location은 재구성 "가운데 검은 돌솥"), gemini-3.5-flash-lite, App Check 없음): 성공. 2.4초, STOP, 입력 2,427 토큰(이미지 2장 2,160) · 출력 54 토큰. 결과 `i1 remaining_ratio 1.0, confidence 1.0`, warnings 없음. 기댓값(같은 사진 = 안 먹음 → 1에 가까움)과 일치. 정리 함수(`parseAfterText`) 통과.
+- 관찰: 두 사진이 완전히 같아도 경고 없이 confidence 1.0을 줬다. "먹은 후 사진을 다시 찍었는지" 같은 확인은 모델에 기대지 않는다(필요하면 화면에서 두 사진 해시가 같을 때 안내). 반찬 여러 개 상차림·실제 먹은 후 사진은 10/29 샘플 측정에서 본다.
+
+### 스펙과 다르게(또는 새로) 정한 점
+1. 응답 정리 규칙: before에 없는 id·중복 id는 버리고 경고. 빠진 id는 `remaining_ratio=null`, `confidence=0` + 경고. 0~1 밖·숫자 아님은 자르지 않고 null + 경고(모델이 준 null은 경고 없이 그대로). confidence는 a1과 같은 규칙. 항목은 before 순서. 형식 오류(재시도 대상): JSON 파싱 실패, `items` 배열 없음, 응답 항목이 있는데 before id와 하나도 안 맞음. `items: []`는 형식 오류가 아니라 전부 null.
+2. 먹기 전 목록이 비면 호출하지 않고 `ANALYSIS_UNAVAILABLE`(reason `bad_request`). 먹은 후 사진이 비었거나 이미지가 아니면 `PHOTO_INVALID`. 먹기 전 사진이 읽히지 않으면 오류가 아니라 사진 없는 경로로 간다.
+3. 같은 사진 캐시: 저장소 `after`, 키 `SHA-256(먹은 후 압축본):SHA-256(모델에 보내는 먹기 전 목록 JSON)`. 모델·프롬프트 버전·7일 규칙은 a1과 같다. 사진 없이 분석한 캐시는 지금 먹기 전 사진이 있으면 쓰지 않고 다시 분석한다(반대는 그대로 씀: 분석 성공 뒤 먹기 전 사진을 지우므로). `getAnalysisOrigin`은 `BeforeAnalysis | AfterAnalysis`를 받는다.
+4. 목업: `__fixtures__/after-bibimbap.json`(before 픽스처 i1~i6, 남긴 비율 0.3/0/1.0/null/0/1.0)을 넘겨받은 before 목록 기준으로 같은 정리 함수에 통과시킨다. 실제 먹기 전 결과(i1 하나)와 섞으면 i2~i6은 "목록에 없는 항목"으로 빠진다. `getAnalysisMode().promptVersions.after = 'b1'`.
+5. 먹기 전 사진 IndexedDB 삭제는 `analyzeAfter`가 하지 않는다(호출한 화면이 성공 뒤 지운다).
