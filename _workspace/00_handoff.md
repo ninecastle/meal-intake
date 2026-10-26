@@ -63,7 +63,7 @@
 | 기준 | 결과 |
 | --- | --- |
 | 사용자 스펙 확인 | 완료. 해시 `_workspace/freeze_01.sha` |
-| localhost AI 호출 1회 성공 | 완료. `npm --prefix web run dev` → "AI 연결 시험" → "성공: 빨강"(사용자 보고). 디버그 토큰 등록함(이름은 사용자 메시지에 `kkama-pc`·`kkamang-pc` 두 가지로 적혀 있어 확인 필요) |
+| localhost AI 호출 1회 성공 | 완료. `npm --prefix web run dev` → "AI 연결 시험" → "성공: 빨강"(사용자 보고). 디버그 토큰 등록함(이름 `kkamang-pc`) |
 | 무료 한도·그라운딩 가능 여부 기록 | 그라운딩: 무료 등급 불가(`03_vision_eval.md`). 한도 값: 확인 불가(AI Studio 권한 없음, 429 본문에 값 없음) → 계획용 추정치로 관리 |
 | U1·U3 결정 | U1 `gemini-3.5-flash-lite`, U3 검색 코드 유지·기본 off(`CLAUDE.md` 반영) |
 
