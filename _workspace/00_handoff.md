@@ -48,3 +48,10 @@
 ## 주의
 - 사진은 서버(Storage·Firestore)에 저장하지 않는다. 먹기 전 사진만 IndexedDB에 임시 보관한다(`CLAUDE.md`).
 - 11/5 17:00 이후 Gemini 무료 한도는 심사위원용이다. 그 뒤로는 실제 AI 호출을 하지 않는다(`CLAUDE.md` "제출·심사").
+
+## 0단계 진행 (2026-10-26 오후)
+- 저장소 골격 `a11eb1c`, App Check 코드 `78e5aed`, 스파이크 `0c06a4f`(결과 `_workspace/03_vision_eval.md`).
+- 사용자 결정: U1 = `gemini-3.5-flash-lite`, U3 = 검색 단계 코드 유지·기본 off(`CLAUDE.md` 반영). 그라운딩 결과 저장 약관 확인은 불필요해졌다.
+- 무료 한도 값은 미확인(AI Studio 권한 없음, 429 본문에 quota 정보 없음). 계획용 추정치로 관리.
+- 남은 0단계 완료 기준: 사용자가 localhost에서 디버그 토큰 등록 후 "AI 연결 시험" 버튼 1회 성공.
+- 첫 배포 전 할 일: AI Logic App Check 강제 켜기, 배포 빌드에 `VITE_RECAPTCHA_SITE_KEY` 들어 있는지 확인.
