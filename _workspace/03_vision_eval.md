@@ -96,3 +96,11 @@
 ### 관찰
 - "생크림 딸기 케이크"는 뒤쪽 일치로 케이크 대표 행 "케이크_클래식 치즈 케이크 (조각)" 306kcal에 붙는다. 규칙이 없으면 치즈케이크 값을 DB로 보였을 것이다. 참고 이름이 실제 음식과 다를 수 있으니 화면은 "DB 대표값 306kcal"처럼 이름보다 값을 앞세우는 편이 낫다.
 - "치킨"·"양념치킨 순살"·"후라이드 치킨"은 DB 대표식품명이 "닭튀김"이라 맞는 행이 없어 참고값 없이 AI 추정이 된다. "떡볶이"처럼 일반 이름이 DB 행 이름과 그대로 같으면 `name` 일치라 DB 값을 쓴다. a2가 구체적인 이름을 내면 대개 세부명 키(예: "로제 떡볶이" → "떡볶이_간편조리세트_로제떡볶이", "더블 치즈버거" → "버거_더블치즈 버거")로 `name` 일치가 된다.
+
+## 계산·조립·검증 (2026-10-26, 1단계 조각 4: `compute.ts`·`assemble.ts`·`validate.ts`)
+- 공식(4.6): 섭취량 = 100g당 값 × 중량 ÷ 100 × (1 − 남긴 비율) ÷ 인원수. 남긴 비율 null은 0으로 계산하고 `needs_review=true`. 반올림(소수 첫째)은 `buildAnalysis`·`computeTotals`에서만 하고, 합계는 반올림 전 값을 더한다. 인원수는 1~20 정수, 비율은 0~1로 맞춘다.
+- `applyNutrition`: 출처가 바뀌면 `db_*`·`per_100g_fill`·`db_ml_converted`·`db_reference`를 지우고 새 출처 필드만 채운다. `fill`이 missing인 영양소는 `per_100g` 0. user_input은 `kcal_overridden=true`이고 `consumed.kcal`은 지금 값을 초안으로 둔다. `buildAnalysis`는 스키마 키만, undefined 없이 만든다(Firestore용).
+- `assembleAnalysis`: 항목 confidence는 호출 A·B 가운데 낮은 값. 조회는 동시 4개까지. 조회 예외나 중단 때는 guess가 있으면 AI 추정, 없으면 직접 입력으로 두고 경고를 남긴다. after가 null이면 비율이 모두 null이고 경고 1개. `prompt_version`은 `a1-b1`(after가 없으면 `a1`), 모델이 다르면 `A+B`.
+- 스키마 v2(`references/analysis-schema.json`)와 검증기(`scripts/validate_analysis.mjs`, 앱은 `validate.ts`의 `checkAnalysis`, 규칙 같음): 3.3절 규칙 3개, `db_ml_converted`는 db이고 true일 때만, `db_reference`는 ai_estimate일 때만(형식·kcal 0~900 검사). 스펙에 없던 규칙도 더했다. 스키마에 없는 키는 거부하고, db가 아니면 `db_food_code`는 null, user_input이면 `per_100g`가 null이고 탄·단·지는 0이다. `data:image` 값도 거부하고, 비율이 null인 항목의 `consumed_grams`도 r=0으로 검사한다.
+- 픽스처(`web/src/analysis/__fixtures__/analysis-v2-*.json`, 실제 DB 행 사용): valid(DB·DB(환산)·DB+fill·AI 추정+DB 참고·직접 입력, 인원 2, 비율 null)는 TS·Node 검증을 모두 통과했다. bad-calc는 2건(kcal 불일치, 합계 불일치), bad-photo는 3건(`photo_base64` 키, data:image 값, 스키마 밖 키)으로 실패했다.
+- 조립 시험: 목업 before·after와 가짜 resolve로 돌렸다. 6항목, 최대 동시 4, `a1-b1`, 검증 통과. after가 null인 경우, 중단된 경우(호출 0, 모두 AI 추정), before가 깨진 경우(항목 0)에도 검증을 통과했다. 실제 AI 호출은 0회.

@@ -1,0 +1,188 @@
+{
+  "items": [
+    {
+      "id": "i1",
+      "name": "비빔밥",
+      "location": "가운데 큰 흰 대접",
+      "db_food_code": "D101-018000000-0001",
+      "db_name": "비빔밥",
+      "db_match": "name",
+      "eaters": 1,
+      "before_grams": 450,
+      "remaining_ratio": 0.3,
+      "consumed_grams": 315,
+      "per_100g": {
+        "kcal": 142,
+        "carbs_g": 18.84,
+        "protein_g": 6.86,
+        "fat_g": 4.32
+      },
+      "nutrition_source": "db",
+      "consumed": {
+        "kcal": 447.3,
+        "carbs_g": 59.3,
+        "protein_g": 21.6,
+        "fat_g": 13.6
+      },
+      "kcal_overridden": false,
+      "confidence": 0.85,
+      "needs_review": false
+    },
+    {
+      "id": "i2",
+      "name": "제육볶음",
+      "location": "오른쪽 큰 접시",
+      "db_food_code": "D410-529000000-0001",
+      "db_name": "제육볶음",
+      "db_match": "name",
+      "db_ml_converted": true,
+      "eaters": 1,
+      "before_grams": 300,
+      "remaining_ratio": 0.1,
+      "consumed_grams": 270,
+      "per_100g": {
+        "kcal": 151,
+        "carbs_g": 5.73,
+        "protein_g": 12.2,
+        "fat_g": 8.39
+      },
+      "nutrition_source": "db",
+      "consumed": {
+        "kcal": 407.7,
+        "carbs_g": 15.5,
+        "protein_g": 32.9,
+        "fat_g": 22.7
+      },
+      "kcal_overridden": false,
+      "confidence": 0.75,
+      "needs_review": false
+    },
+    {
+      "id": "i3",
+      "name": "김치 고로케",
+      "location": "왼쪽 위 작은 접시",
+      "db_food_code": "D202-112000000-0001",
+      "db_name": "크로켓(고로케)_NEW김치 고로케",
+      "db_match": "name",
+      "eaters": 1,
+      "before_grams": 80,
+      "remaining_ratio": null,
+      "consumed_grams": 80,
+      "per_100g": {
+        "kcal": 288,
+        "carbs_g": 3.5,
+        "protein_g": 6.82,
+        "fat_g": 0
+      },
+      "per_100g_fill": {
+        "carbs_g": "ai_estimate",
+        "fat_g": "missing"
+      },
+      "nutrition_source": "db",
+      "consumed": {
+        "kcal": 230.4,
+        "carbs_g": 2.8,
+        "protein_g": 5.5,
+        "fat_g": 0
+      },
+      "kcal_overridden": false,
+      "confidence": 0.3,
+      "needs_review": true
+    },
+    {
+      "id": "i4",
+      "name": "콩나물무침",
+      "location": "위쪽 가운데 작은 접시",
+      "db_food_code": "D113-597000000-0001",
+      "db_name": "콩나물무침",
+      "db_match": "name",
+      "eaters": 2,
+      "before_grams": 60,
+      "remaining_ratio": 0.25,
+      "consumed_grams": 22.5,
+      "per_100g": {
+        "kcal": 69,
+        "carbs_g": 3.2,
+        "protein_g": 3.86,
+        "fat_g": 4.54
+      },
+      "nutrition_source": "db",
+      "consumed": {
+        "kcal": 15.5,
+        "carbs_g": 0.7,
+        "protein_g": 0.9,
+        "fat_g": 1
+      },
+      "kcal_overridden": false,
+      "confidence": 0.8,
+      "needs_review": false
+    },
+    {
+      "id": "i5",
+      "name": "양념치킨 순살",
+      "location": "가운데 종이 상자",
+      "db_food_code": null,
+      "db_reference": {
+        "db_food_code": "D108-402000000-0001",
+        "db_name": "치킨데리야끼",
+        "db_match": "group",
+        "kcal_per_100g": 208
+      },
+      "eaters": 1,
+      "before_grams": 300,
+      "remaining_ratio": 0.5,
+      "consumed_grams": 150,
+      "per_100g": {
+        "kcal": 290,
+        "carbs_g": 18,
+        "protein_g": 17,
+        "fat_g": 16
+      },
+      "nutrition_source": "ai_estimate",
+      "consumed": {
+        "kcal": 435,
+        "carbs_g": 27,
+        "protein_g": 25.5,
+        "fat_g": 24
+      },
+      "kcal_overridden": false,
+      "confidence": 0.7,
+      "needs_review": false
+    },
+    {
+      "id": "u1",
+      "name": "할머니 떡",
+      "db_food_code": null,
+      "eaters": 1,
+      "before_grams": 120,
+      "remaining_ratio": 0,
+      "consumed_grams": 120,
+      "per_100g": null,
+      "nutrition_source": "user_input",
+      "consumed": {
+        "kcal": 250,
+        "carbs_g": 0,
+        "protein_g": 0,
+        "fat_g": 0
+      },
+      "kcal_overridden": true,
+      "confidence": 1,
+      "needs_review": false,
+      "user_edited": true
+    }
+  ],
+  "totals": {
+    "before_kcal": 2233.8,
+    "consumed": {
+      "kcal": 1785.9,
+      "carbs_g": 105.3,
+      "protein_g": 86.4,
+      "fat_g": 61.3
+    }
+  },
+  "warnings": [
+    "김치 고로케: 먹은 후 사진에서 어느 그릇인지 판단할 수 없습니다"
+  ],
+  "model": "gemini-3.5-flash-lite",
+  "prompt_version": "a1-b1"
+}

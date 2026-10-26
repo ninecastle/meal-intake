@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "MealIntakeAnalysis",
-  "description": "먹기 전·후 사진 분석으로 계산한 한 끼 섭취 결과. Firestore meals/{id}.analysis에 그대로 저장한다. 프런트·분석 모듈·QA가 공유하는 계약. 사진 관련 필드는 두지 않는다.",
+  "title": "MealIntakeAnalysis v2",
+  "description": "먹기 전·후 사진 분석으로 계산한 한 끼 섭취 결과. Firestore meals/{id}.analysis에 그대로 저장한다. 프런트·분석 모듈·QA가 공유하는 계약(타입: web/src/types/analysis.ts, 검증: scripts/validate_analysis.mjs, web/src/analysis/validate.ts). 사진 관련 필드는 두지 않는다. v2(스펙 3.3절): db_name, db_match, per_100g_fill, db_ml_converted, db_reference 추가. 계산식 검사(섭취 중량·섭취 값·합계, 허용 오차 2% 또는 1)는 JSON Schema로 표현할 수 없어 검증 스크립트가 한다.",
   "type": "object",
   "required": ["items", "totals", "warnings"],
   "additionalProperties": false,
@@ -16,6 +16,20 @@
         "protein_g": {"type": "number", "minimum": 0},
         "fat_g": {"type": "number", "minimum": 0}
       }
+    },
+    "fillSource": {"enum": ["ai_estimate", "missing"], "description": "ai_estimate: DB 빈 값을 AI 추정으로 채움, missing: 값 없음(per_100g·consumed 값은 0, 화면은 –)"},
+    "dbReference": {
+      "type": "object",
+      "description": "값 계산에는 쓰지 않고 화면에 참고로만 보이는 DB 행(종류별 차이가 큰 음식이 대표값·일반 이름에만 맞았을 때)",
+      "required": ["db_food_code", "db_name", "db_match", "kcal_per_100g"],
+      "additionalProperties": false,
+      "properties": {
+        "db_food_code": {"type": "string", "minLength": 1},
+        "db_name": {"type": "string", "minLength": 1},
+        "db_match": {"enum": ["group", "partial"]},
+        "kcal_per_100g": {"type": "number", "minimum": 0, "maximum": 900},
+        "ml_converted": {"type": "boolean"}
+      }
     }
   },
   "properties": {
@@ -26,22 +40,53 @@
         "required": ["id", "name", "db_food_code", "eaters", "before_grams", "remaining_ratio", "consumed_grams", "per_100g", "nutrition_source", "consumed", "kcal_overridden", "confidence", "needs_review"],
         "additionalProperties": false,
         "properties": {
-          "id": {"type": "string"},
+          "id": {"type": "string", "minLength": 1, "description": "모델 항목 i1…, 사용자 추가 u1…"},
           "name": {"type": "string"},
           "location": {"type": "string"},
-          "db_food_code": {"type": ["string", "null"], "description": "nutrition_source가 db일 때 식약처 음식 코드"},
+          "db_food_code": {"type": ["string", "null"], "description": "nutrition_source가 db일 때 식약처 음식 코드, 그 밖에는 null"},
+          "db_name": {"type": ["string", "null"], "description": "v2. db일 때 매칭된 DB 음식명"},
+          "db_match": {"enum": ["name", "group", "partial"], "description": "v2. db일 때 매칭 방식(이름·대표값·부분 일치)"},
+          "db_ml_converted": {"const": true, "description": "v2. db이고 100ml 기준 값을 1ml=1g으로 환산한 행일 때만 넣는다. 화면 출처 \"DB(환산)\""},
+          "db_reference": {"$ref": "#/$defs/dbReference", "description": "v2. ai_estimate일 때만. 참고로 보이는 DB 대표값"},
           "eaters": {"type": "integer", "minimum": 1, "maximum": 20, "description": "같이 먹은 인원수(사용자 선택, 기본 1). 섭취 값을 이 수로 나눈다"},
           "before_grams": {"type": "number", "minimum": 0},
-          "remaining_ratio": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
-          "consumed_grams": {"type": "number", "minimum": 0},
+          "remaining_ratio": {"type": ["number", "null"], "minimum": 0, "maximum": 1, "description": "남은 양 비율(0=다 먹음, 1=그대로). null=매칭 실패(0으로 계산, needs_review=true)"},
+          "consumed_grams": {"type": "number", "minimum": 0, "description": "before_grams × (1 − remaining_ratio) ÷ eaters"},
           "per_100g": {"oneOf": [{"$ref": "#/$defs/nutrients"}, {"type": "null"}], "description": "user_input일 때만 null 허용"},
-          "nutrition_source": {"enum": ["db", "search", "ai_estimate", "user_input"], "description": "화면 표시: DB / 검색 기반 / AI 추정 / 직접 입력"},
-          "consumed": {"$ref": "#/$defs/nutrients"},
-          "kcal_overridden": {"type": "boolean", "description": "사용자가 칼로리를 직접 고쳤으면 true"},
+          "per_100g_fill": {
+            "type": "object",
+            "additionalProperties": false,
+            "minProperties": 1,
+            "properties": {"carbs_g": {"$ref": "#/$defs/fillSource"}, "fat_g": {"$ref": "#/$defs/fillSource"}},
+            "description": "v2. db이고 DB 행에 탄·지 값이 비어 있을 때만. 영양소 단위 출처"
+          },
+          "nutrition_source": {"enum": ["db", "search", "ai_estimate", "user_input"], "description": "화면 표시: DB(db_ml_converted면 DB(환산)) / 검색 기반 / AI 추정(db_reference면 DB 참고 함께) / 직접 입력"},
+          "consumed": {"$ref": "#/$defs/nutrients", "description": "per_100g × consumed_grams ÷ 100. kcal_overridden이면 kcal은 사용자 입력값"},
+          "kcal_overridden": {"type": "boolean", "description": "사용자가 칼로리를 직접 고쳤으면 true(user_input은 항상 true)"},
           "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-          "needs_review": {"type": "boolean"},
+          "needs_review": {"type": "boolean", "description": "confidence < 0.6 또는 remaining_ratio = null이면 true"},
           "user_edited": {"type": "boolean", "description": "이름·중량·비율 중 하나라도 사용자가 고쳤으면 true"}
-        }
+        },
+        "allOf": [
+          {
+            "if": {"properties": {"nutrition_source": {"const": "db"}}, "required": ["nutrition_source"]},
+            "then": {"properties": {"db_food_code": {"type": "string", "minLength": 1}}},
+            "else": {"properties": {"db_food_code": {"type": "null"}, "db_name": {"type": "null"}, "db_match": false, "db_ml_converted": false, "per_100g_fill": false}}
+          },
+          {
+            "if": {"properties": {"nutrition_source": {"const": "ai_estimate"}}, "required": ["nutrition_source"]},
+            "else": {"properties": {"db_reference": false}}
+          },
+          {
+            "if": {"required": ["db_match"]},
+            "then": {"required": ["db_name"], "properties": {"db_name": {"type": "string", "minLength": 1}}}
+          },
+          {
+            "if": {"properties": {"nutrition_source": {"const": "user_input"}}, "required": ["nutrition_source"]},
+            "then": {"properties": {"per_100g": {"type": "null"}, "kcal_overridden": {"const": true}}},
+            "else": {"properties": {"per_100g": {"$ref": "#/$defs/nutrients"}}}
+          }
+        ]
       }
     },
     "totals": {
@@ -49,12 +94,12 @@
       "required": ["before_kcal", "consumed"],
       "additionalProperties": false,
       "properties": {
-        "before_kcal": {"type": "number", "minimum": 0},
-        "consumed": {"$ref": "#/$defs/nutrients"}
+        "before_kcal": {"type": "number", "minimum": 0, "description": "Σ before_grams × per_100g.kcal ÷ 100 (인원수로 나누지 않는다)"},
+        "consumed": {"$ref": "#/$defs/nutrients", "description": "Σ items.consumed"}
       }
     },
     "warnings": {"type": "array", "items": {"type": "string"}},
     "model": {"type": "string"},
-    "prompt_version": {"type": "string"}
+    "prompt_version": {"type": "string", "description": "호출 A·B 프롬프트 버전, 예: a1-b1(먹은 후 분석이 없으면 a1)"}
   }
 }
