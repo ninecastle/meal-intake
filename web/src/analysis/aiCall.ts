@@ -1,4 +1,5 @@
-// 호출 A·B·D 공통: 시도당 시간 제한(기본 20초, 호출 D는 10초), 2초 뒤 1회 재시도, SDK 오류 → AnalysisError 변환(스펙 4.2·4.4절).
+// 호출 A·B·D 공통: 시도당 시간 제한(기본 40초, 호출 D는 10초), 2초 뒤 1회 재시도, SDK 오류 → AnalysisError 변환(스펙 4.2·4.4절).
+// 시간 초과는 다시 시도하지 않는다(서버가 느린 시간대에 호출만 2번 쓰고 실패하지 않게, 2026-10-27 사용자 결정).
 import {
   AIError,
   AIErrorCode,
@@ -8,7 +9,7 @@ import {
 } from 'firebase/ai'
 import { AnalysisError, type AnalysisFailReason, type QuotaScope } from './errors'
 
-export const ATTEMPT_TIMEOUT_MS = 20_000
+export const ATTEMPT_TIMEOUT_MS = 40_000
 export const RETRY_DELAY_MS = 2_000
 const MAX_ATTEMPTS = 2
 
@@ -118,7 +119,7 @@ async function attemptOnce(
     if (timedOut) {
       throw new AttemptError({
         reason: 'timeout',
-        retryable: true,
+        retryable: false,
         message: `응답이 ${timeoutMs / 1000}초 안에 오지 않았습니다`,
         cause: e,
       })
@@ -138,7 +139,7 @@ function fromStatus(status: number, e: AIError, message: string): AttemptFailure
     return { reason: 'quota', retryable: quotaScope === 'minute', quotaScope, message, cause: e }
   }
   if (status === 401 || status === 403) return { reason: 'app_check', retryable: false, message, cause: e }
-  if (status === 408) return { reason: 'timeout', retryable: true, message, cause: e }
+  if (status === 408) return { reason: 'timeout', retryable: false, message, cause: e }
   if (status >= 500) return { reason: 'server', retryable: true, message, cause: e }
   return { reason: 'bad_request', retryable: false, message, cause: e } // 400·404(모델 ID 오류) 등
 }
@@ -162,7 +163,7 @@ function classify(e: unknown): AttemptFailure {
         return { reason: 'bad_request', retryable: false, message, cause: e }
     }
   }
-  if (e instanceof DOMException && e.name === 'AbortError') return { reason: 'timeout', retryable: true, message, cause: e }
+  if (e instanceof DOMException && e.name === 'AbortError') return { reason: 'timeout', retryable: false, message, cause: e }
   return { reason: 'network', retryable: true, message, cause: e }
 }
 
@@ -191,7 +192,7 @@ export async function generateWithRetry<T>(input: {
   parse: (text: string) => ParseOutcome<T>
   signal?: AbortSignal
   label: string
-  /** 시도당 시간 제한. 기본 ATTEMPT_TIMEOUT_MS(20초) */
+  /** 시도당 시간 제한. 기본 ATTEMPT_TIMEOUT_MS(40초) */
   timeoutMs?: number
 }): Promise<{ value: T; attempts: number }> {
   const { model, parts, parse, signal, label, timeoutMs } = input

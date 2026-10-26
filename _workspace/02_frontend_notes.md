@@ -80,10 +80,10 @@
 
 ### 구조
 - 수정 모드: 넘겨받은 state는 쓰지 않고 `getMeal` 1회 → `done`이면 편집기, 아니면(없음 포함) 상세로 replace. 편집기·`onBusyChange` 잠금·검증·오프라인 안내·나가기 확인은 결과 확인과 같은 코드. 다른 점만 분기: 제목 "기록 수정", 날짜 입력(`type=date`, `max=오늘`, 미래 값은 onChange에서 버림), 음식 0개 문구, [수정 저장], 나가기·저장 뒤 목적지가 상세(`state.edited`), `beforePhotoStore.remove` 생략. dirty에 날짜 변경 포함.
-- 상세: [수정]·[삭제] 2칸. [수정]은 `replace`로 이동(수정 화면도 상세로 replace하므로 기록이 [홈, 상세]로 남는다).
+- 상세: [수정]·[삭제] 2칸. [수정]은 push(`state.fromDetail`)로 이동(아래 1번).
 
 ### 스펙과 다르게 정한 점
-1. [수정]이 replace라 수정 화면에서 브라우저 뒤로 가기는 상세가 아니라 홈으로 간다(바뀐 값이 있으면 확인 창). ‹ 버튼은 상세로.
+1. (2026-10-27 사용자 결정으로 바꿈) [수정]은 push(`state.fromDetail`)로 들어간다. 수정 화면에서 브라우저 뒤로 가기·‹·저장 모두 상세로 가고, 상세에서 들어왔으면 `navigate(-1)`로 한 칸 뒤의 상세로 돌아가 기록이 [홈, 상세]로 남는다. 저장 뒤 "수정했어요"는 `lib/flash.ts`(메모리, 한 번만)로 넘긴다. 주소로 바로 연 수정 화면은 상세로 replace(`state.edited`).
 
 ### 남은 이슈
 - 저장 성공은 `saveMeal`의 done → done 수정(`editedAt`)과 규칙 변경(firebase-engineer 동시 작업)에 달려 있다. 그전에는 `MEAL_SAVE_REJECTED`.

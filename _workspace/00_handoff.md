@@ -47,7 +47,7 @@
 - **저장:** 현재 설정은 `users/{uid}` 문서의 `goal` 필드, 날짜별 목표 기록은 `users/{uid}/goals/{dateKey}`(목표를 저장한 날짜, 같은 날은 덮어씀, 신체 정보 없이 목표값만). 어떤 날의 비교 목표 = 그날 이전 가장 늦은 기록. 2단계 조각 3의 보안 규칙은 meals만 다루고, 목표 규칙은 3단계에 더한다.
 - **주간 추이(S9 `/week`, M17):** 최근 7일 꺾은선, 탭(칼로리|탄|단|지), 그날 목표 점선, 기록 없는 날 빈칸, ◀ 지난주 / 다음 주 ▶. 홈에서 링크로 연다(리더 결정, 바꿀 수 있음). 스펙 4.7절 끝.
 - **프리미엄 기능(3단계 뒤 따로, 지금은 만들지 않음):** 남은 영양소 기반 음식 추천, 월간 그래프, 리포트. 발표에서는 프리미엄 계획으로 소개(5단계 pitch-writer).
-- **Gemini 지연(2026-10-26 23시 KST 측정):** 같은 사진으로 a2 12.9초, a3 40.1초·16.8초(낮에는 a1·a2 4~6초). a3 응답 형식은 정상(`whole_count: 1`). 서버가 느린 시간대에는 호출 A·B 시도당 제한 20초(스펙 4.2)에 걸릴 수 있다. 제한 시간·재시도 정책 조정은 사용자 결정 대기.
+- **Gemini 지연(2026-10-26 23시 KST 측정):** 같은 사진으로 a2 12.9초, a3 40.1초·16.8초(낮에는 a1·a2 4~6초). a3 응답 형식은 정상(`whole_count: 1`). 2026-10-27 사용자 결정으로 호출 A·B 시도당 제한을 40초로 늘리고 시간 초과는 재시도하지 않게 바꿨다(스펙 4.2).
 - 오늘 실제 호출 누적(에이전트·리더): 0단계 4, 1단계 4, 공개 중량 a3 4(시간 초과 1 포함), 그 밖 사용자 브라우저 시험.
 - 일정 위험: 3단계에 하루 요약·목표·주간 추이·기록 수정이 함께 들어간다. 밀리면 스펙 6.3 축소안 0(기록 수정 → 4단계), 0-1(주간 추이 칼로리 탭만), 3(목표 막대 kcal 한 줄) 순서로 쓴다.
 
@@ -58,7 +58,7 @@
 | `types/analysis.ts` | 분석 결과 타입(스키마 v2와 1:1). `db_ml_converted`, `db_reference`(`DbReference`) 포함 |
 | `analysis/analyze.ts` | `analyzeBefore`(호출 A), `analyzeAfter`(호출 B), `assembleAnalysis` 다시 내보내기, `getAnalysisMode`, `getAnalysisOrigin`(실제/캐시/목업) |
 | `analysis/beforePrompt.ts`, `afterPrompt.ts` | 프롬프트 a2·b1, 응답 스키마, 응답 정리 |
-| `analysis/aiCall.ts` | 호출 공통: 시도당 제한(A·B 20초, D 10초), 2초 뒤 1회 재시도, 오류 변환(일일 한도 429는 재시도 안 함) |
+| `analysis/aiCall.ts` | 호출 공통: 시도당 제한(A·B 40초, D 10초), 2초 뒤 1회 재시도, 오류 변환(시간 초과·일일 한도 429는 재시도 안 함) |
 | `analysis/cache.ts` | IndexedDB `meal-analysis-cache`(v2): `before`·`after`(압축본 SHA-256 키, 결과만, 사진 없음), `nutrition`(호출 D, 이름 키). 모델·프롬프트 버전이 다르거나 7일이 지나면 쓰지 않는다 |
 | `analysis/nutrition/` | `db.ts`(DB 로드·검색·매칭·`searchFoodNames`·`listFoodVariants`), `normalize.ts`, `aliases.ts`(통째 별칭 + 단어 치환), `highVariance.ts`(종류별 차이가 큰 음식 키워드), `resolve.ts`(`createNutritionResolver`, Node 시험 가능), `estimate.ts`(호출 D d1), `index.ts`(앱용 `resolveNutrition`) |
 | `analysis/compute.ts`, `assemble.ts`, `validate.ts` | 섭취량 계산(화면도 이것만 쓴다), A·B 합치기와 영양값 조회, v2 검증 |

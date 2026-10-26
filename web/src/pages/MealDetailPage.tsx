@@ -1,7 +1,7 @@
 // S7 기록 상세(3단계 조각 1, /meal/:mealId, 보기 전용). subscribeMeal로 불러와 날짜·끼니·저장 시각, 끼니 합계,
 // 음식별 값(먹기 전 무게·남긴 비율·같이 먹은 인원·먹은 양·kcal·탄단지·출처)을 보인다. 사진은 없다(서버 미저장).
 // [삭제]는 확인 뒤 deleteMeal → 그 날짜 홈(replace). done이 아니면 이어 할 화면으로 안내한다.
-// [수정]은 S8 기록 수정(/meal/:mealId/edit, 3단계 조각 1-2)으로 간다. 수정 저장 뒤 state { edited: true }면 "수정했어요"를 3초 보인다.
+// [수정]은 S8 기록 수정(/meal/:mealId/edit, 3단계 조각 1-2)으로 간다. 수정 저장 뒤 돌아오면(flash 또는 state { edited: true }) "수정했어요"를 3초 보인다.
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import SourceBadge from '../components/review/SourceBadge'
@@ -15,6 +15,7 @@ import {
   homeHref,
 } from '../components/mealText'
 import { deleteMeal, subscribeMeal, type MealWithId } from '../data/meals'
+import { clearFlash, peekFlash } from '../lib/flash'
 import { APP_TIMEZONE, toDateKey } from '../lib/time'
 import type { MealItem, Nutrients } from '../types/analysis'
 
@@ -57,7 +58,11 @@ export default function MealDetailPage({ uid }: { uid: string }) {
   const today = toDateKey(new Date())
   // 기록 수정(S8)에서 저장하고 돌아왔으면 "수정했어요"를 3초 보인다
   const location = useLocation()
-  const [editedNotice, setEditedNotice] = useState(() => (location.state as { edited?: unknown } | null)?.edited === true)
+  const flashKey = `edited:${mealId}`
+  const [editedNotice, setEditedNotice] = useState(
+    () => (location.state as { edited?: unknown } | null)?.edited === true || peekFlash(flashKey),
+  )
+  useEffect(() => clearFlash(flashKey), [flashKey])
   useEffect(() => {
     if (!editedNotice) return
     const t = window.setTimeout(() => setEditedNotice(false), 3000)
@@ -194,10 +199,10 @@ function DoneMeal({ meal, deleting, onDelete }: { meal: MealWithId; deleting: bo
       <p className="mt-4 text-xs text-gray-500">{NUTRITION_SOURCE_NOTE}. DB에 없는 음식은 AI 추정값이에요.</p>
 
       <div className="mt-6 grid grid-cols-2 gap-2">
-        {/* replace: 수정 화면이 저장·‹ 뒤 상세로 replace하므로 기록이 [홈, 상세]로 남는다 */}
+        {/* push: 수정 화면에서 뒤로 가기·‹·저장하면 방문 기록 한 칸 뒤의 이 상세로 돌아온다(기록은 [홈, 상세]) */}
         <Link
           to={`/meal/${meal.id}/edit`}
-          replace
+          state={{ fromDetail: true }}
           className="flex min-h-12 items-center justify-center rounded-xl border border-gray-300 font-medium text-gray-800"
         >
           수정

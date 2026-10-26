@@ -104,7 +104,7 @@ S0 로그인 → S1 홈(=오늘의 하루 요약) ─"식사 기록"→ S2 먹�
 | S2 | `/capture/before` | 먹기 전 촬영 | "수저를 함께, 위에서 찍어 주세요", 사진 전송 고지 한 줄, "데모 사진 사용" | 촬영 |
 | S3 | `/meal/:mealId/after` | 먹은 후 촬영 | 먹기 전 사진(IndexedDB에 있을 때), 인식한 음식 목록(이름·g, 읽기 전용), "같은 위치·각도로", "데모 사진 사용", "기록 취소" | 남은 음식 찍기 |
 | S7 | `/meal/:mealId` | 기록 상세(3단계, 읽기 전용) | 날짜·끼니·저장 시각, 음식별 이름·먹기 전 무게(g)·남긴 비율·같이 먹은 인원·섭취 kcal·탄·단·지·출처 배지(DB·DB(환산)·AI 추정·직접 입력, 참고 DB 대표값), 끼니 합계, [삭제]("이 기록을 삭제할까요?" 확인 → `deleteMeal` → 그 날짜 S1). [수정](S8)·[삭제]("이 기록을 삭제할까요?" 확인 → `deleteMeal` → 그 날짜 S1). 수정한 기록이면 "수정됨 · 시각" | 수정·삭제 |
-| S8 | `/meal/:mealId/edit` | 기록 수정(3단계, M16) | S4 편집기를 수정 모드로 다시 쓴다: 음식별 이름·무게·남긴 비율·인원·kcal, 음식 추가·삭제(2.3절 규칙 그대로), 끼니 칩, 날짜 선택(오늘과 지난 날짜만). 사진은 다시 분석하지 않는다. 음식이 0개면 저장하지 않고 기록 삭제를 안내한다. 나가기 전 "저장하지 않고 나갈까요?". 저장 → S7("수정했어요") | 수정 저장 |
+| S8 | `/meal/:mealId/edit` | 기록 수정(3단계, M16) | S4 편집기를 수정 모드로 다시 쓴다: 음식별 이름·무게·남긴 비율·인원·kcal, 음식 추가·삭제(2.3절 규칙 그대로), 끼니 칩, 날짜 선택(오늘과 지난 날짜만). 사진은 다시 분석하지 않는다. 음식이 0개면 저장하지 않고 기록 삭제를 안내한다. 나가기 전 "저장하지 않고 나갈까요?". 저장 → S7("수정했어요"). 브라우저 뒤로 가기·‹·저장 뒤 모두 S7로 가고, 방문 기록에 S7이 두 번 쌓이지 않는다(2026-10-27 사용자 결정) | 수정 저장 |
 | S9 | `/week`(`?end=YYYY-MM-DD`) | 주간 추이(3단계, M17) | 탭(칼로리·탄·단·지), 최근 7일 일별 꺾은선, 그날 목표 점선, 기록 없는 날 빈칸, ◀ 지난주 / 다음 주 ▶, 점을 누르면 그날 값·목표·그날 홈 링크(4.7절 끝) | - |
 | S6 | `/goal` | 목표 설정(3단계, 언제든 수정) | 성별·나이·키·몸무게·활동량·목표 입력(바꾸면 바로 재계산) → 기초대사량·하루 소모량·목표 kcal·탄단지 추천 표시, 추천값 직접 조정과 [추천값으로], 안전 장치 문구, 의학적 조언 아님 고지(4.7절). AI 호출 없음 | 저장 |
 | S4 | `/meal/:mealId/review` | 결과 확인·수정 | 음식 카드(2.3절), 끼니 칩, 경고, 합계. 직접 입력은 같은 화면을 빈 목록으로 연다(`/meal/new/review?date=`) | 저장 |
@@ -382,8 +382,8 @@ localStorage와 sessionStorage에는 이미지를 넣지 않는다.
 | 호출 C | `tools: [{ googleSearch: {} }]`. 응답 스키마 없이 텍스트를 받아 JSON을 추출하고 범위를 검사한다. `groundingMetadata.searchEntryPoint.renderedContent`를 함께 돌려준다 | [S5]. Firebase 문서에는 그라운딩과 스키마를 함께 쓰는 방법이 없다 |
 | 이미지 | `compressPhoto` 결과(JPEG, 긴 변 1280px, 품질 0.8)를 base64 inline data로 보낸다. 두 장을 합쳐도 1MB 안팎이라 요청 한도 20MB보다 훨씬 작다. 입력 해상도는 설정할 수 없다 | [S7] |
 | thinking | 모델이 허용하는 가장 낮은 수준(3.8 Flash는 low, minimal을 주면 오류). SDK 필드 이름은 vision-ai-engineer가 확인한다 | [S20]. SDK 필드는 확인 못 함 |
-| 시간 제한 | 호출 A·B는 시도당 20초, C는 8초, D는 10초 | 녹화·심사 중 대기 상한 |
-| 자동 재시도 | 2초 뒤 1회. 대상: 네트워크 오류, 시간 초과, 5xx, 429, 형식 검증 실패. 재시도하지 않음: 400(요청·모델 ID 오류), 401·403(App Check), 안전 필터 차단 | vision-ai-engineer 정의의 "재시도 1회 후 `ANALYSIS_UNAVAILABLE`" |
+| 시간 제한 | 호출 A·B는 시도당 40초(2026-10-27 사용자 결정, 처음 20초), C는 8초, D는 10초 | 녹화·심사 중 대기 상한. 밤 시간대 실측 13~40초(03_vision_eval.md) |
+| 자동 재시도 | 2초 뒤 1회. 대상: 네트워크 오류, 5xx, 분당 한도 429, 형식 검증 실패. 재시도하지 않음: 시간 초과(408 포함, 2026-10-27 사용자 결정: 느린 시간대에 호출만 2번 쓰고 실패하지 않게), 400(요청·모델 ID 오류), 401·403(App Check), 안전 필터 차단, 일일 한도 429 | vision-ai-engineer 정의의 "재시도 1회 후 `ANALYSIS_UNAVAILABLE`" |
 | 목업 | env `VITE_AI_MOCK=1`이면 `web/src/analysis/__fixtures__/`의 응답을 돌려준다. 개발 기본값 1, 배포 빌드 0 | 무료 한도 절약 |
 | 검색 단계 스위치 | env `VITE_SEARCH_GROUNDING`(`on`·`off`). 기본값은 0단계 실측 결과로 정한다(7.1절 U3) | 7.2절 R1 |
 | 프롬프트 | `prompt-template.md`의 호출 A~D를 v1(`a1`·`b1`·`c1`·`d1`)으로 그대로 쓴다. 바꾸면 버전을 올려 `_workspace/03_vision_eval.md`에 기록하고, `analysis.prompt_version`에 `a1-b1`처럼 남긴다 | intake-calorie-estimation |
@@ -772,7 +772,7 @@ export function compareToGoal(consumed: Nutrients, targets: GoalTargets):   // �
 
 | ID | 상황 | 자동 처리 | 사용자에게 보이는 것 | 담당 |
 | --- | --- | --- | --- | --- |
-| F1 | 호출 A 실패(네트워크, 5xx, 429, 시간 초과, 형식 오류) | 2초 뒤 1회 재시도 → 그래도 실패하면 `ANALYSIS_UNAVAILABLE` | "다시 시도"(IndexedDB의 같은 사진으로), "직접 입력"(S4 빈 목록, 사진 삭제), "데모 사진 사용" | vision-ai-engineer, frontend-dev |
+| F1 | 호출 A 실패(네트워크, 5xx, 429, 시간 초과, 형식 오류) | 2초 뒤 1회 재시도(시간 초과는 재시도 없이 바로) → 그래도 실패하면 `ANALYSIS_UNAVAILABLE` | "다시 시도"(IndexedDB의 같은 사진으로), "직접 입력"(S4 빈 목록, 사진 삭제), "데모 사진 사용" | vision-ai-engineer, frontend-dev |
 | F2 | App Check 거부(401·403) | 재시도하지 않는다 | "앱 확인에 실패했어요" + 직접 입력. 개발 빌드에서는 디버그 토큰 안내 | firebase-engineer, frontend-dev |
 | F3 | 음식을 못 찾음(`NO_FOOD_DETECTED`) | - | "음식을 찾지 못했어요": 다시 찍기, 직접 입력 | frontend-dev |
 | F4 | 호출 B 실패 | 1회 재시도. 먹기 전 사진은 IndexedDB에 남긴다 | "다시 시도"(먹은 후 사진이 이 화면 메모리에 있을 때만, 없으면 다시 촬영), "남긴 비율 직접 고르기"(`assembleAnalysis(before, null)` → S4) | vision-ai-engineer, frontend-dev |
@@ -780,7 +780,7 @@ export function compareToGoal(consumed: Nutrients, targets: GoalTargets):   // �
 | F6 | DB에 없는 이름 | 검색(켜져 있을 때) → AI 추정 → 직접 입력 | 출처 배지 | vision-ai-engineer |
 | F7 | 검색 불가(무료 등급 미제공, 400·403·429) | 그 세션 동안 2단계를 건너뛴다 | AI 추정 배지 | vision-ai-engineer |
 | F8 | 신뢰도 낮음(`confidence<0.6`), 매칭 실패(`null`) | `needs_review=true`. null은 0으로 계산 | 맨 앞에 정렬, 노란 테두리, "남긴 양 확인 필요" | vision-ai-engineer, frontend-dev |
-| F9 | 느린 응답 | 시도당 20초 제한 | 10초에 "조금 더 걸려요" + "직접 입력" 링크 | frontend-dev |
+| F9 | 느린 응답 | 시도당 40초 제한, 시간 초과는 재시도하지 않음 | 10초에 "조금 더 걸려요" + "직접 입력" 링크 | frontend-dev |
 | F10 | 일일 한도 소진(재시도 뒤에도 429) | 그 세션은 "AI 한도 모드": 촬영 대신 직접 입력을 먼저 보여 준다 | "오늘 AI 분석 한도를 다 썼어요. 16:00(11/2부터는 17:00)에 다시 열려요" + 직접 입력 | frontend-dev |
 | F11 | DB JSON 로드 실패 | 1회 재시도 → DB 단계 건너뜀 | 자동완성 대신 자유 입력 | vision-ai-engineer, frontend-dev |
 | F12 | 오프라인이거나 저장이 느림 | Firestore 영구 캐시 대기열에 넣는다. 화면은 3초까지 기다리고 S1로 이동 | "저장 대기 중"(`hasPendingWrites`) | firebase-engineer, frontend-dev |
@@ -1057,6 +1057,7 @@ U0·U3·U5는 결정 내용으로 바꿨다. 나머지(U1·U2·U4·U6·U7·U8)�
 | 날짜 | 변경 내용 | 절 | 영향을 받는 에이전트 |
 | --- | --- | --- | --- |
 | 2026-10-26 | 초안 작성(0단계). 리더 요청에 따라 식약처 DB 처리 규칙(100ml 행, 탄·지 빈 값, 같은 이름 중복, 이름 매칭, 앱 JSON 필드·크기)을 반영하고 analysis-schema v2(선택 필드 `per_100g_fill`·`db_name`·`db_match`)를 제안. 공식 문서 확인 결과(그라운딩 무료 등급 미제공, App Check 자동 강제, AI 모니터링 프롬프트 저장, 무료 등급 데이터 약관)를 7.2절 위험과 부록 A에 기록 | 전체 | vision-ai-engineer, frontend-dev, firebase-engineer, qa-integrator, pitch-writer |
+| 2026-10-27 | (리더, 사용자 결정) 호출 A·B 시도당 제한 20초 → 40초, 시간 초과는 재시도하지 않음(네트워크·5xx·분당 429·형식 오류만 재시도). S8에서 브라우저 뒤로 가기도 S7로(상세에서 push로 들어와 나갈 때 한 칸 뒤로, 주소로 바로 열었으면 replace) | 2.2, 4.2, 5.1 | vision-ai-engineer, frontend-dev, qa-integrator |
 | 2026-10-26 | (리더, 사용자 결정) 공개 중량 4.5.5절: 업체 제공 식품중량(100g·100ml 제외)을 DB JSON `w`로 넣고, 통째로 보인 메뉴(`whole_count`)가 세부 종류까지 일치하면 먹기 전 무게 = 공개 중량 × 개수, `grams_source` 표시. 프롬프트 a3. 홈 날짜 이동 문구 ◀ 전날 / 다음 날 ▶, 오늘이 아니면 [오늘로] | 2.2, 3.3, 3.5, 4.3, 4.5.5 | vision-ai-engineer, frontend-dev, qa-integrator |
 | 2026-10-26 | (리더, 사용자 결정) 3단계 조각을 사용자 순서로 확정(1 홈 기록 보기 → 2 목표 설정 → 3 목표 대비 비교 → 4 주간 추이 → 5 배포). 주간 추이 M17·S9 `/week` 추가, 1.3절 "주간 통계 안 만듦"을 월간으로 좁힘, 프리미엄 기능(음식 추천·월간 그래프·리포트)은 3단계 뒤 따로. 축소안 0-1 | 1.1, 1.3, 2.2, 4.7, 6.1, 6.3 | firebase-engineer, frontend-dev, qa-integrator, pitch-writer |
 | 2026-10-26 | (리더, 사용자 결정) 저장한 기록 수정 M16: S8 `/meal/:mealId/edit`(결과 수정 규칙 그대로 + 끼니·날짜(오늘과 지난 날짜만)), 전이 `done → done`, 필드 `editedAt`, P5를 MVP로 옮김. 3단계에서 기록 보기·상세 바로 다음 순서, 밀리면 가장 먼저 4단계로 | 1.1, 1.2, 2.1, 2.2, 3.2, 4.3, 6.1, 6.3 | firebase-engineer, frontend-dev, qa-integrator |

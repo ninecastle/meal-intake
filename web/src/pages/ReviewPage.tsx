@@ -2,7 +2,9 @@
 // 화면 사이 계약: 들어올 때 state { analysis, dateKey, mealType }(없으면 getMeal), 저장 뒤 '/'에 state { saved: { dateKey, consumedKcal } }.
 // 계산·합계·출처 문구는 ReviewEditor가 보여 준다(여기서 다시 만들지 않는다). AI 호출은 이 화면에서 하지 않는다.
 // 수정 모드(mode="edit", S8 /meal/:mealId/edit, 3단계 조각 1-2): 저장한(done) 기록을 getMeal로 1회 읽어 같은 편집기로 연다.
-// 끼니와 날짜(오늘과 지난 날짜만)도 바꿀 수 있다. 사진 재분석 없음. 저장 뒤·‹는 상세(/meal/:mealId)로, 저장 뒤 state { edited: true }.
+// 끼니와 날짜(오늘과 지난 날짜만)도 바꿀 수 있다. 사진 재분석 없음. 저장 뒤·‹·브라우저 뒤로 가기는 상세(/meal/:mealId)로.
+// 상세에서 state { fromDetail: true }로 들어왔으면 방문 기록 한 칸 뒤(그 상세)로 돌아가 상세가 두 번 쌓이지 않게 하고,
+// 주소로 바로 열었으면 상세로 replace한다. 저장했으면 상세가 "수정했어요"를 보인다(flash 또는 state { edited: true }).
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   UNSAFE_DataRouterContext,
@@ -19,6 +21,7 @@ import ReviewEditor from '../components/review/ReviewEditor'
 import { getMeal, MealStoreError, newMealId, saveMeal, type MealStoreErrorCode, type MealType } from '../data/meals'
 import { useAuthUser } from '../lib/auth'
 import { APP_TIMEZONE, guessMealType, toDateKey } from '../lib/time'
+import { setFlash } from '../lib/flash'
 import { beforePhotoStore } from '../photos/beforePhotoStore'
 import type { MealIntakeAnalysis } from '../types/analysis'
 
@@ -210,11 +213,17 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
 
   const onAnalysis = useCallback((a: MealIntakeAnalysis) => setDraft((d) => (d ? { ...d, analysis: a } : d)), [])
 
-  /** 화면을 떠난다. 결과 확인·직접 입력은 홈(저장했으면 state.saved), 수정 모드는 기록 상세(저장했으면 state.edited). */
+  /** 화면을 떠난다. 결과 확인·직접 입력은 홈(저장했으면 state.saved), 수정 모드는 기록 상세(저장했으면 "수정했어요"). */
   function leave(saved?: Saved) {
     allowLeave.current = true
-    if (isEdit && routeId) navigate(`/meal/${routeId}`, { replace: true, state: saved ? { edited: true } : undefined })
-    else navigate('/', { replace: true, state: saved ? { saved } : undefined })
+    if (isEdit && routeId) {
+      if ((entryState.current as { fromDetail?: unknown } | null)?.fromDetail === true) {
+        if (saved) setFlash(`edited:${routeId}`)
+        navigate(-1)
+      } else {
+        navigate(`/meal/${routeId}`, { replace: true, state: saved ? { edited: true } : undefined })
+      }
+    } else navigate('/', { replace: true, state: saved ? { saved } : undefined })
   }
 
   function onBack() {
