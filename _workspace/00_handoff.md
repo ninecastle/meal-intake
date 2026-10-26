@@ -132,3 +132,16 @@ App Check 강제 켜고 버튼으로 재확인, 배포 빌드에 사이트 키�
   - 스킬 문서 `.claude/skills/intake-calorie-estimation/references/prompt-template.md`의 호출 A는 아직 a1 문구다. 코드는 a2(`web/src/analysis/beforePrompt.ts`). 4단계 정확도 작업 전에 맞춘다.
   - Node 시험: `assemble.ts`는 앱용 `nutrition/index.ts`·`lib/ai`(import.meta.env)를 따라가므로 Node에서 바로 못 불러온다. scratchpad 스크립트는 `module.registerHooks`로 두 모듈을 빈 모듈로 바꿔 돌렸다. 10/29 측정 스크립트도 같은 방식이 필요하다.
 - 스펙과 실제 경로 차이: 스펙 4.1절은 `web/src/firebase.ts`지만 실제는 `web/src/lib/firebase.ts`(AI는 `web/src/lib/ai.ts`). 실제 경로를 따른다.
+
+## 2단계 진행 기록 (2026-10-26 시작, 1단계와 같은 조각 방식)
+1단계는 조각 4까지 구현을 마치고 사용자 지시로 2단계로 넘어왔다(조각 4 브라우저 확인은 2단계 조각 1 확인 때 함께 본다).
+| 조각 | 내용 | 상태 |
+| --- | --- | --- |
+| 1 | 결과 수정 화면(이름·중량·남긴 비율·kcal 수정과 자동 재계산, 자동완성·세부 종류 목록, "다시 계산할까요?", 음식 추가·삭제, 인원수), 같은 사진 안내, 흔한 이름 별칭 | 진행 중(vision: 별칭·`listFoodVariants`, frontend: `web/src/components/review/`, 같은 사진 안내) |
+| 2 | 구글 로그인 | - |
+| 3 | Firestore 기록 저장 + 본인 기록만 읽고 쓰는 보안 규칙 | - |
+| 4 | 실제 흐름 화면 연결(로그인 → 먹기 전 → 먹은 후 → 결과 수정 → 저장), 시험 패널은 개발 모드에서만, 모바일 우선 | - |
+| 5 | Firebase Hosting 첫 배포 → web.app 주소 확인 | - |
+지킬 것(사용자): App Check 적용(Enforce)은 10/29 정확도 측정 뒤에 켠다. 첫 배포는 적용이 꺼진 상태. 하루 요약은 3단계. 시험 호출 최소.
+- 같은 사진 안내는 분석 호출 전에 압축본 SHA-256으로 비교하고, 사용자가 [그대로 분석]을 눌러야 호출한다(한도 절약).
+- 위험(첫 배포 ~ App Check 적용 전): 배포본의 웹 API 키로 누구나 Gemini 무료 한도를 쓸 수 있다. 그 기간에는 URL을 공유하지 않는다.
