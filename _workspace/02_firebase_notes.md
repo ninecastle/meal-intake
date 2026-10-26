@@ -127,3 +127,9 @@ firebase firestore:databases:create "(default)" --location asia-northeast3 --edi
 - 사용자 콘솔 확인 완료: 승인된 도메인에 `meal-intake-2026.web.app`, OAuth 웹 클라이언트 리디렉션 URI에 `https://meal-intake-2026.web.app/__/auth/handler`, OAuth 동의 화면 프로덕션.
 - **AI Logic App Check 적용(Enforce)은 꺼져 있다**(사용자 결정: 10/29 측정 뒤 켠다). 그동안 배포본 웹 API 키로 누구나 Gemini 무료 한도를 쓸 수 있으므로 URL을 공유하지 않는다.
 - Firestore 규칙은 조각 3에서 이미 배포했다. 인덱스는 단일 필드 쿼리만 써서 배포하지 않았다.
+
+## 3단계 조각 1 데이터 쪽: 하루 요약 함수 (2026-10-26)
+- `web/src/data/summary.ts`: `DaySummary`, `DaySummaryMeal`, `summarizeDay(dateKey, meals)`. done·analysis 있음·같은 dateKey만 합산, 합계와 끼니별 값은 반올림 전 값을 더한 뒤 소수 첫째 자리로 반올림. `meals[]`에 `editedAt: Date | null` 추가(스펙 4.3절에 없던 필드, 조각 2 "수정됨" 표시용).
+- `web/src/data/meals.ts`: `subscribeDay`(where dateKey ==, status ==, orderBy 없음, includeMetadataChanges로 hasPendingWrites), `subscribeMeal`(문서 하나, 없거나 지워지면 null), `MealDoc.editedAt?: Timestamp | null`(타입만, 규칙은 조각 2).
+- 인덱스: 하루 요약 쿼리는 등호 조건 두 개라 단일 필드 인덱스 병합으로 돈다. 대기 카드(`status in`)는 단일 필드. `subscribeMeal`은 문서 읽기. `firestore.indexes.json`은 빈 채로 둔다.
+- 시험: `node spike/tests/summary_test.mjs <루트>` 통과, `npx tsc -b` 통과. AI 호출 0회.

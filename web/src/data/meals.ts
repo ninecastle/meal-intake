@@ -18,11 +18,12 @@ import {
 import { validateAnalysis } from '../analysis/validate'
 import { db } from '../lib/firebase'
 import type { BeforeAnalysis, MealIntakeAnalysis } from '../types/analysis'
+import { summarizeDay, type DaySummary } from './summary'
 
 // 식사 기록 저장소(스펙 2.1절 상태 전이, 3.2절 필드, 4.3절 시그니처, 4.4절 오류 코드).
 // Firestore에는 분석 결과만 저장한다. 사진·썸네일·base64·이미지 URL 필드는 두지 않는다(CLAUDE.md).
 // 규칙(firestore.rules)이 문서 키와 analysis·beforeAnalysis 하위 키를 허용 목록으로 막으므로,
-// 여기서도 허용 키만 골라 쓴다. 하루 요약(subscribeDay·summarizeDay)은 3단계.
+// 여기서도 허용 키만 골라 쓴다. 하루 요약은 subscribeDay(쿼리) + summarizeDay(summary.ts, 합산).
 
 export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack'
 export type MealStatus = 'awaiting_after' | 'needs_review' | 'done'
@@ -36,6 +37,8 @@ export interface MealDoc {
   consumedKcal?: number
   createdAt: Timestamp | null
   updatedAt: Timestamp | null
+  /** done 기록을 고친 마지막 시각(M16, 스펙 3.2절). 규칙 허용은 3단계 조각 2 */
+  editedAt?: Timestamp | null
 }
 
 export type MealWithId = MealDoc & { id: string }
@@ -130,7 +133,7 @@ function readError(e: unknown): MealStoreError {
 /** 대기 중인 serverTimestamp는 추정값으로 읽는다(정렬용). */
 function toMeal(s: DocumentSnapshot): MealWithId {
   const d = s.data({ serverTimestamps: 'estimate' }) as MealDoc
-  return { ...d, id: s.id, createdAt: d.createdAt ?? null, updatedAt: d.updatedAt ?? null }
+  return { ...d, id: s.id, createdAt: d.createdAt ?? null, updatedAt: d.updatedAt ?? null, editedAt: d.editedAt ?? null }
 }
 
 /** createdAt 내림차순(최근 먼저). orderBy를 쓰지 않으므로 정렬은 클라이언트에서 한다(스펙 3.2절). */
@@ -257,6 +260,46 @@ export function subscribePending(
     (snap) => cb(newestFirst(snap.docs.map(toMeal))),
     (e) => {
       console.warn('[meals] subscribePending 오류', e)
+      onError?.('MEAL_STORE_UNAVAILABLE')
+    },
+  )
+}
+
+/**
+ * 하루 요약(S1): 그날 done 식사를 구독해 summarizeDay로 합산한다. 등호 조건 두 개라 단일 필드 인덱스로 동작한다
+ * (orderBy 없음, 정렬은 summarizeDay). 저장·수정·삭제 후 별도 집계 없이 다시 호출된다.
+ * includeMetadataChanges로 오프라인 저장 대기(hasPendingWrites)가 풀릴 때도 다시 알린다.
+ */
+export function subscribeDay(
+  uid: string,
+  dateKey: string,
+  cb: (s: DaySummary) => void,
+  onError?: (code: MealStoreErrorCode) => void,
+): () => void {
+  const q = query(mealsCol(uid), where('dateKey', '==', dateKey), where('status', '==', 'done'))
+  return onSnapshot(
+    q,
+    { includeMetadataChanges: true },
+    (snap) => cb({ ...summarizeDay(dateKey, snap.docs.map(toMeal)), hasPendingWrites: snap.metadata.hasPendingWrites }),
+    (e) => {
+      console.warn('[meals] subscribeDay 오류', e)
+      onError?.('MEAL_STORE_UNAVAILABLE')
+    },
+  )
+}
+
+/** 기록 상세(S7): 문서 하나를 구독한다. 없거나 지워지면 null(화면은 S1로 이동). */
+export function subscribeMeal(
+  uid: string,
+  mealId: string,
+  cb: (m: MealWithId | null) => void,
+  onError?: (code: MealStoreErrorCode) => void,
+): () => void {
+  return onSnapshot(
+    mealRef(uid, mealId),
+    (s) => cb(s.exists() ? toMeal(s) : null),
+    (e) => {
+      console.warn('[meals] subscribeMeal 오류', e)
       onError?.('MEAL_STORE_UNAVAILABLE')
     },
   )
