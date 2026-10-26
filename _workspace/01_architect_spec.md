@@ -171,6 +171,7 @@ users/{uid}/meals/{mealId}      식사 1건. mealId는 클라이언트가 먼저
 | `per_100g_fill` | `items[]`, `{ carbs_g?, fat_g? }`. 값은 `ai_estimate` 또는 `missing` | `nutrition_source=db`이고 DB 행에 그 값이 비어 있을 때만 | 식약처 행 상당수가 탄·지 빈 값이다[L]. 영양소 단위로 출처를 보여 준다 |
 | `db_name` | `items[]`, string 또는 null | db일 때 채운다 | 무엇과 매칭됐는지 사용자가 보고 판단한다 |
 | `db_match` | `items[]`, `name`·`group`·`partial` | db일 때 | 대표값·부분 일치 표시, 출처 평가 지표 |
+| `db_ml_converted` | `items[]`, boolean(true일 때만 넣음) | db이고 매칭된 행이 100ml 기준을 1g/ml로 환산한 행(`ml: 1`)일 때 | 화면 출처를 "DB(환산)"으로 구분한다(4.5.3 (a)-4, 2026-10-26 사용자 결정) |
 
 추가할 검증 규칙(vision-ai-engineer가 `validate_analysis.mjs`와 TS 함수에 반영)
 1. `per_100g_fill`은 `nutrition_source="db"`일 때만 허용한다.
@@ -442,7 +443,7 @@ export function assembleAnalysis(before: BeforeAnalysis, after: AfterAnalysis | 
 // ── web/src/analysis/nutrition/index.ts ── 담당: vision-ai-engineer
 export type NutritionResult =
   | { source: "db"; per_100g: Nutrients; fill?: Partial<Record<"carbs_g" | "fat_g", FillSource>>;
-      db_food_code: string; db_name: string; db_match: DbMatch }
+      db_food_code: string; db_name: string; db_match: DbMatch; ml_converted?: true }  // ml_converted: 화면 출처 "DB(환산)"
   | { source: "search"; per_100g: Nutrients; searchSuggestionHtml: string | null;
       groundingSources: { title?: string; uri: string }[] }        // 화면 표시용. 저장하지 않는다
   | { source: "ai_estimate"; per_100g: Nutrients; via: "guess" | "call_d" }
@@ -587,9 +588,10 @@ Firebase AI SDK 오류를 `reason`으로 바꾸는 표는 vision-ai-engineer가 
 
 **(a) 100ml 기준 행**
 1. 정규화한 이름이 같은 100g 행이 있으면 그 이름의 100ml 행은 모두 버린다. 예를 들어 쌀밥은 100g 행(166kcal)을 쓰고 100ml 행(120kcal)은 버린다[L].
-2. 100ml 행만 있는 이름: 식품대분류가 액체 분류면 밀도를 1.0g/ml로 보고 100ml 값을 그대로 100g 값으로 쓰며 `ml: 1`을 붙인다. 액체 분류 목록은 vision-ai-engineer가 원본의 실제 대분류 값과 분류별 ml 전용 행 수를 출력해 정하고 03 문서에 적는다(후보: 음료 및 차류, 국·탕, 찌개·전골, 죽·스프).
-3. 그 밖의 경우(고형 음식인데 100ml 행만 있음)는 앱 DB에서 뺀다. 그 이름은 2·3단계로 넘어간다.
-- 이유: 물이 주성분인 액체는 1g/ml로 가정해도 오차가 몇 % 수준이다. 고형 음식은 부피 밀도가 크게 달라서(리더 수치로 쌀밥은 약 0.72g/ml) 한 가지 밀도를 쓰면 "DB" 출처를 단 채 30% 가까이 틀린 값이 나간다.
+2. 100ml 행만 있는 이름은 분류와 상관없이(액체·고형 모두) 밀도를 1.0g/ml로 보고 100ml 값을 그대로 100g 값으로 쓰며 `ml: 1`을 붙인다. 액체 분류 목록(음료 및 차류, 국 및 탕류, 찌개 및 전골류, 죽 및 스프류)은 통계에서 고형·액체를 나눠 세는 데만 쓴다.
+3. (2026-10-26 사용자 결정으로 삭제) 고형 음식의 ml 전용 행을 빼던 규칙. 이 규칙으로 제육볶음·달걀후라이 같은 흔한 이름 775개(1,690행)가 빠져 AI 추정으로 넘어갔다.
+4. 화면 출처 표시: `ml: 1` 행에서 온 값은 "DB"가 아니라 **"DB(환산)"**으로 보여 준다. 결과에는 `nutrition_source="db"`에 `db_ml_converted: true`를 붙인다(3.3절 선택 필드, `NutritionResult`의 db 분기에 `ml_converted?: true`).
+- 이유: 고형 음식은 부피 밀도가 1과 달라(리더 수치로 쌀밥은 약 0.72g/ml) 30% 가까이 틀릴 수 있다. 그래도 사진만으로 하는 AI 추정보다 나을 가능성이 크다고 보고 넣되, 출처를 "DB(환산)"으로 구분해 일반 DB 값처럼 보이지 않게 한다. 10/29 측정에서 환산 DB 값과 AI 추정 값을 함께 계산해 비교한다(`_workspace/00_handoff.md` "10/29 모델 비교 계획").
 
 **(b) 탄수화물·지방 빈 값** (7.1절 U2 확인 전까지는 이 안으로 구현한다)
 1. 변환에서는 null로 둔다. 0으로 채우지 않는다.
@@ -937,4 +939,5 @@ U0·U3·U5는 결정 내용으로 바꿨다. 나머지(U1·U2·U4·U6·U7·U8)�
 | 날짜 | 변경 내용 | 절 | 영향을 받는 에이전트 |
 | --- | --- | --- | --- |
 | 2026-10-26 | 초안 작성(0단계). 리더 요청에 따라 식약처 DB 처리 규칙(100ml 행, 탄·지 빈 값, 같은 이름 중복, 이름 매칭, 앱 JSON 필드·크기)을 반영하고 analysis-schema v2(선택 필드 `per_100g_fill`·`db_name`·`db_match`)를 제안. 공식 문서 확인 결과(그라운딩 무료 등급 미제공, App Check 자동 강제, AI 모니터링 프롬프트 저장, 무료 등급 데이터 약관)를 7.2절 위험과 부록 A에 기록 | 전체 | vision-ai-engineer, frontend-dev, firebase-engineer, qa-integrator, pitch-writer |
+| 2026-10-26 | (리더, 사용자 결정) 4.5.3 (a): 고형 음식의 100ml 전용 행도 1g/ml로 환산해 넣고 출처를 "DB(환산)"으로 구분. 3.3절에 `db_ml_converted`, 4.3절 `NutritionResult`에 `ml_converted` 추가 | 3.3, 4.3, 4.5.3 | vision-ai-engineer, frontend-dev, qa-integrator |
 | 2026-10-26 | 사용자 결정 반영(U0~U8, U5는 제출·심사 방식으로 대체): 샘플 체험 M12, 호출 절약 M13, 5.2절을 녹화·심사 기간 기준으로 다시 쓰고 5.2.2 호출 절약 장치 추가, F15 녹화 기준, 0·5·6단계 일정, 7.3 필요할 때 확인 목록. 사용자 요청으로 추가 조사를 멈추고, architect가 1절을 반영한 뒤 리더가 나머지를 마무리 | 1, 5, 6, 7 | 전원 |

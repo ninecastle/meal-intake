@@ -8,4 +8,5 @@ export const FOOD_ALIASES: Readonly<Record<string, string>> = {
   밥: '쌀밥',
   김치: '배추김치',
   계란말이: '달걀말이',
+  계란후라이: '달걀후라이',
 }

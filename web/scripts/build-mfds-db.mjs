@@ -15,7 +15,8 @@ const OUT = path.join(HERE, '../public/data/mfds-foods-20261006.json')
 const STATS_OUT = path.join(HERE, 'build-mfds-db.stats.json')
 const SRC_LABEL = '식품의약품안전처 전국통합식품영양성분정보(음식)표준데이터(15100070)'
 
-// 4.5.3 (a)-2: 100ml 행만 있는 이름 가운데 밀도 1.0g/ml로 환산할 액체 분류(원본 식품대분류명 그대로)
+// 4.5.3 (a)-2: 100ml 행만 있는 이름은 분류와 상관없이 밀도 1.0g/ml로 환산해 넣는다(ml: 1, 화면 출처 "DB(환산)").
+// 아래 액체 분류는 통계에서 고형·액체를 나눠 세는 데만 쓴다(원본 식품대분류명 그대로)
 const LIQUID_CATEGORIES = new Set(['음료 및 차류', '국 및 탕류', '찌개 및 전골류', '죽 및 스프류'])
 
 let unparsable = 0
@@ -89,8 +90,8 @@ const stats = {
     empty_name: 0,
     out_of_range: 0,
     ml_row_has_g_row: 0,
-    ml_only_solid: 0,
   },
+  ml_only_solid_converted: { names: 0, rows: 0 },
   unparsable_values: 0,
   ml_only_names_by_category: {},
   liquid_categories: [...LIQUID_CATEGORIES],
@@ -160,12 +161,13 @@ for (const rs of byKey.values()) {
     kept = rs.filter((r) => !r.ml)
     stats.dropped.ml_row_has_g_row += rs.length - kept.length
   } else {
-    kept = rs.filter((r) => LIQUID_CATEGORIES.has(r.cat))
-    stats.dropped.ml_only_solid += rs.length - kept.length
-    const cs = (stats.ml_only_names_by_category[rs[0].cat] ??= { names: 0, included: 0 })
+    kept = rs
+    const cs = (stats.ml_only_names_by_category[rs[0].cat] ??= { names: 0, liquid: LIQUID_CATEGORIES.has(rs[0].cat) })
     cs.names++
-    if (kept.length) cs.included++
-    if (!kept.length) continue
+    if (!cs.liquid) {
+      stats.ml_only_solid_converted.names++
+      stats.ml_only_solid_converted.rows += rs.length
+    }
   }
   merged += kept.length - 1
   reps.push(pick(kept))
