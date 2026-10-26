@@ -1,4 +1,4 @@
-// S1 홈 = 하루 요약(3단계 조각 1). 위에서부터 사용자 줄, 날짜 이동(◀ 어제 · 날짜 · 내일 ▶, ?date=YYYY-MM-DD), 저장·오프라인 안내,
+// S1 홈 = 하루 요약(3단계 조각 1). 위에서부터 사용자 줄, 날짜 이동(◀ 전날 · 날짜(오늘이 아니면 [오늘로]) · 다음 날 ▶, ?date=YYYY-MM-DD), 저장·오프라인 안내,
 // 이어 할 기록 카드(awaiting_after·needs_review, 날짜와 무관하게 전부), 그날 합계 kcal·탄·단·지(subscribeDay, 클라이언트 합산),
 // 끼니별 기록 목록(누르면 S7 /meal/:mealId), 영양 정보 출처, 아래 고정 [식사 기록]·[직접 입력](보고 있는 날짜로).
 // 목표 비교 막대·목표 설정 카드는 3단계 조각 4에서 더한다.
@@ -194,19 +194,29 @@ export default function HomePage({ user }: { user: User }) {
 
       <nav aria-label="날짜 이동" className="mt-1 flex items-center justify-between gap-1">
         <Link to={homeHref(shiftDateKey(dateKey, -1), today)} replace className={`${navBtn} text-gray-700`}>
-          ◀ 어제
+          ◀ 전날
         </Link>
         <div className="min-w-0 text-center">
           <h1 className="text-xl font-bold">{isToday ? '오늘' : dateKeyLabel(dateKey)}</h1>
-          {isToday && <p className="text-xs text-gray-500">{dateKeyLabel(dateKey)}</p>}
+          {isToday ? (
+            <p className="text-xs text-gray-500">{dateKeyLabel(dateKey)}</p>
+          ) : (
+            <Link
+              to={homeHref(today, today)}
+              replace
+              className="mt-0.5 inline-flex min-h-11 items-center rounded-full border border-gray-300 px-3 text-xs font-medium text-gray-700"
+            >
+              오늘로
+            </Link>
+          )}
         </div>
         {isToday ? (
           <button type="button" disabled className={`${navBtn} justify-end text-gray-300`}>
-            내일 ▶
+            다음 날 ▶
           </button>
         ) : (
           <Link to={homeHref(shiftDateKey(dateKey, 1), today)} replace className={`${navBtn} justify-end text-gray-700`}>
-            내일 ▶
+            다음 날 ▶
           </Link>
         )}
       </nav>
