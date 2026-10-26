@@ -33,6 +33,8 @@
 | M10 | 사진 전송 고지: 첫 촬영 전 1회 + 촬영 화면에 한 줄(문구는 7.1절 U4) | 약관 대응(7.2절 R2) | frontend-dev |
 | M11 | Hosting 배포, App Check, 개발용 AI 목업 스위치 | 운영, 무료 한도 절약 | firebase-engineer, frontend-dev |
 | M12 | 샘플 체험: 실제 모델로 미리 분석한 결과(정적 JSON)로 촬영 없이 전체 흐름을 체험. AI 호출 0회, 화면에 "미리 분석한 결과" 표시(7.1절 U6) | 음식·카메라가 없는 심사위원도 체험하고 한도를 지킨다 | vision-ai-engineer(결과), frontend-dev(화면) |
+| M14 | 목표 설정(S6): 성별·나이·키·몸무게·활동량·목표 → Mifflin-St Jeor로 기초대사량·하루 소모량 → 목표 kcal·탄단지 추천(4.7절). AI 호출 없음. 안전 장치(기초대사량 하한, 만 18세 미만 유지, 의학적 조언 아님 고지) | 하루 요약을 "얼마나 먹었나"에서 "목표 대비 얼마나 남았나"로 바꾼다(2026-10-26 사용자 결정, 3단계) | vision-ai-engineer(계산), firebase-engineer(저장·규칙), frontend-dev(화면) |
+| M15 | 하루 요약 목표 비교: kcal·탄·단·지 "먹은 양/목표" 막대와 남은 양(4.7절) | 같음 | frontend-dev |
 | M13 | 호출 절약 장치(5.2.2절): 같은 사진 결과 캐시, 분석 중 잠금, 429 분당·일일 구분과 한도 모드, 호출 D 결과 캐시, 사용자별 하루 실시간 분석 상한 | 심사 기간 내내 동작한다 | vision-ai-engineer, frontend-dev, firebase-engineer |
 
 ### 1.2 있으면 좋음: 4단계(11/2~3)에 시간이 남을 때 위에서부터
@@ -44,22 +46,23 @@
 | P3 | "남김 없이 다 먹었어요" 버튼(먹은 후 촬영 생략, 남긴 비율 0) | 입력 단계와 호출 수가 준다 |
 | P4 | PWA 매니페스트(홈 화면 설치) | 시연 인상 |
 | P5 | 저장한 식사 다시 수정 | MVP는 삭제 후 직접 입력으로 대신한다 |
-| P6 | 하루 목표 kcal 설정, 진행 막대 | 기준 두 가지와 관계없고 설정 입력이 늘어난다 |
+| P6 | (MVP M14·M15로 옮김, 2026-10-26 사용자 결정) | - |
 
 ### 1.3 만들지 않는 것
 - 사진·썸네일·이미지 URL·base64 저장(Storage, Firestore, localStorage), 먹은 후 사진 보관: 확정 결정 사항
 - Cloud Functions, Cloud Storage, 별도 서버, 서버 집계(`daily/*`), Blaze가 필요한 기능: 확정 결정 사항
 - Firebase AI 모니터링: 켜면 프롬프트(사진이 들어갈 수 있음)가 저장된다(7.2절 R3)
 - 주간·월간 통계, 푸시 알림, 바코드, 공유, 다국어: 기준 두 가지에 기여하지 않는다
+- 남은 영양소 기반 음식 추천, 주간·월간 리포트: "프리미엄 계획"으로 발표에서만 소개한다(2026-10-26 사용자 결정)
 
 ### 1.4 스킬 기본값과 다르게 정한 것
 
 | 스킬 기본값 | 이 스펙의 결정 | 이유 |
 | --- | --- | --- |
 | meal-log-frontend: 홈과 하루 요약이 다른 화면 | 홈 = 오늘의 하루 요약(날짜 이동 포함) | 흐름의 끝(하루 요약)이 다음 기록을 시작하는 화면과 같아져 화면과 탭이 준다 |
-| meal-log-frontend: 홈에 "섭취 / 목표" | 섭취 합계만 표시 | 목표 설정은 P6 |
+| meal-log-frontend: 홈에 "섭취 / 목표" | (2026-10-26 변경) 목표가 있으면 "먹은 양/목표" 막대와 남은 양, 없으면 합계와 "목표 설정하기" 카드 | 목표 설정을 3단계 MVP(M14·M15)로 넣었다 |
 | meal-log-frontend: 먹은 후 촬영 때 반투명 겹치기 | MVP는 먹기 전 사진을 위쪽에 표시 | `<input capture>`로는 겹칠 수 없고, 카메라를 직접 만드는 일은 P1 |
-| firebase-stack: `users/{uid}` 프로필 문서 | MVP에서는 만들지 않는다. 시간대는 상수 `Asia/Seoul` | 설정 화면이 없어 쓰는 곳이 없다. 규칙은 본인 읽기·쓰기만 열어 둔다 |
+| firebase-stack: `users/{uid}` 프로필 문서 | (2026-10-26 변경) 3단계 목표 설정용 `goal` 필드 하나만 둔다(4.7절). 시간대는 계속 상수 `Asia/Seoul` | 목표를 기기와 상관없이 쓰려면 서버에 있어야 한다 |
 | firebase-stack: 규칙에서 항목별 `eaters` 1~20 검사 | 규칙은 문서 최상위 필드·열거값·범위·항목 수만 본다. 항목별 검사는 클라이언트 `validateAnalysis`가 한다 | Firestore 규칙 언어에는 배열을 순회하는 문법이 없다 |
 | firebase-stack: App Check는 디버그 확인 뒤 적용 | 처음부터 적용된 상태로 보고 0단계에 디버그 토큰을 등록한다 | 2026년 7월 초부터 AI Logic 설정 과정이 App Check를 자동으로 적용한다 [S1] |
 | intake-calorie-estimation: 이름 정확 일치 → 별칭 → 부분 일치 | 이름·세부명·대표식품명 일치 → 별칭 → **뒤쪽 일치만**. 국물·건더기는 부분 일치에서 뺀다 | 앞·중간 일치를 허용하면 "김치"가 "김치찌개"로 잘못 매칭되고, 그 값이 "DB" 출처로 표시된다 |
@@ -95,9 +98,10 @@ S0 로그인 → S1 홈(=오늘의 하루 요약) ─"식사 기록"→ S2 먹�
 | ID | 경로 | 화면 | 주요 요소 | 주 버튼 |
 | --- | --- | --- | --- | --- |
 | S0 | `/login` | 로그인 | Google 버튼 하나. 이미 로그인했으면 바로 S1. 인앱 브라우저면 "Chrome·Safari로 열어 주세요" | Google로 로그인 |
-| S1 | `/`(`?date=YYYY-MM-DD`) | 홈 = 하루 요약 | 맨 위 대기 카드(`awaiting_after`: "다 드셨나요? 남은 음식 찍기", `needs_review`: "확인하고 저장하기"). 합계 kcal·탄·단·지, 끼니별 합계, 식사 목록(음식 이름과 kcal, 사진 없음, 삭제), 날짜 좌우 이동, 영양 정보 출처 한 줄 | 식사 기록 |
+| S1 | `/`(`?date=YYYY-MM-DD`) | 홈 = 하루 요약 | 맨 위 대기 카드(`awaiting_after`: "다 드셨나요? 남은 음식 찍기", `needs_review`: "확인하고 저장하기"). 합계 kcal·탄·단·지, 끼니별 합계, 식사 목록(음식 이름과 kcal, 사진 없음, 삭제), 날짜 좌우 이동, 영양 정보 출처 한 줄. 목표가 있으면 kcal·탄·단·지 "먹은 양/목표" 막대와 남은 양, 없으면 "목표 설정하기" 카드(3단계, 4.7절) | 식사 기록 |
 | S2 | `/capture/before` | 먹기 전 촬영 | "수저를 함께, 위에서 찍어 주세요", 사진 전송 고지 한 줄, "데모 사진 사용" | 촬영 |
 | S3 | `/meal/:mealId/after` | 먹은 후 촬영 | 먹기 전 사진(IndexedDB에 있을 때), 인식한 음식 목록(이름·g, 읽기 전용), "같은 위치·각도로", "데모 사진 사용", "기록 취소" | 남은 음식 찍기 |
+| S6 | `/goal` | 목표 설정(3단계) | 성별·나이·키·몸무게·활동량·목표 입력 → 기초대사량·하루 소모량·목표 kcal·탄단지 추천 표시, 안전 장치 문구, 의학적 조언 아님 고지(4.7절). AI 호출 없음 | 저장 |
 | S4 | `/meal/:mealId/review` | 결과 확인·수정 | 음식 카드(2.3절), 끼니 칩, 경고, 합계. 직접 입력은 같은 화면을 빈 목록으로 연다(`/meal/new/review?date=`) | 저장 |
 | - | S2·S3 위에 덮는 상태 | 분석 중 | 진행 표시. 10초가 지나면 "조금 더 걸려요"와 "직접 입력" 링크. 실패하면 5절 선택지 | - |
 
@@ -133,7 +137,7 @@ S0 로그인 → S1 홈(=오늘의 하루 요약) ─"식사 기록"→ S2 먹�
 ### 3.1 경로
 
 ```
-users/{uid}                     MVP에서는 쓰지 않는다(규칙은 본인 읽기·쓰기만 허용)
+users/{uid}                     3단계부터 목표 설정 `goal` 필드 하나(4.7절). 본인만 읽기·쓰기
 users/{uid}/meals/{mealId}      식사 1건. mealId는 클라이언트가 먼저 만든다(IndexedDB 키와 같다)
 ```
 사진·썸네일·이미지 URL·base64 필드는 어디에도 두지 않는다. `daily/*` 문서도 없다.
@@ -647,6 +651,64 @@ consumed.X     = per_100g.X × consumed_grams ÷ 100        (X = kcal, carbs_g, 
 - 하루 요약: 그날 `done` 문서들의 `analysis.totals.consumed`를 더한다. 끼니별 합계는 `mealType`으로 묶는다.
 - 검증 허용 오차는 `validate_analysis.mjs`를 따른다(2% 또는 1).
 
+### 4.7 목표 설정과 목표 대비 비교 (3단계, 2026-10-26 사용자 결정)
+
+AI 호출 없이 공식으로만 계산한다. 담당: 계산 함수 vision-ai-engineer(`web/src/analysis/goal.ts`, 순수 함수), 저장·규칙 firebase-engineer, 화면 frontend-dev.
+
+**입력(S6)**
+| 필드 | 값 | 범위 |
+| --- | --- | --- |
+| `sex` | `male`·`female` | 공식의 성별 상수에만 쓴다 |
+| `age` | 정수(만 나이) | 14~100 |
+| `height_cm` | 숫자 | 120~220 |
+| `weight_kg` | 숫자 | 30~250 |
+| `activity` | `sedentary`(거의 안 움직임) 1.2 · `light`(주 1~3회 가벼운 운동) 1.375 · `moderate`(주 3~5회) 1.55 · `active`(주 6~7회) 1.725 · `very_active`(매일 고강도·육체노동) 1.9 | |
+| `goal` | `lose`(감량)·`maintain`(유지)·`gain`(증량) | 만 18세 미만은 `maintain`만 |
+
+**계산**
+```
+BMR  = 10 × weight_kg + 6.25 × height_cm − 5 × age + (male ? 5 : −161)     // Mifflin-St Jeor
+TDEE = BMR × activity 계수
+target_kcal = TDEE − 500 (lose) | TDEE (maintain) | TDEE + 300 (gain)
+target_kcal = max(target_kcal, BMR)            // 안전 장치: 기초대사량 아래로 내리지 않는다. 내렸으면 clamped=true
+carbs_g = target_kcal × 0.55 ÷ 4, protein_g = target_kcal × 0.20 ÷ 4, fat_g = target_kcal × 0.25 ÷ 9
+```
+- 손 계산 예시(QA 대조용, 반올림 전 → 표시값)
+  - 남 30세 175cm 70kg, 주 3~5회(1.55), 감량: BMR 1648.75 → 1650, TDEE 2555.56 → 2560, 목표 2055.56 → 2060kcal, 탄 282.6 → 283g, 단 102.8 → 103g, 지 57.1 → 57g, clamped=false
+  - 여 25세 160cm 50kg, 거의 안 움직임(1.2), 감량: BMR 1214 → 1210, TDEE 1456.8 → 1460, 감량 계산값 956.8이 BMR보다 낮아 목표 1214 → 1210kcal(clamped=true), 탄 166.9 → 167g, 단 60.7 → 61g, 지 33.7 → 34g
+- 탄·단·지 비율 55:20:25는 한국인 영양소 섭취기준(2020)의 에너지 적정비율(탄 55~65%, 단 7~20%, 지 15~30%) 안에서 고른 고정값이다. 사용자가 비율을 고치는 기능은 없다.
+- 반올림: BMR·TDEE·목표 kcal은 10kcal 단위, 탄·단·지는 g 정수. 계산은 원래 정밀도로 하고 표시·저장 직전에 반올림한다.
+- 만 18세 미만: 감량·증량을 고를 수 없고 목표는 유지로 계산한다. 안내 문구: "성장기에는 감량·증량보다 고르게 잘 먹는 것이 중요해요. 목표는 유지 기준으로 보여 드려요."
+- `clamped=true`면: "목표 칼로리가 기초대사량보다 낮아지지 않게 맞췄어요."
+- 모든 목표 화면과 하루 요약의 목표 영역에 고지: "이 목표는 일반 공식(Mifflin-St Jeor)으로 계산한 참고값이며 의학적 조언이 아니에요. 질환이 있거나 임신·수유 중이면 전문가와 상의하세요."
+
+**함수(`web/src/analysis/goal.ts`)**
+```ts
+export type Sex = "male" | "female";
+export type Activity = "sedentary" | "light" | "moderate" | "active" | "very_active";
+export type GoalType = "lose" | "maintain" | "gain";
+export interface GoalInput { sex: Sex; age: number; height_cm: number; weight_kg: number; activity: Activity; goal: GoalType }
+export interface GoalResult { bmr: number; tdee: number; target_kcal: number;
+  macros: { carbs_g: number; protein_g: number; fat_g: number };
+  goal_applied: GoalType;            // 만 18세 미만이면 maintain
+  clamped: boolean; minor: boolean; formula: "mifflin-st-jeor" }
+export function validateGoalInput(x: unknown): { ok: true; value: GoalInput } | { ok: false; errors: string[] };
+export function computeGoal(input: GoalInput): GoalResult;
+export function compareToGoal(consumed: Nutrients, goal: GoalResult):   // 하루 요약 막대용
+  Record<"kcal" | "carbs_g" | "protein_g" | "fat_g", { eaten: number; target: number; remaining: number; ratio: number }>;  // remaining<0이면 초과
+```
+
+**저장(`users/{uid}` 문서)**
+- 필드 `goal: { input: GoalInput, result: GoalResult, updatedAt }` 하나만 둔다. 다른 기기에서도 같은 목표를 쓰려고 Firestore에 둔다(본인만 읽기·쓰기).
+- 규칙: 본인 uid만, 문서 키 `hasOnly(["goal"])`, `goal.input`의 열거값과 범위(위 표). `result`는 클라이언트가 계산한 값이라 범위만 본다(`target_kcal` 800~6000).
+- 목표가 없으면 하루 요약은 지금처럼 합계만 보이고 "목표 설정하기" 카드를 띄운다.
+
+**하루 요약(S1) 목표 비교**
+- kcal·탄·단·지 네 줄: "먹은 양 / 목표" 막대와 "남은 양 ○○"(넘으면 "○○ 초과", 막대 색 바꿈). 막대 길이는 `ratio`(100%에서 자른다).
+- 대기 상태 식사는 합계와 마찬가지로 빼고 `done`만 비교한다.
+
+**프리미엄 계획(만들지 않음, 발표에서만 소개):** 남은 영양소 기반 음식 추천, 주간·월간 리포트.
+
 ---
 
 ## 5. 실패 대체 경로
@@ -742,12 +804,12 @@ consumed.X     = per_100g.X × consumed_grams ÷ 100        (X = kcal, carbs_g, 
 
 | 담당 | 작업 |
 | --- | --- |
-| firebase-engineer | `subscribeDay`, `summarizeDay`, 쿼리 인덱스 확인 |
-| frontend-dev | S1 홈 = 하루 요약(합계, 끼니별, 목록, 날짜 이동, 대기 카드, 삭제), 앱 시작 시 `beforePhotoStore.cleanup` |
-| vision-ai-engineer | 10쌍 측정(사진이 모이면), 별칭표 보강 |
+| firebase-engineer | `subscribeDay`, `summarizeDay`, 쿼리 인덱스 확인, `users/{uid}.goal` 읽기·쓰기와 규칙(4.7절) |
+| frontend-dev | S1 홈 = 하루 요약(합계, 끼니별, 목록, 날짜 이동, 대기 카드, 삭제, 목표 비교 막대·남은 양), S6 목표 설정, 앱 시작 시 `beforePhotoStore.cleanup` |
+| vision-ai-engineer | 10쌍 측정(사진이 모이면), 별칭표 보강, `goal.ts`(4.7절 공식·안전 장치, 단위 시험) |
 | qa-integrator | 점검표 E, 점검표 C의 IndexedDB 정리 항목 |
 
-완료 기준: 저장·삭제 직후 새로고침 없이 반영된다. 화면 합계가 그날 `done` 문서들의 합과 같다(Firestore에서 직접 대조). 대기 상태 식사는 빠진다. 날짜를 옮겨도 다른 날 기록이 섞이지 않는다.
+완료 기준: 저장·삭제 직후 새로고침 없이 반영된다. 화면 합계가 그날 `done` 문서들의 합과 같다(Firestore에서 직접 대조). 대기 상태 식사는 빠진다. 날짜를 옮겨도 다른 날 기록이 섞이지 않는다. 목표 계산이 손 계산 예시와 같고(감량 목표가 기초대사량 아래로 내려가지 않음, 만 18세 미만은 유지), 하루 요약의 남은 양이 목표 − 합계와 같다.
 
 **4단계 · 11/2(월)~11/3(화) · 정확도 개선·화면 다듬기**
 
@@ -791,10 +853,11 @@ consumed.X     = per_100g.X × consumed_grams ÷ 100        (X = kcal, carbs_g, 
 ### 6.3 축소안 (일정이 밀리면 위에서부터 뺀다)
 1. 1.2절 P1~P6 전부
 2. (검색 단계가 꺼져 있을 때만) 검색 추천 렌더링 구현
-3. 끼니별 합계 → 식사 목록만
-4. 날짜 이동 → 오늘만
-5. 자동완성 → 자유 입력 + 정확 일치(4.5.4의 1~3)
-6. `needs_review` 상태 저장 → 메모리 보관(앱을 닫으면 먹은 후 분석 결과를 잃는 것을 감수)
+3. 목표 비교 막대 → kcal 한 줄만(탄·단·지 막대 생략). 목표 설정 화면과 안전 장치·고지는 남긴다
+4. 끼니별 합계 → 식사 목록만
+5. 날짜 이동 → 오늘만
+6. 자동완성 → 자유 입력 + 정확 일치(4.5.4의 1~3)
+7. `needs_review` 상태 저장 → 메모리 보관(앱을 닫으면 먹은 후 분석 결과를 잃는 것을 감수)
 
 끝까지 지킬 것: 확정 결정 사항의 흐름, 계산식, 결과 수정 규칙, 오늘 합계, 직접 입력 대체 경로.
 
@@ -939,5 +1002,6 @@ U0·U3·U5는 결정 내용으로 바꿨다. 나머지(U1·U2·U4·U6·U7·U8)�
 | 날짜 | 변경 내용 | 절 | 영향을 받는 에이전트 |
 | --- | --- | --- | --- |
 | 2026-10-26 | 초안 작성(0단계). 리더 요청에 따라 식약처 DB 처리 규칙(100ml 행, 탄·지 빈 값, 같은 이름 중복, 이름 매칭, 앱 JSON 필드·크기)을 반영하고 analysis-schema v2(선택 필드 `per_100g_fill`·`db_name`·`db_match`)를 제안. 공식 문서 확인 결과(그라운딩 무료 등급 미제공, App Check 자동 강제, AI 모니터링 프롬프트 저장, 무료 등급 데이터 약관)를 7.2절 위험과 부록 A에 기록 | 전체 | vision-ai-engineer, frontend-dev, firebase-engineer, qa-integrator, pitch-writer |
+| 2026-10-26 | (리더, 사용자 결정) 3단계에 목표 설정 추가: M14·M15, S6, `users/{uid}.goal`, 4.7절(Mifflin-St Jeor, 안전 장치, 고지), 3단계 작업·완료 기준, 축소안 3. P6은 MVP로 옮김. 음식 추천·주간/월간 리포트는 프리미엄 계획(발표에서만) | 1, 2.2, 3.1, 4.7, 6.1, 6.3 | vision-ai-engineer, firebase-engineer, frontend-dev, qa-integrator, pitch-writer |
 | 2026-10-26 | (리더, 사용자 결정) 4.5.3 (a): 고형 음식의 100ml 전용 행도 1g/ml로 환산해 넣고 출처를 "DB(환산)"으로 구분. 3.3절에 `db_ml_converted`, 4.3절 `NutritionResult`에 `ml_converted` 추가 | 3.3, 4.3, 4.5.3 | vision-ai-engineer, frontend-dev, qa-integrator |
 | 2026-10-26 | 사용자 결정 반영(U0~U8, U5는 제출·심사 방식으로 대체): 샘플 체험 M12, 호출 절약 M13, 5.2절을 녹화·심사 기간 기준으로 다시 쓰고 5.2.2 호출 절약 장치 추가, F15 녹화 기준, 0·5·6단계 일정, 7.3 필요할 때 확인 목록. 사용자 요청으로 추가 조사를 멈추고, architect가 1절을 반영한 뒤 리더가 나머지를 마무리 | 1, 5, 6, 7 | 전원 |
