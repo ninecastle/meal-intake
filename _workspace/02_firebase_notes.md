@@ -64,7 +64,7 @@ firebase firestore:databases:create "(default)" --location asia-northeast3 --edi
 | App Check 제공자 | `meal-intake-web`에 reCAPTCHA Enterprise(Essentials, 무료) 사이트 키 등록. 결제 수단 요구 없음 → U8 불필요. 도메인: `meal-intake-2026.web.app`, `meal-intake-2026.firebaseapp.com`, `localhost` |
 | App Check 강제(AI Logic API) | **아직 끔.** 스파이크·디버그 토큰 확인 뒤, 첫 배포(2단계) 전에 켠다 |
 | AI 모니터링 | 켜져 있던 것을 끔(R3 충족) |
-| 모델별 무료 한도 | AI Studio 프로젝트 목록이 "permission denied"로 확인 불가. 시험 호출로 접근 가능 여부만 확인하고, 한도 값은 미확인으로 둔다 |
+| 모델별 무료 한도 | (처음에는 AI Studio 권한 문제로 확인 불가였으나 이후 사용자가 확인) 3.5 Flash-Lite 분당 15·하루 500, 3.8 Flash 분당 5·하루 20. 프로젝트 전체 공유. 세부는 `00_handoff.md` "무료 한도 확인" |
 
 ## App Check 코드 (2026-10-26, firebase-engineer)
 - `web/src/lib/firebase.ts`: `initializeApp` → (DEV만) `self.FIREBASE_APPCHECK_DEBUG_TOKEN = true` → `initializeAppCheck(ReCaptchaEnterpriseProvider(VITE_RECAPTCHA_SITE_KEY), isTokenAutoRefreshEnabled: true)` → `getAuth`·`getFirestore`. 사이트 키가 비면 콘솔 경고만 내고 App Check 없이 앱은 뜬다(`appCheck === null`).
