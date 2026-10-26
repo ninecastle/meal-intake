@@ -23,3 +23,24 @@
 - `listFoodVariants`와 `FoodSuggestion.mlConverted`는 vision-ai-engineer가 추가하기 전까지 `tsc -b` 오류 2개(TS2305, TS2339)가 남는다. 그 외 오류는 없다.
 - 저장(`saveMeal`), 실제 화면 흐름·라우팅은 다음 조각에서 한다.
 - 개발 서버에서 직접 확인할 것: 슬라이더·인원수 버튼 터치 영역, 삭제 3초 되돌리기, 같은 사진 안내에서 [다른 사진 고르기]가 파일 선택 창을 여는지(모바일 브라우저).
+
+## 2단계 조각 4-B (2026-10-26): 결과 확인·수정 화면(S4)과 저장
+`web/src/pages/ReviewPage.tsx`(기본 export, props 없음). AI 호출 0회, 개발 서버로는 시험하지 않음. `tsc -b` 오류 없음.
+
+### 구조
+- 들어오기: `location.state {analysis, dateKey, mealType}` → 없으면 `getMeal`(`needs_review`면 편집, `awaiting_after`면 [남은 음식 찍기], `done`·없음이면 홈). 불러오기 실패는 [다시 시도]. 직접 입력(`/meal/new/review`, `:mealId`가 `new`여도 같음)은 `newMealId` + `buildAnalysis([], [])`, `?date`가 틀리면 오늘, 끼니는 `guessMealType(지금)`. 처음 들어올 때의 state·date만 쓴다.
+- 화면: 헤더(‹ 홈), 날짜 + 끼니 칩 4개, 경고 목록(`analysis.warnings`), `ReviewEditor`(합계·출처 문구는 편집기 것을 그대로 쓰고 중복하지 않음), 아래 고정 [저장]. 본문만 스크롤해서 편집기의 되돌리기 알림(sticky)이 저장 버튼 위에 보인다.
+- 저장: `validateAnalysis` 통과 + 음식 1개 이상일 때만 활성. 저장 중에는 버튼과 편집기(`fieldset disabled`)를 잠근다. 성공 → `beforePhotoStore.remove` → `navigate('/', {replace, state:{saved:{dateKey, consumedKcal}}})`. 실패 → `MealStoreError.code`별 안내 + [다시 시도].
+- 오프라인: 10초(브라우저가 오프라인이라고 알리면 1.5초)가 지나도 끝나지 않으면 "연결이 느려요. 연결되면 자동으로 저장돼요."와 [홈으로]. 자동으로 보내지 않고 한 번 누르게 했다. Firestore가 `persistentLocalCache`라 쓰기는 기기에 남아 앱을 닫아도 연결되면 올라간다.
+- 나가기 확인: 바뀐 값(끼니 또는 분석 JSON)이 있을 때만. ‹ 홈 버튼은 `confirm`, 새로 고침·탭 닫기는 `useBeforeUnload`, 브라우저 뒤로 가기는 `useBlocker`인데 데이터 라우터(`createBrowserRouter`)일 때만 켜진다(`UNSAFE_DataRouterContext`로 판별).
+
+### 스펙과 다르게 정한 점
+1. 날짜는 표시만 한다(바꾸기 없음). 스펙대로 dateKey는 먹기 전 촬영 시각·홈에서 보던 날짜.
+2. ‹ 버튼은 이전 화면(S3)이 아니라 홈으로 간다(S3로 돌아가 다시 찍으면 AI 호출이 또 난다).
+3. 오프라인 저장은 자동 이동 대신 [홈으로] 한 번 누르기.
+
+### 남은 이슈
+- 편집기가 이름 조회 중(`resolveNutrition` 대기)이거나 이름을 입력하고 확정하지 않은 상태를 페이지가 알 수 없다. 그때 저장하면 조회 전 값이 저장된다. 편집기에 `onBusyChange` 같은 알림을 두면 저장을 잠글 수 있다.
+- 연결 대기 중 [홈으로]로 나간 뒤 서버가 거부하면(규칙) 알릴 곳이 없다(콘솔만). 식사는 `needs_review`로 남아 홈 대기 카드에 다시 보인다.
+- 라우터가 `<BrowserRouter>`면 브라우저·안드로이드 뒤로 가기는 확인 없이 나간다(값은 `needs_review`로 서버에 남아 있음, 직접 입력은 사라짐).
+- S3에서 S4로 갈 때 `replace`로 가야 저장 뒤 뒤로 가기에서 촬영 화면이 다시 나오지 않는다.
