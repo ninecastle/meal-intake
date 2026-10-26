@@ -119,3 +119,11 @@ firebase firestore:databases:create "(default)" --location asia-northeast3 --edi
 ### 규칙 테스트 실행 결과 (2026-10-26, 리더)
 - 사용자가 JDK 21(Eclipse Adoptium)을 설치한 뒤 `cd firestore-tests && npm install && npm test` 실행 → **15개 통과, 실패 0**(에뮬레이터 `demo-meal-intake`). 로그의 `PERMISSION_DENIED`는 거부 시험에서 나오는 정상 로그다.
 - OAuth 동의 화면: 프로덕션(사용자 확인).
+
+## Hosting 첫 배포 (2026-10-26, 2단계 조각 5, 리더)
+- 명령: `npm --prefix web run build` → `firebase deploy --only hosting --project meal-intake-2026 -m "2단계 조각 5 첫 배포 (App Check 적용 꺼짐)"` → https://meal-intake-2026.web.app
+- 배포 전 확인: 빌드에 `VITE_RECAPTCHA_SITE_KEY` 포함(`web/.env.local`이 production 빌드에도 읽힌다), 개발 패널 문자열 없음, 목업 픽스처 없음(실제 AI 호출 모드), dist 2.9MB.
+- 배포 뒤 확인(curl): `/`·`/login`·`/meal/x/after` 200(SPA rewrite), `/__/auth/handler` 200(authDomain=web.app 로그인용), `/__/firebase/init.json` 200, DB JSON 200(brotli 전송 224KB), 첫 JS 전송 255KB(br). 캐시 `max-age=3600`(기본).
+- 사용자 콘솔 확인 완료: 승인된 도메인에 `meal-intake-2026.web.app`, OAuth 웹 클라이언트 리디렉션 URI에 `https://meal-intake-2026.web.app/__/auth/handler`, OAuth 동의 화면 프로덕션.
+- **AI Logic App Check 적용(Enforce)은 꺼져 있다**(사용자 결정: 10/29 측정 뒤 켠다). 그동안 배포본 웹 API 키로 누구나 Gemini 무료 한도를 쓸 수 있으므로 URL을 공유하지 않는다.
+- Firestore 규칙은 조각 3에서 이미 배포했다. 인덱스는 단일 필드 쿼리만 써서 배포하지 않았다.

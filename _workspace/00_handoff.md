@@ -1,6 +1,6 @@
 # 인계 메모 (최종 갱신 2026-10-26 밤)
 
-> **상태:** 0단계 완료, 1단계 구현 완료(사용자 확인. 정확도 측정만 10/29 샘플이 모이면 따로), 2단계 조각 1~3 완료(사용자 확인), 조각 4(실제 흐름 화면) 진행 중.
+> **상태:** 0단계 완료, 1단계 구현 완료(사용자 확인. 정확도 측정만 10/29 샘플이 모이면 따로), 2단계 조각 1~4 완료(사용자 확인), 조각 5 첫 배포 완료(https://meal-intake-2026.web.app, 사용자 확인 대기).
 > **다음:** 아래 "2단계 남은 조각" 표를 따른다.
 
 새 세션은 이 메모 → `CLAUDE.md` → (필요한 절만) `_workspace/01_architect_spec.md` 순서로 읽는다. 이전 대화 기록은 넘어오지 않는다. 결정은 모두 파일에 있다.
@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | 0 환경 준비 | 완료 | App Check 동작은 미검증(적용이 꺼져 있음, 5절) |
 | 1 사진 두 장 → 칼로리 | 구현 완료, 사용자 확인 | 5쌍 첫 측정(10/29, 7절). 스펙 1단계 완료 기준 가운데 "실제 사진 → 호출 A·B → 결과 표시"와 "v2 검증 통과"는 개발 시험 패널로 확인했다 |
-| 2 로그인·저장·결과 수정·첫 배포 | 조각 1~3 완료, 조각 4 진행 중, 5 남음 | 2절 |
+| 2 로그인·저장·결과 수정·첫 배포 | 조각 1~4 완료, 조각 5 배포 완료(확인 대기) | 2절. 2단계가 끝나면 qa-integrator 점검(아직 한 번도 안 돌림) |
 | 3~6 | 시작 전 | 3단계 = 하루 요약 + 목표 설정·목표 대비 비교(2단계에서 만들지 않는다). 아래 "3단계에 추가한 것" |
 
 ## 2. 진행 방식 (사용자 요청, 계속 지킨다)
@@ -25,8 +25,8 @@
 | 1 | 결과 수정 화면: 이름·중량·남긴 비율·kcal 수정과 자동 재계산, DB 자동완성 + 세부 종류 목록, kcal 직접 수정 뒤 이름을 바꾸면 "다시 계산할까요?", 음식 추가·삭제, 인원수(기본 1), 같은 사진 안내, 흔한 이름 별칭 | 완료(`e96c8ed`, `a61ce7d`, 사용자 확인) |
 | 2 | 구글 로그인 | 완료(`5fbceea`, 사용자 확인). `web/src/lib/auth.ts`(`signInWithGoogle`·`signOutAndClear`·`useAuthUser`), `web/src/pages/LoginPage.tsx`. 배포 도메인에서는 authDomain을 그 도메인으로 바꾼다(`lib/firebase.ts`). 로그아웃 때 분석 결과 캐시는 지우지 않는다(사진 없음, 7일 만료) |
 | 3 | Firestore에 기록 저장 + 본인 기록만 읽고 쓰는 보안 규칙 | 완료(사용자 확인). `862de06`(`web/src/data/meals.ts`, `firestore.rules` v1 **실제 프로젝트에 배포함**, `firestore-tests/`), 리더가 FlowTest에 저장 흐름 연결. 규칙 테스트 15개 통과(2026-10-26, 사용자가 JDK 21 설치 후 리더 실행: `cd firestore-tests && npm install && npm test`). 열린 판단: 샘플 체험 문서의 `entry` 키는 지금 규칙이 거부한다(샘플 체험 구현 때 3.2절·규칙에 추가), 저장한 식사 다시 저장(done→done)은 거부(저장 뒤 수정 P5를 넣으면 전이 추가) |
-| 4 | 실제 흐름 화면 연결(로그인 → 먹기 전 촬영 → 먹은 후 촬영 → 결과 수정 → 저장). 개발용 시험 패널은 개발 모드에서만. 모바일 우선 | 구현 완료, 사용자 확인 대기(`730042a` 4-A, `732a40a` 4-B, 리더 연결: 데이터 라우터 `createBrowserRouter`로 바꿔 결과 화면 뒤로 가기 확인 동작, 편집기 `onBusyChange`로 이름 재계산 중 저장 잠금). 남은 것(4단계): AI 한도 모드(F10), 데모 사진·샘플 체험, 사용자별 하루 상한, 첫 청크 994KB(gzip 304KB) 줄이기. 4-A(frontend-dev): `react-router`, `/`(최소 홈: 식사 기록·직접 입력·대기 카드·저장 안내, 하루 요약은 3단계), `/capture/before`, `/meal/:mealId/after`, DEV 전용 `/dev`. 4-B(frontend-dev): `/meal/:mealId/review`·`/meal/new/review`(ReviewPage, 저장). 화면 사이 계약: S3→S4 `state {analysis, dateKey, mealType}`(없으면 `getMeal`), 저장 뒤 `/`에 `state {saved:{dateKey, consumedKcal}}` |
-| 5 | Firebase Hosting 첫 배포 → `https://meal-intake-2026.web.app`에서 확인 | - |
+| 4 | 실제 흐름 화면 연결(로그인 → 먹기 전 촬영 → 먹은 후 촬영 → 결과 수정 → 저장). 개발용 시험 패널은 개발 모드에서만. 모바일 우선 | 완료(사용자 확인). `730042a` 4-A, `732a40a` 4-B, 리더 연결: 데이터 라우터 `createBrowserRouter`로 바꿔 결과 화면 뒤로 가기 확인 동작, 편집기 `onBusyChange`로 이름 재계산 중 저장 잠금). 남은 것(4단계): AI 한도 모드(F10), 데모 사진·샘플 체험, 사용자별 하루 상한, 첫 청크 994KB(gzip 304KB) 줄이기. 4-A(frontend-dev): `react-router`, `/`(최소 홈: 식사 기록·직접 입력·대기 카드·저장 안내, 하루 요약은 3단계), `/capture/before`, `/meal/:mealId/after`, DEV 전용 `/dev`. 4-B(frontend-dev): `/meal/:mealId/review`·`/meal/new/review`(ReviewPage, 저장). 화면 사이 계약: S3→S4 `state {analysis, dateKey, mealType}`(없으면 `getMeal`), 저장 뒤 `/`에 `state {saved:{dateKey, consumedKcal}}` |
+| 5 | Firebase Hosting 첫 배포 → `https://meal-intake-2026.web.app`에서 확인 | 배포 완료(2026-10-26, App Check 적용 꺼진 상태). curl로 경로·로그인 핸들러·DB JSON 응답 확인. 사용자 확인 대기(PC·폰). 세부 `02_firebase_notes.md` "Hosting 첫 배포" |
 
 2단계에서 지킬 것(사용자):
 - AI Logic의 App Check 적용(Enforce)은 10/29 정확도 측정이 끝난 뒤에 켠다. 첫 배포는 적용이 꺼진 상태로 한다.
