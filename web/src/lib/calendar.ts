@@ -1,30 +1,70 @@
-// 달력(S10, 3단계 조각 3-1, 스펙 4.7절 "달력")과 주간 추이에서 쓰는 순수 함수. Firestore·AI 호출 없음.
+// 기록 보기(S10 달력, 3단계 조각 3-1, 스펙 4.7절 "기록 보기")와 주간 추이에서 쓰는 순수 함수. Firestore·AI 호출 없음.
 // 날짜는 모두 Asia/Seoul dateKey('YYYY-MM-DD') 문자열로 다룬다(문자열 비교 = 날짜 비교).
+// 히트맵(2026-10-27 사용자 결정): 고른 항목(칼로리·탄·단·지)의 그날 목표 대비 %로 한 가지 색의 진하기 4단계.
 import type { DatedGoal } from '../data/goals'
 import type { GoalTargets } from '../analysis/goal'
+import type { Nutrients } from '../types/analysis'
 
-/** 목표 대비 색. null = 색 없음(그날 목표가 없거나 미래). */
-export type CalendarTone = 'green' | 'orange' | 'blue' | 'gray' | null
+export type Metric = 'kcal' | 'carbs_g' | 'protein_g' | 'fat_g'
+export const METRICS: readonly Metric[] = ['kcal', 'carbs_g', 'protein_g', 'fat_g']
+/** 선택 버튼 글자 [칼로리 | 탄 | 단 | 지] */
+export const METRIC_LABEL: Record<Metric, string> = { kcal: '칼로리', carbs_g: '탄', protein_g: '단', fat_g: '지' }
+export const METRIC_UNIT: Record<Metric, 'kcal' | 'g'> = { kcal: 'kcal', carbs_g: 'g', protein_g: 'g', fat_g: 'g' }
 
-/** 목표의 90~110%(경계 포함)면 초록 */
-export const TONE_LOW = 0.9
-export const TONE_HIGH = 1.1
+/** 목표 범위(✓): 목표의 90~110%, 경계 포함 */
+export const RANGE_LOW = 0.9
+export const RANGE_HIGH = 1.1
+/** 진하기 1단계 끝(목표의 50%) */
+export const LEVEL1_HIGH = 0.5
+/**
+ * 그날 목표가 없을 때 진하기 기준이 되는 양(리더 결정): 일반 성인 하루 2,000kcal을 앱의 탄단지 비율 55:20:25로 나눈 값.
+ * 이 기준으로는 ✓를 붙이지 않는다(목표가 아니므로).
+ */
+export const REFERENCE_AMOUNT: Record<Metric, number> = { kcal: 2000, carbs_g: 275, protein_g: 100, fat_g: 56 }
+
+/** 0 = 기록 없음, 1 = 50% 미만, 2 = 50~90%, 3 = 90~110%(목표 범위), 4 = 110% 초과 */
+export type HeatLevel = 0 | 1 | 2 | 3 | 4
+export interface HeatCell {
+  level: HeatLevel
+  /** 그날 목표가 있고 90~110%면 true(✓) */
+  inRange: boolean
+  /** 값 ÷ 기준(목표 또는 REFERENCE_AMOUNT). 기록 없으면 null */
+  ratio: number | null
+  /** 진하기 기준. 기록 없으면 null */
+  basis: 'goal' | 'reference' | null
+}
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/
-
+const DAY_MS = 86_400_000
 const pad = (n: number) => String(n).padStart(2, '0')
+const toUtc = (dateKey: string) => {
+  const [y, m, d] = dateKey.split('-').map(Number)
+  return Date.UTC(y, m - 1, d)
+}
+const fromUtc = (ms: number) => {
+  const d = new Date(ms)
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`
+}
 
-/**
- * 그날 색. 그날 목표가 없으면 색 없이 숫자만(null).
- * 목표가 있으면 기록 없음(kcal null) 회색, 목표의 90~110% 초록, 110% 초과 주황, 90% 미만 파랑.
- */
-export function calendarTone(kcal: number | null, targetKcal: number | null): CalendarTone {
-  if (targetKcal === null || !(targetKcal > 0)) return null
-  if (kcal === null) return 'gray'
-  const r = kcal / targetKcal
-  if (r > TONE_HIGH) return 'orange'
-  if (r < TONE_LOW) return 'blue'
-  return 'green'
+/** 하루 합계에서 고른 항목의 값 */
+export function metricOf(n: Nutrients, m: Metric): number {
+  return n[m]
+}
+
+/** 목표에서 고른 항목의 값(kcal은 target_kcal). 목표가 없으면 null */
+export function targetOf(t: GoalTargets | null, m: Metric): number | null {
+  if (!t) return null
+  return m === 'kcal' ? t.target_kcal : t[m]
+}
+
+/** 그날 칸의 진하기. value null = 기록 없음. target이 없거나 0 이하면 REFERENCE_AMOUNT 기준(✓ 없음). */
+export function heatLevelFor(value: number | null, target: number | null, metric: Metric): HeatCell {
+  if (value === null) return { level: 0, inRange: false, ratio: null, basis: null }
+  const hasGoal = target !== null && target > 0
+  const base = hasGoal ? target : REFERENCE_AMOUNT[metric]
+  const ratio = value / base
+  const level: HeatLevel = ratio < LEVEL1_HIGH ? 1 : ratio < RANGE_LOW ? 2 : ratio <= RANGE_HIGH ? 3 : 4
+  return { level, inRange: hasGoal && level === 3, ratio, basis: hasGoal ? 'goal' : 'reference' }
 }
 
 /** 'YYYY-MM'으로 바꾼다. 형식이 틀리거나 이번 달보다 뒤면 이번 달. */
@@ -46,20 +86,49 @@ function daysInMonth(month: string): number {
   return new Date(Date.UTC(y, m, 0)).getUTCDate()
 }
 
-/** 그달 첫날·말일 dateKey(범위 쿼리용, 둘 다 포함). */
+/** 그달 첫날·말일 dateKey(둘 다 포함). */
 export function monthRange(month: string): { start: string; end: string } {
   return { start: `${month}-01`, end: `${month}-${pad(daysInMonth(month))}` }
 }
 
-/** 달력 칸: 일요일 시작 7칸씩, 1일 앞은 null, 마지막 주 뒤도 7칸이 차도록 null. */
-export function monthCells(month: string): (string | null)[] {
-  const [y, m] = month.split('-').map(Number)
-  const lead = new Date(Date.UTC(y, m - 1, 1)).getUTCDay() // 0 = 일요일
-  const n = daysInMonth(month)
-  const cells: (string | null)[] = Array.from({ length: lead }, () => null)
-  for (let d = 1; d <= n; d++) cells.push(`${month}-${pad(d)}`)
-  while (cells.length % 7 !== 0) cells.push(null)
+export interface GridCell {
+  dateKey: string
+  /** 보고 있는 달의 날짜면 true. 앞뒤 달 날짜는 false(흐리게 채운다) */
+  inMonth: boolean
+}
+
+/** 월요일 시작 격자: 1일 앞은 지난달 날짜, 말일 뒤는 다음 달 날짜로 채워 빈칸이 없다(5주 또는 6주, 4주인 달도 있다). */
+export function monthGrid(month: string): GridCell[] {
+  const { start, end } = monthRange(month)
+  const first = toUtc(start)
+  const lead = (new Date(first).getUTCDay() + 6) % 7 // 월요일 0 … 일요일 6
+  const last = toUtc(end)
+  const trail = 6 - ((new Date(last).getUTCDay() + 6) % 7)
+  const cells: GridCell[] = []
+  for (let t = first - lead * DAY_MS; t <= last + trail * DAY_MS; t += DAY_MS) {
+    const dateKey = fromUtc(t)
+    cells.push({ dateKey, inMonth: dateKey >= start && dateKey <= end })
+  }
   return cells
+}
+
+/** 격자 첫 칸~마지막 칸(앞뒤 달 날짜 포함) 범위. 조회(subscribeDaysInRange, 최대 42일)에 쓴다. */
+export function gridRange(month: string): { start: string; end: string } {
+  const g = monthGrid(month)
+  return { start: g[0].dateKey, end: g[g.length - 1].dateKey }
+}
+
+/** 월 요약: 그달(앞뒤 달 날짜 제외) 기록이 있는 날 수와 그날들의 하루 평균. 기록 없으면 average null. */
+export function monthSummary(valueByDate: ReadonlyMap<string, number>, month: string): { recordDays: number; average: number | null } {
+  const { start, end } = monthRange(month)
+  let n = 0
+  let sum = 0
+  for (const [d, v] of valueByDate) {
+    if (d < start || d > end) continue
+    n++
+    sum += v
+  }
+  return { recordDays: n, average: n > 0 ? sum / n : null }
 }
 
 /**
@@ -72,4 +141,31 @@ export function goalForDate(goals: readonly DatedGoal[], dateKey: string): GoalT
     if (g.dateKey <= dateKey && (best === null || g.dateKey > best.dateKey)) best = g
   }
   return best?.targets ?? null
+}
+
+// ── 옛 달력(초록·주황·파랑·회색, 일요일 시작). 히트맵 화면으로 바꾸면 지운다. ──
+/** @deprecated 히트맵(heatLevelFor)으로 바뀜 */
+export type CalendarTone = 'green' | 'orange' | 'blue' | 'gray' | null
+/** @deprecated */
+export const TONE_LOW = RANGE_LOW
+/** @deprecated */
+export const TONE_HIGH = RANGE_HIGH
+/** @deprecated 히트맵(heatLevelFor)으로 바뀜 */
+export function calendarTone(kcal: number | null, targetKcal: number | null): CalendarTone {
+  if (targetKcal === null || !(targetKcal > 0)) return null
+  if (kcal === null) return 'gray'
+  const r = kcal / targetKcal
+  if (r > TONE_HIGH) return 'orange'
+  if (r < TONE_LOW) return 'blue'
+  return 'green'
+}
+/** @deprecated monthGrid(월요일 시작, 앞뒤 달 날짜 채움)로 바뀜 */
+export function monthCells(month: string): (string | null)[] {
+  const [y, m] = month.split('-').map(Number)
+  const lead = new Date(Date.UTC(y, m - 1, 1)).getUTCDay()
+  const n = daysInMonth(month)
+  const cells: (string | null)[] = Array.from({ length: lead }, () => null)
+  for (let d = 1; d <= n; d++) cells.push(`${month}-${pad(d)}`)
+  while (cells.length % 7 !== 0) cells.push(null)
+  return cells
 }

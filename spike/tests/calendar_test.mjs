@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 import assert from 'node:assert/strict'
 
 const ROOT = process.argv[2] ?? process.cwd()
-const { calendarTone, parseMonth, shiftMonth, monthRange, monthCells, goalForDate } = await import(
+const { calendarTone, parseMonth, shiftMonth, monthRange, monthCells, goalForDate, heatLevelFor, monthGrid, gridRange, monthSummary, targetOf, metricOf, REFERENCE_AMOUNT } = await import(
   pathToFileURL(path.join(ROOT, 'web/src/lib/calendar.ts')).href
 )
 
@@ -65,5 +65,63 @@ assert.equal(goalForDate(goals, '2026-10-19').target_kcal, 1800)
 assert.equal(goalForDate(goals, '2026-10-20').target_kcal, 2000)
 assert.equal(goalForDate(goals, '2026-10-31').target_kcal, 2200)
 assert.equal(goalForDate([], '2026-10-31'), null)
+
+// ── 히트맵(2026-10-27 사용자 결정) ──
+// 진하기: 50% 미만 1, 50~90% 2, 90~110%(경계 포함) 3 + ✓, 110% 초과 4, 기록 없음 0
+const h = (v, t, m = 'kcal') => heatLevelFor(v, t, m)
+assert.deepEqual(h(null, 2000), { level: 0, inRange: false, ratio: null, basis: null })
+assert.equal(h(999, 2000).level, 1)
+assert.equal(h(1000, 2000).level, 2)
+assert.equal(h(1799, 2000).level, 2)
+assert.equal(h(1800, 2000).level, 3)
+assert.equal(h(1800, 2000).inRange, true)
+assert.equal(h(2200, 2000).level, 3)
+assert.equal(h(2201, 2000).level, 4)
+assert.equal(h(2201, 2000).inRange, false)
+assert.equal(h(0, 2000).level, 1)
+// 목표가 없는 날: 항목별 기준량(2,000kcal 55:20:25) 대비, ✓ 없음
+assert.deepEqual(REFERENCE_AMOUNT, { kcal: 2000, carbs_g: 275, protein_g: 100, fat_g: 56 })
+assert.equal(h(2000, null).level, 3)
+assert.equal(h(2000, null).inRange, false)
+assert.equal(h(2000, null).basis, 'reference')
+assert.equal(h(100, null, 'protein_g').level, 3)
+assert.equal(h(30, null, 'fat_g').level, 2)
+assert.equal(h(50, 0, 'carbs_g').basis, 'reference')
+// 탄·단·지 목표
+const T = { target_kcal: 2060, carbs_g: 283, protein_g: 103, fat_g: 57, source: 'recommended' }
+assert.equal(targetOf(T, 'kcal'), 2060)
+assert.equal(targetOf(T, 'protein_g'), 103)
+assert.equal(targetOf(null, 'fat_g'), null)
+assert.equal(metricOf({ kcal: 1, carbs_g: 2, protein_g: 3, fat_g: 4 }, 'fat_g'), 4)
+assert.equal(h(103, targetOf(T, 'protein_g'), 'protein_g').inRange, true)
+
+// 월요일 시작 격자, 앞뒤 달 날짜 채움
+// 2026-10: 1일 목요일 → 앞 9/28~9/30, 31일 토요일 → 뒤 11/1 → 35칸
+const g10 = monthGrid('2026-10')
+assert.equal(g10.length, 35)
+assert.deepEqual(g10[0], { dateKey: '2026-09-28', inMonth: false })
+assert.deepEqual(g10[3], { dateKey: '2026-10-01', inMonth: true })
+assert.deepEqual(g10[34], { dateKey: '2026-11-01', inMonth: false })
+assert.equal(g10.filter((c) => c.inMonth).length, 31)
+// 2026-11: 1일 일요일 → 앞 6칸, 30일 월요일 → 뒤 6칸 → 42칸(6주)
+const g11 = monthGrid('2026-11')
+assert.equal(g11.length, 42)
+assert.equal(g11[0].dateKey, '2026-10-26')
+assert.equal(g11[41].dateKey, '2026-12-06')
+assert.deepEqual(gridRange('2026-11'), { start: '2026-10-26', end: '2026-12-06' })
+// 2027-02: 1일 월요일, 28일 일요일 → 28칸(4주), 연도 넘김 2026-12 → 2027-01-03까지
+assert.equal(monthGrid('2027-02').length, 28)
+assert.equal(monthGrid('2026-12').at(-1).dateKey, '2027-01-03')
+for (const m of ['2026-01', '2026-02', '2026-03', '2026-08', '2026-11', '2028-02']) {
+  const g = monthGrid(m)
+  assert.equal(g.length % 7, 0, m)
+  assert.ok(g.length <= 42, m)
+  for (let i = 1; i < g.length; i++) assert.ok(g[i - 1].dateKey < g[i].dateKey, `${m} 순서`)
+}
+
+// 월 요약: 그달 날짜만, 기록 있는 날 평균
+const vals = new Map([['2026-09-30', 9999], ['2026-10-01', 1500], ['2026-10-15', 2500], ['2026-11-01', 9999]])
+assert.deepEqual(monthSummary(vals, '2026-10'), { recordDays: 2, average: 2000 })
+assert.deepEqual(monthSummary(new Map(), '2026-10'), { recordDays: 0, average: null })
 
 console.log('모두 통과')

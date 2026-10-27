@@ -305,7 +305,7 @@ export function subscribeDay(
  * dateKey 범위 쿼리 하나(단일 필드 인덱스), done은 클라이언트에서 거른다. 기록이 있는 날만 Map에 넣는다.
  * 같은 필드의 범위 조건 두 개이고 orderBy·status 조건이 없어 복합 인덱스가 필요 없다(firestore.indexes.json 그대로).
  * Map은 dateKey 오름차순으로 넣고, 날마다 hasPendingWrites는 그날 문서 가운데 하나라도 저장 대기면 true.
- * 키 형식이 틀리거나 startKey > endKey이거나 31일을 넘으면 쿼리하지 않고 onError('MEAL_STORE_UNAVAILABLE')를 비동기로 알린다.
+ * 키 형식이 틀리거나 startKey > endKey이거나 42일(월요일 시작 6주 격자)을 넘으면 쿼리하지 않고 onError('MEAL_STORE_UNAVAILABLE')를 비동기로 알린다.
  */
 export function subscribeDaysInRange(
   uid: string,
@@ -351,9 +351,10 @@ export function subscribeDaysInRange(
   )
 }
 
-const MAX_RANGE_DAYS = 31
+// 기록 보기 달력은 앞뒤 달 날짜까지 채운 월요일 시작 격자(최대 6주 = 42일)를 한 번에 조회한다(2026-10-27 사용자 결정)
+const MAX_RANGE_DAYS = 42
 
-/** YYYY-MM-DD 두 개, start <= end, 양 끝 포함 31일 이하. */
+/** YYYY-MM-DD 두 개, start <= end, 양 끝 포함 42일 이하. */
 function validRange(startKey: string, endKey: string): boolean {
   if (!DATE_KEY_RE.test(startKey) || !DATE_KEY_RE.test(endKey) || startKey > endKey) return false
   const ms = (k: string) => Date.UTC(+k.slice(0, 4), +k.slice(5, 7) - 1, +k.slice(8, 10))
