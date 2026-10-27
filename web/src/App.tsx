@@ -5,6 +5,7 @@ import type { User } from 'firebase/auth'
 import { createContext, lazy, Suspense, useContext } from 'react'
 import { createBrowserRouter, Navigate, Outlet, useLocation, type RouteObject } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
+import RouteErrorScreen from './components/RouteErrorScreen'
 import { useAuthUser } from './lib/auth'
 import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
@@ -78,6 +79,8 @@ const userRoutes: RouteObject[] = [
 const router = createBrowserRouter([
   {
     element: <Root />,
+    // 화면 파일 불러오기 실패·화면 예외: 영어 기본 오류 화면 대신 한국어 안내(배포본은 청크 실패 때 한 번 자동 새로고침)
+    errorElement: <RouteErrorScreen />,
     children: [
       { path: '/login', element: <LoginRoute /> },
       { element: <RequireUser />, children: userRoutes },
