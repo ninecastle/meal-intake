@@ -35,6 +35,7 @@
 | M12 | 샘플 체험: 실제 모델로 미리 분석한 결과(정적 JSON)로 촬영 없이 전체 흐름을 체험. AI 호출 0회, 화면에 "미리 분석한 결과" 표시(7.1절 U6) | 음식·카메라가 없는 심사위원도 체험하고 한도를 지킨다 | vision-ai-engineer(결과), frontend-dev(화면) |
 | M18 | 달력(S10): 월 달력에 날짜마다 그날 총 kcal, 목표 대비 색(90~110% 초록·초과 주황·미달 파랑·기록 없음 회색, 목표 없으면 숫자만), 날짜를 누르면 그날 홈, 지난달/다음 달 이동(4.7절 "달력"). AI 호출 없음 | 한 달 기록을 한눈에 보고 그날로 바로 간다(2026-10-27 사용자 결정, 무료 기능, 3단계 조각 3-1) | firebase-engineer(조회), frontend-dev(화면) |
 | M17 | 주간 추이(S9): 최근 7일 일별 꺾은선그래프, 탭(칼로리·탄·단·지), 그날 목표 점선, 기록 없는 날 빈칸, 지난주/다음 주 이동(4.7절 끝). AI 호출 없음 | 하루 기록을 일주일 흐름으로 본다(2026-10-26 사용자 결정, 3단계 조각 4) | firebase-engineer(조회), frontend-dev(화면) |
+| M19 | 앱 안 카메라 촬영 화면(S2·S3): 폰·태블릿은 미리보기·가운데 셔터·왼쪽 아래 사진첩·전환, 먹은 후는 먹기 전 사진 반투명 겹쳐 보기, PC는 파일 고르기(+웹캠), 권한 거부·미지원은 버튼 방식 자동 대체, HEIC, 앨범 EXIF로 날짜·끼니 채움(4.8절) | 같은 각도로 쉽게 찍어 남긴 비율 비교가 정확해진다(2026-10-27 사용자 결정, 3단계가 끝난 뒤 순서) | frontend-dev(화면), vision-ai-engineer(HEIC·EXIF·압축) |
 | M16 | 저장한 기록 수정(S8): 기록 상세 → [수정] → 결과 수정 규칙 그대로 음식별 값·음식 추가·삭제, 끼니, 날짜(오늘과 지난 날짜만). 사진 재분석 없음. `done → done` 전이, `editedAt` 기록. **3단계가 밀리면 가장 먼저 4단계로 미룬다**(삭제는 남긴다) | 실수로 저장한 값을 삭제하지 않고 바로잡는다(2026-10-26 사용자 결정) | firebase-engineer(규칙·저장), frontend-dev(화면) |
 | M14 | 목표 설정(S6): 성별·나이·키·몸무게·활동량·목표 → Mifflin-St Jeor로 기초대사량·하루 소모량 → 목표 kcal·탄단지 추천(4.7절). AI 호출 없음. 안전 장치(기초대사량 하한, 만 18세 미만 유지, 의학적 조언 아님 고지) | 하루 요약을 "얼마나 먹었나"에서 "목표 대비 얼마나 남았나"로 바꾼다(2026-10-26 사용자 결정, 3단계) | vision-ai-engineer(계산), firebase-engineer(저장·규칙), frontend-dev(화면) |
 | M15 | 하루 요약 목표 비교: kcal·탄·단·지 "먹은 양/목표" 막대와 남은 양(4.7절) | 같음 | frontend-dev |
@@ -790,6 +791,31 @@ export function subscribeGoalForDate(uid: string, dateKey: string, cb: (g: Dated
 
 **프리미엄 기능(3단계가 끝난 뒤 따로, 지금은 만들지 않음):** 남은 영양소 기반 음식 추천, 월간 그래프, 리포트(달력 S10은 무료 기능으로 따로 만든다). 발표에서는 프리미엄 계획으로 소개한다.
 
+### 4.8 앱 안 카메라 촬영 화면 (M19, 2026-10-27 사용자 결정, 3단계가 끝난 뒤 순서)
+
+S2(먹기 전)·S3(먹은 후) 촬영을 앱 안 카메라 화면으로 바꾼다. 분석 호출·IndexedDB 임시 보관·압축(`compressPhoto`)·같은 사진 안내는 그대로이고, 사진을 얻는 방법만 바뀐다.
+
+**기기 구분(User-Agent 쓰지 않음)**
+- 카메라 화면 조건: 터치 화면(`matchMedia('(pointer: coarse)')` 또는 `navigator.maxTouchPoints > 0`) + `navigator.mediaDevices.getUserMedia` 있음 + 보안 출처(HTTPS·localhost). 아이패드 사파리는 Mac UA를 보내지만 `maxTouchPoints > 1`이라 터치로 잡힌다.
+- PC(마우스, `pointer: fine`이고 터치 없음): [사진 파일 고르기](`<input type=file accept=image/*>`)가 기본. `enumerateDevices()`에 `videoinput`이 있으면 [카메라로 찍기](같은 카메라 화면을 웹캠으로)도 둔다.
+- 자동 대체: 권한 거부(`NotAllowedError`), 카메라 없음(`NotFoundError`·`OverconstrainedError`), 지원 안 함(getUserMedia 없음·보안 출처 아님), 시작 실패면 [카메라로 찍기](`<input type=file accept=image/* capture=environment>`)·[앨범에서 고르기](`capture` 없음) 버튼 화면으로 바꾸고 권한 다시 켜는 방법을 보인다. 아이폰·아이패드 사파리: 주소창 "aA" → 웹사이트 설정 → 카메라 허용(또는 설정 → 앱 → Safari → 카메라). 안드로이드 크롬: 주소창 왼쪽 아이콘 → 권한 → 카메라 허용. 다시 켠 뒤 [다시 시도].
+
+**카메라 화면**
+- 전체 화면 미리보기(`<video playsInline muted autoPlay>`, iOS 인라인 재생 필수), 가운데 셔터, 왼쪽 아래 사진첩 버튼(앨범에서 고르기), 오른쪽 위 또는 아래 전환 버튼(후면 `facingMode: environment`가 기본 ↔ 전면 `user`). 해상도는 `ideal` 1920×1080(압축이 긴 변 1280px로 줄인다).
+- 가로·세로: 세로면 셔터 줄이 아래, 가로(태블릿)면 오른쪽 세로 줄. 화면을 돌리면 다시 맞춘다. 안전 영역(`env(safe-area-inset-*)`)을 지킨다.
+- 셔터: 지금 프레임을 canvas로 떠서 JPEG Blob → `compressPhoto` → 기존 분석 경로. 찍은 직후 짧은 확인 없이 바로 분석(지금 흐름과 같음, 재촬영은 기존 [다시 찍기]).
+- 화면을 떠나거나 백그라운드로 가면(`visibilitychange`) 카메라 트랙을 끄고, 돌아오면 다시 켠다.
+- S3 겹쳐 보기: IndexedDB의 먹기 전 사진을 미리보기 위에 반투명(기본 약 40%)으로 겹치고 [겹쳐 보기 켜기/끄기]를 둔다. 먹기 전 사진이 없으면(다른 기기 등) 버튼을 숨긴다. 겹친 이미지는 화면에만 쓰고 촬영 결과에는 들어가지 않는다.
+
+**HEIC·EXIF(앨범 사진)**
+- HEIC/HEIF(MIME `image/heic`·`image/heif` 또는 파일 앞부분 `ftyp` heic·heix·mif1): 먼저 브라우저 디코드(`createImageBitmap`)를 시도하고, 실패하면 HEIC 변환 라이브러리를 그때만 불러와(lazy, 첫 화면 번들에 넣지 않음) JPEG로 바꾼 뒤 `compressPhoto`. 변환도 실패하면 "이 사진 형식을 열지 못했어요. 다른 사진을 골라 주세요".
+- EXIF 찍은 시각(`DateTimeOriginal`, 있으면 `OffsetTimeOriginal`): 먹기 전 사진을 앨범에서 고를 때만 읽어 날짜(Asia/Seoul dateKey)와 끼니(`guessMealType`)를 미리 채운다. 미래 시각이면 쓰지 않는다. 사용자는 결과 확인 화면에서 날짜·끼니를 바꿀 수 있다(새 기록도 날짜 선택을 연다, 오늘과 지난 날짜만). 카메라로 찍은 사진은 지금 시각.
+- 메타데이터는 이 계산에만 쓰고 어디에도 저장하지 않는다. `compressPhoto`가 canvas로 다시 인코딩하므로 Gemini에 보내는 사진·IndexedDB 사진에도 EXIF(위치 포함)가 없다.
+
+**확인(실기기, 카메라는 HTTPS에서만 동작)**
+- localhost는 그 PC에서만 HTTPS 예외라, 폰·태블릿은 배포본(https://meal-intake-2026.web.app)으로 확인한다. 개발 중 배포 URL은 공유하지 않는다(App Check 적용 전).
+- 아이폰 사파리·아이패드 사파리(가로·세로, "데스크톱 웹사이트 요청" 켜진 기본 상태)·안드로이드 크롬(폰·태블릿)에서: 카메라 화면이 뜨는지, 후면 기본·전환, 셔터 → 분석, 사진첩 버튼, S3 겹쳐 보기 켜기/끄기, 권한 거부 → 버튼 방식 대체와 안내, HEIC 사진(아이폰 앨범), EXIF 날짜·끼니 채움. 안드로이드는 USB 디버깅 + PC 크롬 `chrome://inspect`로 콘솔을 볼 수 있다. 아이폰 콘솔은 Mac 사파리가 있어야 하므로 화면 동작으로 확인한다.
+
 ---
 
 ## 5. 실패 대체 경로
@@ -899,7 +925,7 @@ export function subscribeGoalForDate(uid: string, dateKey: string, cb: (g: Dated
 | 담당 | 작업 |
 | --- | --- |
 | vision-ai-engineer | 프롬프트 v2(오차가 큰 유형부터. 개선 폭이 두 번 연속 2%p 미만이면 멈춘다), 먹기 전 사진 없는 경로의 오차 측정, P2 검토 |
-| frontend-dev | 5절 실패 경로 UI 전부, 데모 사진(`web/public/demo/`), 사진 전송 고지(U4), 첫 로딩 2초와 DB 첫 번들 제외 확인. 여유가 있으면 P1 → P3 → P4 |
+| frontend-dev | (먼저, 3단계가 끝난 뒤 순서) M19 앱 안 카메라 촬영 화면(4.8절). 5절 실패 경로 UI 전부, 데모 사진(`web/public/demo/`), 사진 전송 고지(U4), 첫 로딩 2초와 DB 첫 번들 제외 확인. 여유가 있으면 P1 → P3 → P4 |
 | firebase-engineer | AI Logic 사용자별 분당 한도 낮추기(5.2절), 재배포, 한도 사용량 기록 |
 | qa-integrator | 점검표 A~E 다시 실행, 실패 모의(429, 403, 시간 초과, IndexedDB 불가, 오프라인, DB 로드 실패) |
 
@@ -1085,6 +1111,7 @@ U0·U3·U5는 결정 내용으로 바꿨다. 나머지(U1·U2·U4·U6·U7·U8)�
 | 날짜 | 변경 내용 | 절 | 영향을 받는 에이전트 |
 | --- | --- | --- | --- |
 | 2026-10-26 | 초안 작성(0단계). 리더 요청에 따라 식약처 DB 처리 규칙(100ml 행, 탄·지 빈 값, 같은 이름 중복, 이름 매칭, 앱 JSON 필드·크기)을 반영하고 analysis-schema v2(선택 필드 `per_100g_fill`·`db_name`·`db_match`)를 제안. 공식 문서 확인 결과(그라운딩 무료 등급 미제공, App Check 자동 강제, AI 모니터링 프롬프트 저장, 무료 등급 데이터 약관)를 7.2절 위험과 부록 A에 기록 | 전체 | vision-ai-engineer, frontend-dev, firebase-engineer, qa-integrator, pitch-writer |
+| 2026-10-27 | (리더, 사용자 결정) M19 앱 안 카메라 촬영 화면 4.8절(기기 구분은 터치·카메라 지원으로, PC는 파일 고르기+웹캠, 권한 거부 자동 대체, HEIC, EXIF 날짜·끼니 채움·저장 안 함, 실기기 확인은 배포본 HTTPS). 3단계가 끝난 뒤 순서(4단계 첫 작업). 먹기 전 그릇을 하나도 못 찾으면 안 보이는 그릇도 확인 필요로 두는 규칙 유지(사용자 확인) | 1.1, 4.8, 6.1 | frontend-dev, vision-ai-engineer, qa-integrator, pitch-writer |
 | 2026-10-27 | (리더, 사용자 결정) 호출 B b3: `same_scene`과 항목 `match`(same·not_visible·different·unclear). 같은 장면에서 그릇이 안 보이면 다 먹음(0)으로 미리 고르고 `MealItem.ratio_assumed: "not_visible"`, 노란 안내·저장 허용. 다른 장면·다른 음식·불확실은 null·저장 막음 유지 | 2.3, 5.1 | vision-ai-engineer, frontend-dev, qa-integrator |
 | 2026-10-27 | (리더, 사용자 결정) 달력 M18·S10(무료, 3단계 조각 3-1: 목표 대비 비교 다음, 주간 추이 앞). 남긴 비율 null은 저장을 막고 안내·먹은 후 다시 찍기(2.3, F8), Gemini 메모는 한국어만(a4·b2, `koreanText.ts`), 분당 429 재시도 없음(4.2, F1, 5.2.2), 화면 파일 불러오기 실패 한국어 안내·배포본 1회 자동 새로고침(F16). 조각 순서 1 → 1-2 → 2 → 3 → 3-1 달력 → 4 주간 추이 → 5 배포 | 1.1, 1.3, 2.2, 2.3, 4.2, 4.7, 5.1, 5.2.2, 6.1 | vision-ai-engineer, firebase-engineer, frontend-dev, qa-integrator, pitch-writer |
 | 2026-10-27 | (리더) 3단계 조각 2: `goal.ts` 구현 메모(반올림 값 반환, 반올림 하한 비교, 미성년 goal 정규화), 저장 함수 `data/goals.ts` 시그니처, 오류 코드 `GOAL_*`, 규칙 `target_kcal` 하한 800 → 300(정상 값 거부 방지) | 4.4, 4.7 | firebase-engineer, frontend-dev, qa-integrator |
