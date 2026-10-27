@@ -14,15 +14,17 @@ import { METRIC_NAME } from './MetricToggle'
 
 const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일'] as const
 
-// SVG 좌표(viewBox). 360px 폰(본문 328px)에서 약 0.98배, 태블릿(본문 최대 416px)에서 약 1.24배로 그려진다.
+// SVG 좌표(viewBox). 360px 폰(본문 328px)에서 약 0.9배, 태블릿(본문 최대 416px)에서 약 1.14배로 그려진다.
+// 왼쪽 AXIS 폭은 세로축 눈금 숫자 자리(그래프 밖). 숫자가 월요일 점·선에 가리지 않게 칸과 나눈다(리더, 2026-10-27).
+const AXIS = 30
 const COL = 48
-const W = COL * 7
+const W = AXIS + COL * 7
 const TOP = 16 // 맨 위 보조선(위에 눈금 숫자 자리)
 const BASE = 152 // 세로축 0
 const WD_Y = 170 // 요일 글자 기준선(요일·날짜 글자 12, 360px 폰에서 약 11.7px)
 const DATE_Y = 187 // 날짜 글자 기준선
 const H = 196
-const cx = (i: number) => COL * i + COL / 2
+const cx = (i: number) => AXIS + COL * i + COL / 2
 
 /** 눈금 숫자: 소수 눈금(예: 1.5g)을 반올림하지 않게 한 자리까지 */
 const tickText = (t: number) => t.toLocaleString('ko-KR', { maximumFractionDigits: 1 })
@@ -197,22 +199,13 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
 
       <div className="relative mt-1">
         <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={summary} className="block h-auto w-full">
-          {/* 가로 보조선과 눈금 숫자(데이터보다 먼저 그려 아래에 깔린다. 숫자는 흰 테두리로 보조선을 끊는다) */}
+          {/* 가로 보조선(칸 영역)과 눈금 숫자(왼쪽 AXIS 자리, 보조선 높이에 맞춰 오른쪽 정렬) */}
           {ticks.map((t, k) => {
             const y = yOf(t)
             return (
               <g key={k}>
-                <line x1={0} x2={W} y1={y} y2={y} className={k === 0 ? 'stroke-gray-300' : 'stroke-gray-200'} strokeWidth={1} />
-                <text
-                  x={2}
-                  y={y - 3}
-                  fontSize={10}
-                  className="fill-gray-500 tabular-nums"
-                  stroke="white"
-                  strokeWidth={3}
-                  strokeLinejoin="round"
-                  style={{ paintOrder: 'stroke' }}
-                >
+                <line x1={AXIS} x2={W} y1={y} y2={y} className={k === 0 ? 'stroke-gray-300' : 'stroke-gray-200'} strokeWidth={1} />
+                <text x={AXIS - 4} y={y + 3.5} textAnchor="end" fontSize={10} className="fill-gray-500 tabular-nums">
                   {tickText(t)}
                 </text>
               </g>
@@ -303,8 +296,8 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
           </p>
         )}
 
-        {/* 누르는 곳: 날짜 칸 세로 띠 전체(폭 = 전체 ÷ 7, 높이 = 그래프 전체) */}
-        <div className="absolute inset-0 grid grid-cols-7">
+        {/* 누르는 곳: 날짜 칸 세로 띠 전체(눈금 숫자 자리 AXIS 오른쪽을 7칸으로, 높이 = 그래프 전체) */}
+        <div className="absolute inset-y-0 right-0 grid grid-cols-7" style={{ left: `${(AXIS / W) * 100}%` }}>
           {points.map((p) => {
             const on = sel?.d === p.d
             return (
