@@ -221,7 +221,7 @@ function DetailRow({ label, k, detail, sub }: { label: string; k: DetailKey; det
       <span>
         {label}
         {t && t.count < detail.items && (
-          <small style={{ marginLeft: 6, fontSize: 12, color: 'var(--ink-3)' }}>{`음식 ${detail.items}개 중 ${t.count}개 기준`}</small>
+          <small style={{ marginLeft: 6, fontSize: 13, color: 'var(--ink-3)' }}>{`음식 ${detail.items}개 중 ${t.count}개 기준`}</small>
         )}
       </span>
       {t ? (

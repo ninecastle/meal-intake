@@ -108,6 +108,18 @@
     text-align: right;
   }
 
+  /* 사용자가 고른 변경 (10, 2026-10-28): 영양정보 표(.ntable) 글자를 시안보다 크게 — 줄 15 → 17px, 세부 줄 14 → 16px, 총 열량 숫자 24 → 28px.
+     끼니 화면 [자세히]와 영양소 상세(D5)가 같은 표를 쓴다 */
+  .nrow {
+    font-size: 17px;
+  }
+  .nrow.sub {
+    font-size: 16px;
+  }
+  .nrow.total .num {
+    font-size: 28px;
+  }
+
   /* D3-2 결과·직접 입력 화면의 입력 상자(테두리 상자 안에 입력 칸과 단위): 키보드 포커스 테두리를 안쪽 칸 대신 상자에(시안 :focus-visible과 같은 색) */
   .fbox:focus-within {
     outline: 3px solid var(--sky-deep);
