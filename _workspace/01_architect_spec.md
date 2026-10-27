@@ -132,6 +132,7 @@ S0 로그인 → S1 홈(=오늘의 하루 요약) ─"식사 기록"→ S2 먹�
 | 저장 | `validateAnalysis` 통과, 남긴 비율이 null인 항목 없음(2026-10-27) → `saveMeal`(done) → S1(그 dateKey) | - | `status`, `analysis`, `consumedKcal`, `mealType` |
 
 추가 표시 규칙
+- 같은 장면인데 그 그릇만 먹은 후 사진에 안 보임(호출 B b3 `match: "not_visible"`, 2026-10-27 사용자 결정): `remaining_ratio=0`(다 먹음)을 미리 고르고 `ratio_assumed: "not_visible"`. 카드에 노란 안내 "그릇이 안 보여서 다 드신 걸로 했어요. 아니면 바꿔 주세요", **저장 허용**. 사용자가 남긴 비율을 고르면 표시를 지운다(`setRemainingRatio`). 상세(S7)에는 "(그릇이 안 보여 다 먹음으로 둠)". 먹은 후 사진이 먹기 전과 다른 장면이면(`same_scene: false`) 그릇이 안 보이는 것도 아래 null로 본다.
 - `remaining_ratio=null`(매칭 실패·판단 불확실, 2026-10-27 사용자 결정으로 바꿈): 카드에 "확인 필요"와 "사진이 먹기 전과 달라 보여요. 다시 찍거나 남긴 양을 직접 골라 주세요"(먹은 후 분석이 아예 실패한 경로와 기록 수정은 "남긴 양을 직접 골라 주세요")를 띄운다. **사용자가 남긴 양을 고르기 전에는 저장하지 않는다**(`saveMeal`도 거부). 먹은 후 분석에서 null이 나오면 먹기 전 사진을 지우지 않고 문서를 awaiting_after로 두어 [먹은 후 사진 다시 찍기]를 할 수 있다. 100% 남김·다 먹음으로 조용히 가정하지 않는다(프롬프트 b2, 응답 정리에서 남긴 비율 0.95 이상·확신 0.6 미만도 null로 바꾼다).
 - Gemini가 쓴 경고·메모는 한국어로만 보인다. 한국어가 아니면 "AI 분석 메모를 한국어로 받지 못했어요. 음식 이름과 양을 한 번 더 확인해 주세요."로 바꾼다(`analysis/koreanText.ts`, 프롬프트 a4·b2도 한국어로 쓰게 함).
 - `per_100g_fill`: 해당 영양소 옆에 작은 "AI 추정" 표시. 값이 `missing`이면 숫자 대신 "–".
@@ -804,6 +805,7 @@ export function subscribeGoalForDate(uid: string, dateKey: string, cb: (g: Dated
 | F5 | 먹기 전 사진 없음(브라우저 데이터 삭제, 사생활 보호 모드, 다른 기기) | 텍스트만으로 호출 B | S4 위쪽에 "먹기 전 사진 없이 분석해 정확도가 낮을 수 있어요" | vision-ai-engineer, frontend-dev |
 | F6 | DB에 없는 이름 | 검색(켜져 있을 때) → AI 추정 → 직접 입력 | 출처 배지 | vision-ai-engineer |
 | F7 | 검색 불가(무료 등급 미제공, 400·403·429) | 그 세션 동안 2단계를 건너뛴다 | AI 추정 배지 | vision-ai-engineer |
+| F8a | 같은 장면인데 그릇이 안 보임(`ratio_assumed`) | 다 먹음(0)으로 미리 고름 | 노란 안내 "그릇이 안 보여서 다 드신 걸로 했어요. 아니면 바꿔 주세요", 저장 허용 | vision-ai-engineer, frontend-dev |
 | F8 | 신뢰도 낮음(`confidence<0.6`), 매칭 실패·판단 불확실(`null`) | `needs_review=true`. null은 합계 표시에서 0으로 계산하되 저장은 막는다(2026-10-27) | 맨 앞에 정렬, 노란 테두리, "사진이 먹기 전과 달라 보여요. 다시 찍거나 남긴 양을 직접 골라 주세요", [먹은 후 사진 다시 찍기] | vision-ai-engineer, frontend-dev |
 | F9 | 느린 응답 | 시도당 40초 제한, 시간 초과는 재시도하지 않음 | 10초에 "조금 더 걸려요" + "직접 입력" 링크 | frontend-dev |
 | F10 | 일일 한도 소진(재시도 뒤에도 429) | 그 세션은 "AI 한도 모드": 촬영 대신 직접 입력을 먼저 보여 준다 | "오늘 AI 분석 한도를 다 썼어요. 16:00(11/2부터는 17:00)에 다시 열려요" + 직접 입력 | frontend-dev |
@@ -1083,6 +1085,7 @@ U0·U3·U5는 결정 내용으로 바꿨다. 나머지(U1·U2·U4·U6·U7·U8)�
 | 날짜 | 변경 내용 | 절 | 영향을 받는 에이전트 |
 | --- | --- | --- | --- |
 | 2026-10-26 | 초안 작성(0단계). 리더 요청에 따라 식약처 DB 처리 규칙(100ml 행, 탄·지 빈 값, 같은 이름 중복, 이름 매칭, 앱 JSON 필드·크기)을 반영하고 analysis-schema v2(선택 필드 `per_100g_fill`·`db_name`·`db_match`)를 제안. 공식 문서 확인 결과(그라운딩 무료 등급 미제공, App Check 자동 강제, AI 모니터링 프롬프트 저장, 무료 등급 데이터 약관)를 7.2절 위험과 부록 A에 기록 | 전체 | vision-ai-engineer, frontend-dev, firebase-engineer, qa-integrator, pitch-writer |
+| 2026-10-27 | (리더, 사용자 결정) 호출 B b3: `same_scene`과 항목 `match`(same·not_visible·different·unclear). 같은 장면에서 그릇이 안 보이면 다 먹음(0)으로 미리 고르고 `MealItem.ratio_assumed: "not_visible"`, 노란 안내·저장 허용. 다른 장면·다른 음식·불확실은 null·저장 막음 유지 | 2.3, 5.1 | vision-ai-engineer, frontend-dev, qa-integrator |
 | 2026-10-27 | (리더, 사용자 결정) 달력 M18·S10(무료, 3단계 조각 3-1: 목표 대비 비교 다음, 주간 추이 앞). 남긴 비율 null은 저장을 막고 안내·먹은 후 다시 찍기(2.3, F8), Gemini 메모는 한국어만(a4·b2, `koreanText.ts`), 분당 429 재시도 없음(4.2, F1, 5.2.2), 화면 파일 불러오기 실패 한국어 안내·배포본 1회 자동 새로고침(F16). 조각 순서 1 → 1-2 → 2 → 3 → 3-1 달력 → 4 주간 추이 → 5 배포 | 1.1, 1.3, 2.2, 2.3, 4.2, 4.7, 5.1, 5.2.2, 6.1 | vision-ai-engineer, firebase-engineer, frontend-dev, qa-integrator, pitch-writer |
 | 2026-10-27 | (리더) 3단계 조각 2: `goal.ts` 구현 메모(반올림 값 반환, 반올림 하한 비교, 미성년 goal 정규화), 저장 함수 `data/goals.ts` 시그니처, 오류 코드 `GOAL_*`, 규칙 `target_kcal` 하한 800 → 300(정상 값 거부 방지) | 4.4, 4.7 | firebase-engineer, frontend-dev, qa-integrator |
 | 2026-10-27 | (리더, 사용자 결정) 호출 A·B 시도당 제한 20초 → 40초, 시간 초과는 재시도하지 않음(네트워크·5xx·분당 429·형식 오류만 재시도). S8에서 브라우저 뒤로 가기도 S7로(상세에서 push로 들어와 나갈 때 한 칸 뒤로, 주소로 바로 열었으면 replace) | 2.2, 4.2, 5.1 | vision-ai-engineer, frontend-dev, qa-integrator |
