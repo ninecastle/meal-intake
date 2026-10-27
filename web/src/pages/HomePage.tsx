@@ -2,24 +2,22 @@
 // div.screen > .sticky(.topbar·.datestrip, HomeDateBar) → section.band.sky "나의 하루"(DayBand) → section.band.lime "식사"(MealBand)
 // → section.band.peach "나의 변화"(ChangeBand). 숫자만 실제 데이터, ?date=YYYY-MM-DD.
 // 데이터: subscribeDay(그날 done 합산, 클라이언트), subscribePending(날짜와 무관한 이어 할 기록), subscribeGoal·subscribeGoalForDate(그날 비교 목표). AI 호출 없음.
-// 시안에 없는 것(리더가 사용자에게 묻는 중)은 components/home의 작은 부품으로 뗐다: (a) HomeFinePrint (b) HomeAccountRow
-// (c) PendingMeals (d) GoalStates (e) DateLimits (f) HomeNotices + 아래 toastText (g) WeightValue.
+// 시안에 없는 상태(2026-10-27 사용자 결정): 이어 할 기록은 그 날짜 끼니 카드 안(MealCard), 목표 없음·정하기 전·초과는 GoalStates,
+// [오늘로]·내일 막기는 DateLimits, 계속 보이는 알림은 띠 맨 위 .callout(HomeNotices), 짧은 알림은 시안 토스트(toastText).
+// 목표 고지·출처 문구·로그아웃·개발 링크는 홈에 두지 않는다(로그아웃·개발 링크는 목표 화면 맨 아래).
 // [한눈에]·[자세히]·[기록하기]·[음식 추천]은 시안처럼 토스트 "준비 중이에요"(1.6초).
 import { useEffect, useState } from 'react'
 import type { User } from 'firebase/auth'
 import { useLocation, useNavigate, useSearchParams } from 'react-router'
 import ChangeBand from '../components/home/ChangeBand'
 import DayBand, { type DayGoalView } from '../components/home/DayBand'
-import { HomeAccountRow } from '../components/home/HomeAccountRow'
 import HomeDateBar from '../components/home/HomeDateBar'
-import { HomeStatusNotes } from '../components/home/HomeNotices'
 import MealBand from '../components/home/MealBand'
 import { formatKcal, isDateKey } from '../components/mealText'
-import { Band, Toast } from '../components/ui'
+import { Toast } from '../components/ui'
 import { subscribeGoal, subscribeGoalForDate, type DatedGoal, type StoredGoal } from '../data/goals'
 import { subscribeDay, subscribePending, type MealWithId } from '../data/meals'
 import type { DaySummary } from '../data/summary'
-import { signOutAndClear } from '../lib/auth'
 import { clearFlash, peekFlash } from '../lib/flash'
 import { toDateKey } from '../lib/time'
 import { beforePhotoStore } from '../photos/beforePhotoStore'
@@ -51,9 +49,7 @@ export default function HomePage({ user }: { user: User }) {
   const [listError, setListError] = useState(false)
   const [day, setDay] = useState<DaySummary | null>(null)
   const [dayErrorKey, setDayErrorKey] = useState<string | null>(null)
-  const [actionError, setActionError] = useState<string | null>(null)
   const [online, setOnline] = useState(() => navigator.onLine)
-  const [loggingOut, setLoggingOut] = useState(false)
   // [한눈에]·[자세히]·[기록하기]: 화면이 아직 없어 "준비 중이에요" 토스트(D5·D6에서 바꾼다)
   const [soon, setSoon] = useState(0)
   // 현재 목표(users/{uid}.goal). undefined = 첫 값 전
@@ -62,7 +58,7 @@ export default function HomePage({ user }: { user: User }) {
   // 보고 있는 날짜의 비교 목표(users/{uid}/goals). forDate가 지금 날짜와 다르면 첫 값 전으로 본다.
   const [dated, setDated] = useState<{ forDate: string; goal: DatedGoal | null } | null>(null)
   const [datedErrorKey, setDatedErrorKey] = useState<string | null>(null)
-  // 목표 설정(S6)에서 저장하고 돌아왔으면 3초 안내(lib/flash, 키는 GoalPage와 같다)
+  // 목표 설정(S6)에서 저장하고 돌아왔으면 1.6초 토스트(lib/flash, 키는 GoalPage와 같다)
   const [goalNotice, setGoalNotice] = useState<'saved' | 'pending' | null>(() =>
     peekFlash('goal:saved') ? 'saved' : peekFlash('goal:pending') ? 'pending' : null,
   )
@@ -87,7 +83,8 @@ export default function HomePage({ user }: { user: User }) {
 
   useEffect(() => {
     if (!saved) return
-    const t = setTimeout(() => setSaved(null), 3000)
+    // 짧은 알림은 시안 토스트 1.6초(2026-10-27 사용자 결정)
+    const t = setTimeout(() => setSaved(null), 1600)
     return () => clearTimeout(t)
   }, [saved])
 
@@ -97,7 +94,7 @@ export default function HomePage({ user }: { user: User }) {
   }, [])
   useEffect(() => {
     if (!goalNotice) return
-    const t = window.setTimeout(() => setGoalNotice(null), 3000)
+    const t = window.setTimeout(() => setGoalNotice(null), 1600)
     return () => window.clearTimeout(t)
   }, [goalNotice])
 
@@ -195,17 +192,6 @@ export default function HomePage({ user }: { user: User }) {
     }
   }, [])
 
-  async function logout() {
-    if (loggingOut) return
-    setLoggingOut(true)
-    try {
-      await signOutAndClear()
-    } catch {
-      setLoggingOut(false)
-      setActionError('로그아웃하지 못했어요. 다시 해 주세요.')
-    }
-  }
-
   const toastText = soon
     ? '준비 중이에요'
     : saved
@@ -224,21 +210,11 @@ export default function HomePage({ user }: { user: User }) {
     <main className="screen enter">
       <HomeDateBar dateKey={dateKey} today={today} />
 
-      <HomeStatusNotes online={online} listError={listError} actionError={actionError} />
+      <DayBand summary={summary} dayError={dayError} isToday={isToday} goal={goalView} online={online} onSoon={showSoon} />
 
-      <DayBand summary={summary} dayError={dayError} isToday={isToday} goal={goalView} onSoon={showSoon} />
-
-      <Band tone="lime" label="식사" title="식사">
-        <MealBand uid={uid} dateKey={dateKey} day={summary} pending={pending} onSoon={showSoon} />
-      </Band>
+      <MealBand uid={uid} dateKey={dateKey} day={summary} pending={pending} listError={listError} onSoon={showSoon} />
 
       <ChangeBand onSoon={showSoon} />
-
-      <HomeAccountRow
-        name={user.displayName ?? user.email ?? '로그인됨'}
-        loggingOut={loggingOut}
-        onLogout={() => void logout()}
-      />
 
       <Toast message={toastText} />
     </main>

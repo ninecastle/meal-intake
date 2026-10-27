@@ -1,12 +1,14 @@
 // 홈 위쪽 고정 줄(조각 D2-S, 시안 home() .sticky > .topbar.pad + .datestrip.pad 마크업·클래스 그대로).
-// 오른쪽 아이콘: cal = 그 날짜가 든 달의 S10 기록 보기(/calendar?month=YYYY-MM), gear = SETTINGS_PATH((b) 부품). 둘 다 push + state.fromHome.
+// 오른쪽 아이콘: cal = 그 날짜가 든 달의 S10 기록 보기(/calendar?month=YYYY-MM), gear = SETTINGS_PATH. 둘 다 push + state.fromHome.
 // 날짜 줄: 양옆 .dside 전날·다음 날(replace 이동), 가운데 .dcenter 날짜(누르면 기록 보기, CLAUDE.md "홈에서 날짜나 달력 아이콘으로 연다") + "오늘" 알약.
 // 오늘이 아닌 날의 [오늘로]와 내일 막기는 (e) 부품(DateLimits).
 import { Link, useNavigate } from 'react-router'
 import { dateKeyLabel, homeHref, shiftDateKey } from '../mealText'
 import { IconButton } from '../ui'
 import { BackToToday, NextDayBlocked } from './DateLimits'
-import { SETTINGS_PATH } from './HomeAccountRow'
+
+/** 톱니(설정) 이동처. 설정 화면(D8)이 생길 때까지 S6 목표 설정(2026-10-27 사용자 결정) */
+const SETTINGS_PATH = '/goal'
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'] as const
 

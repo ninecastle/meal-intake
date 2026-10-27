@@ -6,7 +6,7 @@
 // 방문 기록: 홈에서 push(state.fromHome)로 들어왔으면 저장·‹ 모두 navigate(-1)로 한 칸 돌아가고(같은 화면이 두 번 쌓이지 않게),
 // 주소로 바로 열었으면 홈으로 replace. 저장 안내는 lib/flash로 넘긴다(키 'goal:saved'·'goal:pending'은 HomePage와 같다).
 import { useEffect, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router'
+import { Link, useLocation, useNavigate } from 'react-router'
 import {
   ADULT_AGE,
   INPUT_RANGE,
@@ -22,6 +22,7 @@ import {
 } from '../analysis/goal'
 import { formatKcal } from '../components/mealText'
 import { GoalStoreError, saveGoal, subscribeGoal, type GoalStoreErrorCode, type StoredGoal } from '../data/goals'
+import { signOutAndClear } from '../lib/auth'
 import { setFlash } from '../lib/flash'
 import { Button, IconButton, TopBar } from '../components/ui'
 
@@ -438,6 +439,7 @@ export default function GoalPage({ uid }: { uid: string }) {
             </fieldset>
 
             <p className="text-xs leading-relaxed text-ink-2">{DISCLAIMER}</p>
+            <AccountRow />
           </main>
 
           <footer className="shrink-0 space-y-2 border-t border-line bg-surface px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
@@ -464,6 +466,47 @@ export default function GoalPage({ uid }: { uid: string }) {
             </Button>
           </footer>
         </>
+      )}
+    </div>
+  )
+}
+
+/** 맨 아래 로그아웃(·개발) 줄. 설정 화면(D8)이 생길 때까지 홈에서 옮겨 둔다(2026-10-27 사용자 결정). 동작·오류 처리는 예전 홈 그대로. */
+function AccountRow() {
+  const [loggingOut, setLoggingOut] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  async function logout() {
+    if (loggingOut) return
+    setLoggingOut(true)
+    setError(null)
+    try {
+      await signOutAndClear()
+    } catch {
+      setLoggingOut(false)
+      setError('로그아웃하지 못했어요. 다시 해 주세요.')
+    }
+  }
+  return (
+    <div className="pb-2 text-center text-[13px] text-ink-3">
+      <div className="flex flex-wrap items-center justify-center gap-x-1">
+        {import.meta.env.DEV && (
+          <Link to="/dev" className="focus-ring flex min-h-11 items-center rounded-chip px-2">
+            개발
+          </Link>
+        )}
+        <button
+          type="button"
+          onClick={() => void logout()}
+          disabled={loggingOut}
+          className="focus-ring min-h-11 rounded-chip px-2 underline disabled:opacity-35"
+        >
+          로그아웃
+        </button>
+      </div>
+      {error && (
+        <p role="alert" className="text-peach-deep">
+          {error}
+        </p>
       )}
     </div>
   )

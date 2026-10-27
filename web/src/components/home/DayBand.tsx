@@ -1,16 +1,16 @@
 // 홈 하늘 띠 "나의 하루"(조각 D2-S, 시안 home() section.band.sky 마크업·클래스 그대로):
-// .bandhead(h2 + .seg-mini [한눈에][자세히]) → .summary(.ring 링 R=72 두께 16 + .center, .ratio 탄·단·지) → .bars → .minor → .remain.
-// 숫자만 실제 데이터(그날 done 합산, 그날 목표). 시안처럼 링 가운데 큰 숫자·끼니 kcal·막대 숫자는 쉼표 없이, "목표 N"·남은 양은 쉼표.
+// (알림 .callout) → .bandhead(h2 + .seg-mini [한눈에][자세히]) → .summary(.ring 링 R=72 두께 16 + .center, .ratio 탄·단·지) → .bars → .minor → .remain.
+// 숫자만 실제 데이터(그날 done 합산, 그날 목표). 시안처럼 링 가운데 큰 숫자·막대 숫자는 쉼표 없이, "목표 N"·남은 양은 쉼표.
+// 글자는 시안처럼 한 텍스트 노드로 만든다(노드가 나뉘면 글자 사이 간격이 미세하게 달라진다). 링 진행은 시안과 같이 화면에 보이는 정수 kcal / 목표로 계산한다(stroke-dasharray `${L*frac} ${L}`).
 // 세부 영양소(.minor)는 D4 전이라 "–"(가짜 숫자 금지). 계산은 analysis/goal.ts의 compareToGoal(AI 호출 없음).
-// 목표 없음·정하기 전·초과는 (d) GoalStates, 고지·출처 문구는 (a) HomeFinePrint, 오류·저장 대기는 (f) HomeNotices.
+// 목표 없음·정하기 전·초과는 (d) GoalStates, 계속 보이는 알림은 (f) BandNotices(띠 맨 위 .callout, 2026-10-27 사용자 결정).
 // [한눈에]·[자세히]는 D5 화면이 생길 때까지 부르는 화면이 "준비 중이에요" 토스트를 띄운다(onSoon).
 import { compareToGoal, type GoalTargets } from '../../analysis/goal'
 import type { DaySummary } from '../../data/summary'
 import { formatKcal } from '../mealText'
 import { Band, ChipButton } from '../ui'
-import { GoalGuide, GoalOverRemain, NoGoalRingLabel } from './GoalStates'
-import { HomeFinePrint } from './HomeFinePrint'
-import { DayDataNotes, DayLoadError } from './HomeNotices'
+import { GoalOverRemain, NoGoalRemain } from './GoalStates'
+import { BandNotices } from './HomeNotices'
 
 /** 그날 비교 목표 상태(HomePage가 subscribeGoalForDate·subscribeGoal로 정한다) */
 export type DayGoalView =
@@ -27,6 +27,7 @@ type Props = {
   dayError: boolean
   isToday: boolean
   goal: DayGoalView
+  online: boolean
   onSoon: () => void
 }
 
@@ -44,13 +45,15 @@ const L = 2 * Math.PI * R
 const r1 = (n: number) => Math.round(n * 10) / 10
 
 function Ring({ kcal, target }: { kcal: number; target: number | null }) {
-  const frac = target != null && target > 0 ? Math.min(Math.max(kcal / target, 0), 1) : 0
-  const label = `먹은 양 ${formatKcal(kcal)}kcal${target != null ? `, 목표 ${formatKcal(target)}kcal` : ''}`
+  const k = Math.round(kcal)
+  // 시안 frac=Math.min(t.k/goal.kcal,1)
+  const frac = target != null && target > 0 ? Math.min(Math.max(k / target, 0), 1) : 0
+  const label = `먹은 양 ${formatKcal(k)}kcal${target != null ? `, 목표 ${formatKcal(target)}kcal` : ''}`
   return (
     <div className="ring" role="img" aria-label={label}>
       <svg viewBox="0 0 170 170" aria-hidden="true">
         <circle cx="85" cy="85" r={R} stroke="rgba(31,42,46,.08)" strokeWidth="16" fill="none" />
-        {/* 0kcal이면 둥근 끝이 점으로 남아 그리지 않는다 */}
+        {/* 목표가 없거나 0kcal이면 바탕 원만(둥근 끝이 점으로 남지 않게) */}
         {frac > 0 && (
           <circle
             cx="85"
@@ -65,23 +68,24 @@ function Ring({ kcal, target }: { kcal: number; target: number | null }) {
         )}
       </svg>
       <div className="center" aria-hidden="true">
-        <span className="sub num">{target != null ? `목표 ${formatKcal(target)}` : <NoGoalRingLabel />}</span>
-        <span className="big num">{Math.round(kcal)}</span>
+        <span className="sub num">{`목표 ${target != null ? formatKcal(target) : '–'}`}</span>
+        <span className="big num">{k}</span>
         <span className="unit">kcal</span>
       </div>
     </div>
   )
 }
 
-function Bars({ summary, targets }: { summary: DaySummary; targets: GoalTargets }) {
-  const rows = compareToGoal(summary.totals, targets)
+function Bars({ summary, targets }: { summary: DaySummary; targets: GoalTargets | null }) {
+  const rows = targets ? compareToGoal(summary.totals, targets) : null
   return (
     <div className="bars">
       {MACROS.map(({ k, label, color }) => {
-        const row = rows[k]
-        const over = row.remaining < 0
-        // 시안 Math.min(v/g*100,100). 목표가 0인데 먹었으면 넘은 것으로 꽉 채운다.
-        const pct = over ? 100 : Math.min(Math.max(row.ratio, 0), 1) * 100
+        const eaten = summary.totals[k]
+        const row = rows?.[k]
+        // 시안 Math.min(v/g*100,100). 목표가 0인데 먹었으면 넘은 것으로 꽉 채운다. 목표가 없으면 채움 없음.
+        const pct = row ? (row.remaining < 0 ? 100 : Math.min(Math.max(row.ratio, 0), 1) * 100) : 0
+        const goalText = row ? String(Math.round(row.target)) : '–'
         return (
           <div className="bar" key={k}>
             <label>{label}</label>
@@ -92,12 +96,13 @@ function Bars({ summary, targets }: { summary: DaySummary; targets: GoalTargets 
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={Math.round(pct)}
-              aria-valuetext={`${Math.round(row.eaten)} / ${Math.round(row.target)}g`}
+              aria-valuetext={`${Math.round(eaten)} / ${goalText}g`}
             >
-              <div className="fill" style={{ width: `${pct}%`, background: color }} />
+              {row && <div className="fill" style={{ width: `${pct}%`, background: color }}></div>}
             </div>
             <span className="num">
-              {Math.round(row.eaten)} <span>/ {Math.round(row.target)}g</span>
+              {`${Math.round(eaten)} `}
+              <span>{`/ ${goalText}g`}</span>
             </span>
           </div>
         )
@@ -113,7 +118,7 @@ function Remain({ summary, targets }: { summary: DaySummary; targets: GoalTarget
   if (overText !== '0') return <GoalOverRemain overText={overText} />
   return (
     <div className="remain">
-      <span className="num">{formatKcal(Math.max(left, 0))} kcal</span> 더 먹을 수 있어요
+      <span className="num">{`${formatKcal(Math.max(left, 0))} kcal`}</span> 더 먹을 수 있어요
     </div>
   )
 }
@@ -131,13 +136,21 @@ function Minor() {
   )
 }
 
-export default function DayBand({ summary, dayError, isToday, goal, onSoon }: Props) {
+export default function DayBand({ summary, dayError, isToday, goal, online, onSoon }: Props) {
   const targets = goal.kind === 'targets' ? goal.targets : null
+  const notices = [
+    !online && '오프라인이에요. 기록은 연결되면 저장돼요.',
+    dayError && '요약을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.',
+    goal.kind === 'error' && '목표를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.',
+    summary?.hasPendingWrites && '저장 대기 중이에요. 연결되면 올라가요.',
+    summary?.incompleteMacros && '일부 음식의 탄·단·지가 빠져 있어요.',
+  ]
   return (
     <Band
       tone="sky"
       label={isToday ? '오늘 요약' : '그날 요약'}
       title="나의 하루"
+      notice={<BandNotices items={notices} />}
       action={
         <div className="seg-mini">
           <ChipButton onClick={onSoon}>한눈에</ChipButton>
@@ -147,7 +160,6 @@ export default function DayBand({ summary, dayError, isToday, goal, onSoon }: Pr
         </div>
       }
     >
-      {dayError && <DayLoadError />}
       {summary ? (
         <>
           <div className="summary">
@@ -165,11 +177,13 @@ export default function DayBand({ summary, dayError, isToday, goal, onSoon }: Pr
               ))}
             </div>
           </div>
-          {targets && <Bars summary={summary} targets={targets} />}
+          <Bars summary={summary} targets={targets} />
           <Minor />
-          {targets ? <Remain summary={summary} targets={targets} /> : <GoalGuide goal={goal} />}
-          <DayDataNotes incompleteMacros={summary.incompleteMacros} hasPendingWrites={summary.hasPendingWrites} />
-          <HomeFinePrint goal={targets != null} source={summary.meals.length > 0} />
+          {targets ? (
+            <Remain summary={summary} targets={targets} />
+          ) : (
+            <NoGoalRemain kind={goal.kind === 'targets' ? 'loading' : goal.kind} />
+          )}
         </>
       ) : (
         !dayError && <p style={{ padding: '64px 0', textAlign: 'center', color: 'var(--ink-2)' }}>불러오는 중…</p>

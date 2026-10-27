@@ -14,9 +14,11 @@ type Props = {
   id?: string
   /** 시안 section aria-label */
   label?: string
+  /** 띠 .pad 첫 줄(.bandhead 위)에 둘 알림(홈 (f) BandNotices). 없으면 아무것도 그리지 않는다 */
+  notice?: ReactNode
 }
 
-export function Band({ tone, title, action, children, className, id, label }: Props) {
+export function Band({ tone, title, action, children, className, id, label, notice }: Props) {
   const headingId = useId()
   const hasTitle = title != null && title !== ''
   return (
@@ -27,6 +29,7 @@ export function Band({ tone, title, action, children, className, id, label }: Pr
       className={cx('band', tone, className)}
     >
       <div className="pad">
+        {notice}
         {(hasTitle || action != null) && (
           <div className="bandhead">
             {hasTitle && <h2 id={headingId}>{title}</h2>}
