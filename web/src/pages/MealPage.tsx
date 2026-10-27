@@ -2,7 +2,9 @@
 // div.screen > .mealhero(.topbar 닫기·제목 "점심 N", .art 큰 끼니 그림, .cam → 식사 기록 시트) → .sheetbody.pad(.mtotal 총 kcal·[시간 입력]·[자세히],
 // .stack·.legend 탄단지, .foods) → .bottom .inner([음식 추가]·[수정 완료]).
 // 사용자가 고른 변경(시안과 다르게, 2026-10-27): 먹은 시간은 .timebox 줄 대신 [시간 입력] 칩 글자("10:47"), 음식 이름은 foodName(DB 표기 정리),
-// 탄단지 막대 안쪽 끝은 거의 수직(index.css .stack).
+// 탄단지 막대 안쪽 끝은 거의 수직(index.css .stack). 같은 사진(같은 기록)에서 나온 음식은 한 묶음: 묶음마다 왼쪽 4px 세로 줄
+// (끝난 기록은 그 끼니 카드 색, 먹은 후 사진·결과 확인을 기다리는 묶음은 ink-3 회색), 묶음 사이 14px(사용자 선택 C, 모양 _workspace/design/mock/d3_group_C.png).
+// 기다리는 묶음은 묶음 전체가 한 버튼(먹은 후 시트 또는 결과 화면), 끝난 묶음은 음식 줄마다 수정 화면.
 // 데이터(AI 호출 없음): subscribeMealsFor(그 날짜·끼니 모든 상태 기록), subscribeMealTimes(하루 문서 mealTimes). 합계는 done 기록만(클라이언트).
 // 사용자 결정(2026-10-27, CLAUDE.md 디자인 기준 "끼니 화면"):
 // - 모든 기록의 음식을 한 목록으로. done 음식 줄: 먹은 양 kcal·출처 배지·설명 줄(먹기 전 무게·남긴 비율·인원), 누르면 그 기록 수정 화면,
@@ -12,7 +14,7 @@
 // - 촬영·분석은 이 화면이 맡는다(useBeforeFlow·useAfterFlow, 카메라는 useCaptureSource 하나). 먹기 전 분석이 끝나면 이 화면에 머문다.
 // - [수정 완료]·닫기는 홈(그 날짜)으로. [수정 완료]는 "저장했어요" 토스트(바뀐 내용은 이미 바로 저장됨).
 // 들어오는 state: { fromHome?: true(홈에서 push → 나갈 때 뒤로), openAfter?: 기록 id(그 시트를 바로 연다), openRecord?: true(식사 기록 시트) }.
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Navigate, useLocation, useNavigate, useParams } from 'react-router'
 import { buildAnalysis } from '../analysis/compute'
 import { useCaptureSource } from '../components/capture/useCaptureSource'
@@ -36,6 +38,14 @@ import { clearFlash, peekFlash, setFlash } from '../lib/flash'
 import { toDateKey } from '../lib/time'
 import type { MealItem } from '../types/analysis'
 
+/** 시안 meals[k].card(홈 끼니 카드 색). 끝난 기록 묶음의 왼쪽 세로 줄 색 */
+const GROUP_LINE: Record<MealType, string> = {
+  breakfast: 'var(--sky)',
+  lunch: 'var(--lime)',
+  dinner: 'var(--peach)',
+  snack: 'var(--butter)',
+}
+
 /** 시안 meals[k].color(끼니 화면 위쪽 바탕) */
 const HERO_BG: Record<MealType, string> = {
   breakfast: 'var(--sky-soft)',
@@ -52,8 +62,28 @@ type Row = {
   src: string | null
   desc: string
   kcal: number | null
-  onOpen: () => void
+  /** 끝난 기록의 음식 줄만(수정 화면). 기다리는 묶음은 묶음 전체가 누르기를 받는다 */
+  onOpen?: () => void
   onDelete?: () => void
+}
+
+/** 같은 기록(같은 사진)에서 나온 음식 묶음 */
+type Group = { key: string; done: boolean; rows: Row[]; onOpen?: () => void; label?: string }
+
+/** div를 버튼처럼(Enter·Space). 안쪽 X 버튼의 키 입력은 그 버튼이 받는다 */
+function pressable(onPress: () => void, label?: string) {
+  return {
+    role: 'button',
+    tabIndex: 0,
+    'aria-label': label,
+    onClick: onPress,
+    onKeyDown: (e: KeyboardEvent<HTMLDivElement>) => {
+      if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+        e.preventDefault()
+        onPress()
+      }
+    },
+  } as const
 }
 
 type EntryState = { fromHome?: unknown; openAfter?: unknown; openRecord?: unknown }
@@ -260,11 +290,13 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
     return { kcal: t.kcal, carbs_g: r1(t.carbs_g), protein_g: r1(t.protein_g), fat_g: r1(t.fat_g) }
   }, [done])
 
-  const rows: Row[] = []
+  const groups: Group[] = []
   for (const m of meals ?? []) {
     if (m.status === 'done' && m.analysis) {
-      for (const it of m.analysis.items) {
-        rows.push({
+      groups.push({
+        key: m.id,
+        done: true,
+        rows: m.analysis.items.map((it) => ({
           key: `${m.id}/${it.id}`,
           name: foodName(it.name),
           src: sourceLabel(it),
@@ -272,25 +304,41 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
           kcal: Math.round(it.consumed.kcal),
           onOpen: () => navigate(`/meal/${m.id}/edit`, { state: { fromMeal: true } }),
           onDelete: () => void removeItem(m, it),
-        })
-      }
+        })),
+      })
     } else if (m.status === 'awaiting_after' && m.beforeAnalysis) {
-      for (const it of m.beforeAnalysis.items) {
-        rows.push({ key: `${m.id}/${it.id}`, name: foodName(it.name), src: null, desc: '먹은 후 사진 기다림', kcal: null, onOpen: () => openAfter(m.id) })
-      }
+      const rows = m.beforeAnalysis.items.map((it) => ({
+        key: `${m.id}/${it.id}`,
+        name: foodName(it.name),
+        src: null,
+        desc: '먹은 후 사진 기다림',
+        kcal: null,
+      }))
+      groups.push({
+        key: m.id,
+        done: false,
+        rows,
+        onOpen: () => openAfter(m.id),
+        label: `${rows.map((r) => r.name).join(', ')}: 먹은 후 사진 기다림. 남은 음식 알려 주기`,
+      })
     } else if (m.status === 'needs_review' && m.analysis) {
-      for (const it of m.analysis.items) {
-        rows.push({
-          key: `${m.id}/${it.id}`,
-          name: foodName(it.name),
-          src: sourceLabel(it),
-          desc: '결과 확인 기다림',
-          kcal: null,
-          onOpen: () => navigate(`/meal/${m.id}/review`, { replace: true }),
-        })
-      }
+      const rows = m.analysis.items.map((it) => ({
+        key: `${m.id}/${it.id}`,
+        name: foodName(it.name),
+        src: sourceLabel(it),
+        desc: '결과 확인 기다림',
+        kcal: null,
+      }))
+      groups.push({
+        key: m.id,
+        done: false,
+        rows,
+        onOpen: () => navigate(`/meal/${m.id}/review`, { replace: true }),
+        label: `${rows.map((r) => r.name).join(', ')}: 결과 확인 기다림. 결과 화면 열기`,
+      })
     }
   }
+  const rowCount = groups.reduce((n, g) => n + g.rows.length, 0)
 
   const label = MEAL_TYPE_LABEL[meal]
   const time = times[meal]
@@ -308,7 +356,7 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
             <h1>
               {`${label} `}
               <span className="num" style={{ color: 'var(--ink-3)' }}>
-                {rows.length}
+                {rowCount}
               </span>
             </h1>
             <div style={{ width: 44 }}></div>
@@ -378,42 +426,45 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
               </div>
             </>
           )}
-          <div className="foods">
-            {meals === null && !loadError ? null : rows.length > 0 ? (
-              rows.map((r) => (
+          <div className="foods" style={{ gap: 14 }}>
+            {meals === null && !loadError ? null : groups.length > 0 ? (
+              groups.map((g) => (
                 <div
-                  key={r.key}
-                  className="food"
-                  role="button"
-                  tabIndex={0}
-                  style={{ cursor: 'pointer' }}
-                  onClick={r.onOpen}
-                  onKeyDown={(e) => {
-                    if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
-                      e.preventDefault()
-                      r.onOpen()
-                    }
+                  key={g.key}
+                  style={{
+                    borderLeft: `4px solid ${g.done ? GROUP_LINE[meal] : 'var(--ink-3)'}`,
+                    paddingLeft: 12,
+                    ...(g.onOpen ? { cursor: 'pointer' } : {}),
                   }}
+                  {...(g.onOpen ? pressable(g.onOpen, g.label) : {})}
                 >
-                  <div>
-                    <div className="fn">
-                      {r.name}
-                      {r.src && <span className="srcb">{r.src}</span>}
+                  {g.rows.map((r) => (
+                    <div
+                      key={r.key}
+                      className="food"
+                      {...(r.onOpen ? { ...pressable(r.onOpen), style: { cursor: 'pointer' } } : {})}
+                    >
+                      <div>
+                        <div className="fn">
+                          {r.name}
+                          {r.src && <span className="srcb">{r.src}</span>}
+                        </div>
+                        <div className="fs">{r.desc}</div>
+                      </div>
+                      <span className="num">{r.kcal == null ? '–' : `${r.kcal}kcal`}</span>
+                      {r.onDelete && (
+                        <IconButton
+                          icon="close"
+                          label={`${r.name} 삭제`}
+                          style={{ width: 36, height: 36 }}
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            r.onDelete?.()
+                          }}
+                        />
+                      )}
                     </div>
-                    <div className="fs">{r.desc}</div>
-                  </div>
-                  <span className="num">{r.kcal == null ? '–' : `${r.kcal}kcal`}</span>
-                  {r.onDelete && (
-                    <IconButton
-                      icon="close"
-                      label={`${r.name} 삭제`}
-                      style={{ width: 36, height: 36 }}
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        r.onDelete?.()
-                      }}
-                    />
-                  )}
+                  ))}
                 </div>
               ))
             ) : (
@@ -425,7 +476,7 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
         </div>
         <div className="bottom">
           <div className="inner pad">
-            {rows.length > 0 ? (
+            {rowCount > 0 ? (
               <>
                 <button type="button" className="btn sky narrow" onClick={openRecord}>
                   음식 추가
