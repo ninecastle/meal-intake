@@ -5,7 +5,7 @@
 // 시안에 없는 상태(2026-10-27 사용자 결정): 이어 할 기록은 그 날짜 끼니 카드 안(MealCard), 목표 없음·정하기 전·초과는 GoalStates,
 // [오늘로]·내일 막기는 DateLimits, 계속 보이는 알림은 띠 맨 위 .callout(HomeNotices), 짧은 알림은 시안 토스트(toastText).
 // 목표 고지·출처 문구·로그아웃·개발 링크는 홈에 두지 않는다(로그아웃·개발 링크는 목표 화면 맨 아래).
-// [한눈에]·[자세히]는 D5 화면(/glance·/detail)으로, [기록하기]·[음식 추천]은 시안처럼 토스트 "준비 중이에요"(1.6초).
+// [한눈에]·[자세히]는 D5 화면(/glance·/detail)으로, [음식 추천]은 시안처럼 토스트 "준비 중이에요"(1.6초). 나의 변화 [기록하기]는 D6 체중 기록 시트(ChangeBand).
 import { useEffect, useState } from 'react'
 import type { User } from 'firebase/auth'
 import { useLocation, useNavigate, useSearchParams } from 'react-router'
@@ -50,8 +50,10 @@ export default function HomePage({ user }: { user: User }) {
   const [day, setDay] = useState<DaySummary | null>(null)
   const [dayErrorKey, setDayErrorKey] = useState<string | null>(null)
   const [online, setOnline] = useState(() => navigator.onLine)
-  // [한눈에]·[자세히]·[기록하기]: 화면이 아직 없어 "준비 중이에요" 토스트(D5·D6에서 바꾼다)
+  // [음식 추천]·식단 앨범: 화면이 아직 없어 "준비 중이에요" 토스트
   const [soon, setSoon] = useState(0)
+  // 나의 변화(D6) 짧은 알림("체중을 기록했어요" 등). at이 바뀌면 1.6초를 새로 센다
+  const [note, setNote] = useState<{ text: string; at: number } | null>(null)
   // 현재 목표(users/{uid}.goal). undefined = 첫 값 전
   const [goal, setGoal] = useState<StoredGoal | null | undefined>(undefined)
   const [goalError, setGoalError] = useState(false)
@@ -105,6 +107,12 @@ export default function HomePage({ user }: { user: User }) {
     const t = window.setTimeout(() => setGoalNotice(null), 1600)
     return () => window.clearTimeout(t)
   }, [goalNotice])
+
+  useEffect(() => {
+    if (!note) return
+    const t = window.setTimeout(() => setNote(null), 1600)
+    return () => window.clearTimeout(t)
+  }, [note])
 
   useEffect(() => {
     if (!soon) return
@@ -202,7 +210,9 @@ export default function HomePage({ user }: { user: User }) {
 
   const toastText = soon
     ? '준비 중이에요'
-    : saved
+    : note
+      ? note.text
+      : saved
       ? `저장했어요 · ${formatKcal(saved.consumedKcal)}kcal${saved.dateKey !== today ? ` (${shortDate(saved.dateKey)})` : ''}`
       : mealNotice
         ? '저장했어요'
@@ -232,7 +242,7 @@ export default function HomePage({ user }: { user: User }) {
 
       <MealBand uid={uid} dateKey={dateKey} day={summary} pending={pending} listError={listError} onSoon={showSoon} />
 
-      <ChangeBand onSoon={showSoon} />
+      <ChangeBand uid={uid} dateKey={dateKey} today={today} goal={goal} onToast={(text) => setNote({ text, at: Date.now() })} />
 
       <Toast message={toastText} />
     </main>

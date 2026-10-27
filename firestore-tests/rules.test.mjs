@@ -1,4 +1,4 @@
-// firestore.rules v6 테스트(@firebase/rules-unit-testing + node:test).
+// firestore.rules v7 테스트(@firebase/rules-unit-testing + node:test).
 // 실행: firestore-tests 폴더에서 `npm test` (Firestore 에뮬레이터를 띄워 실행, JDK 21+ 필요, firebase-tools 15 기준).
 // 이미 에뮬레이터가 떠 있으면 `npm run test:running`.
 // 실제 프로젝트는 건드리지 않는다(demo- 프로젝트 ID). AI 호출 없음.
@@ -11,6 +11,7 @@ import {
   arrayUnion,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -744,5 +745,84 @@ describe('하루 문서 끼니별 먹은 시간(mealTimes, 규칙 v5, 디자인 
     await assertFails(setTimes(alice(), { dinner: '19:05' }))
     // 틀린 값을 올바른 값으로 덮어쓰면 허용
     await assertSucceeds(setTimes(alice(), { lunch: '12:40', dinner: '19:05' }))
+  })
+})
+
+describe('체중 기록·목표 몸무게(규칙 v7, 디자인 조각 D6)', () => {
+  const USER = 'users/alice'
+  const wPath = (key, uid = 'alice') => `users/${uid}/weights/${key}`
+  /** web/src/data/weights.ts와 같은 쓰기: setDoc 덮어쓰기 + serverTimestamp */
+  const setW = (fs, key, kg, extra = {}) => setDoc(doc(fs, wPath(key)), { dateKey: key, kg, updatedAt: serverTimestamp(), ...extra })
+  const readUser = async () => (await getDoc(doc(alice(), USER))).data()
+
+  test('본인: 기록 → 같은 날 덮어쓰기 → 읽기 → 지우기, 경계값 30·250·소수', async () => {
+    const fs = alice()
+    await assertSucceeds(setW(fs, '2026-10-28', 58.4))
+    await assertSucceeds(setW(fs, '2026-10-28', 58.1))
+    const snap = await assertSucceeds(getDoc(doc(fs, wPath('2026-10-28'))))
+    assert.equal(snap.data().kg, 58.1)
+    assert.deepEqual(Object.keys(snap.data()).sort(), ['dateKey', 'kg', 'updatedAt'])
+    await assertSucceeds(setW(fs, '2026-10-01', 30))
+    await assertSucceeds(setW(fs, '2026-10-02', 250))
+    await assertSucceeds(deleteDoc(doc(fs, wPath('2026-10-28'))))
+  })
+
+  test('지난 기록·최근 기록 조회(dateKey 범위 + 내림차순 + limit 1)', async () => {
+    await seed(wPath('2026-10-20'), { dateKey: '2026-10-20', kg: 59, updatedAt: serverTimestamp() })
+    await seed(wPath('2026-10-25'), { dateKey: '2026-10-25', kg: 58.7, updatedAt: serverTimestamp() })
+    await seed(wPath('2026-10-28'), { dateKey: '2026-10-28', kg: 58.4, updatedAt: serverTimestamp() })
+    const col = collection(alice(), 'users/alice/weights')
+    const before = await assertSucceeds(getDocs(query(col, where('dateKey', '<', '2026-10-28'), orderBy('dateKey', 'desc'), limit(1))))
+    assert.deepEqual(before.docs.map((d) => d.id), ['2026-10-25'])
+    const latest = await assertSucceeds(getDocs(query(col, where('dateKey', '<=', '2026-10-28'), orderBy('dateKey', 'desc'), limit(1))))
+    assert.deepEqual(latest.docs.map((d) => d.data().kg), [58.4])
+  })
+
+  test('남의 uid·미로그인: 읽기·쓰기·지우기·조회 거부', async () => {
+    await seed(wPath('2026-10-28'), { dateKey: '2026-10-28', kg: 58.4, updatedAt: serverTimestamp() })
+    for (const fs of [db('bob'), db(null)]) {
+      await assertFails(getDoc(doc(fs, wPath('2026-10-28'))))
+      await assertFails(setW(fs, '2026-10-28', 60))
+      await assertFails(deleteDoc(doc(fs, wPath('2026-10-28'))))
+      await assertFails(getDocs(query(collection(fs, 'users/alice/weights'), orderBy('dateKey', 'desc'), limit(1))))
+    }
+  })
+
+  test('kg 범위·형식 거부: 29.9·250.1·0·음수·문자열·null·빠짐', async () => {
+    for (const v of [29.9, 250.1, 0, -58, '58.4', null, { kg: 58 }]) {
+      await assertFails(setW(alice(), '2026-10-28', v))
+    }
+    await assertFails(setDoc(doc(alice(), wPath('2026-10-28')), { dateKey: '2026-10-28', updatedAt: serverTimestamp() }))
+  })
+
+  test('dateKey 불일치·형식 오류·모르는 키·updatedAt 위조 거부', async () => {
+    await assertFails(setDoc(doc(alice(), wPath('2026-10-28')), { dateKey: '2026-10-27', kg: 58, updatedAt: serverTimestamp() }))
+    await assertFails(setDoc(doc(alice(), wPath('20261028')), { dateKey: '20261028', kg: 58, updatedAt: serverTimestamp() }))
+    await assertFails(setW(alice(), '2026-10-28', 58, { photo: 'data:image/jpeg;base64,AAAA' }))
+    await assertFails(setW(alice(), '2026-10-28', 58, { updatedAt: Timestamp.fromDate(new Date('2026-01-01')) }))
+  })
+
+  test('목표 몸무게 targetWeightKg: 본인 생성·바꾸기·지우기(deleteField), prefs와 함께', async () => {
+    await assertSucceeds(setDoc(doc(alice(), USER), { targetWeightKg: 54 }, { merge: true }))
+    await assertSucceeds(setDoc(doc(alice(), USER), { prefs: { shareEaters: true } }, { merge: true }))
+    await assertSucceeds(setDoc(doc(alice(), USER), { targetWeightKg: 54.5 }, { merge: true }))
+    assert.deepEqual(await readUser(), { prefs: { shareEaters: true }, targetWeightKg: 54.5 })
+    await assertSucceeds(setDoc(doc(alice(), USER), { targetWeightKg: deleteField() }, { merge: true }))
+    assert.deepEqual(await readUser(), { prefs: { shareEaters: true } })
+    for (const v of [29.9, 250.1, '54', null, true]) {
+      await assertFails(setDoc(doc(alice(), USER), { targetWeightKg: v }, { merge: true }))
+    }
+    await assertFails(setDoc(doc(db('bob'), USER), { targetWeightKg: 54 }, { merge: true }))
+  })
+
+  test('prefs.weightAskSkipKg: 본인 쓰기 허용, 범위·형식 거부', async () => {
+    await assertSucceeds(setDoc(doc(alice(), USER), { prefs: { shareEaters: false, weightAskSkipKg: 56.2 } }, { merge: true }))
+    await assertSucceeds(setDoc(doc(alice(), USER), { prefs: { weightAskSkipKg: 55 } }, { merge: true }))
+    assert.deepEqual((await readUser()).prefs, { shareEaters: false, weightAskSkipKg: 55 })
+    await assertSucceeds(setDoc(doc(alice(), USER), { prefs: { weightAskSkipKg: deleteField() } }, { merge: true }))
+    assert.deepEqual((await readUser()).prefs, { shareEaters: false })
+    for (const v of [10, 300, '55', null, [55]]) {
+      await assertFails(setDoc(doc(alice(), USER), { prefs: { weightAskSkipKg: v } }, { merge: true }))
+    }
   })
 })

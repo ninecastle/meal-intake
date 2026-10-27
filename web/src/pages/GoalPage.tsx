@@ -5,7 +5,8 @@
 // 처음 열 때 subscribeGoal의 첫 값으로만 폼을 채운다(그 뒤 스냅샷은 편집 중인 폼을 덮지 않는다).
 // 방문 기록: 홈에서 push(state.fromHome)로 들어왔으면 저장·‹ 모두 navigate(-1)로 한 칸 돌아가고(같은 화면이 두 번 쌓이지 않게),
 // 주소로 바로 열었으면 홈으로 replace. 저장 안내는 lib/flash로 넘긴다(키 'goal:saved'·'goal:pending'은 HomePage와 같다).
-// 설정 화면(D8)이 생길 때까지 맨 아래(로그아웃 위)에 설정 줄을 둔다: "같이 먹은 사람 고르기"(2026-10-27 사용자가 고른 변경, 기본 꺼짐, 계정에 저장).
+// 설정 화면(D8)이 생길 때까지 맨 아래(로그아웃 위)에 설정 줄을 둔다: "같이 먹은 사람 고르기"(2026-10-27 사용자가 고른 변경, 기본 꺼짐, 계정에 저장),
+// "목표 몸무게"(D6, 2026-10-28 사용자 결정, 시안 설정 "내 목표" 줄 → 목표 몸무게 시트, users/{uid}.targetWeightKg).
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import {
@@ -24,6 +25,9 @@ import {
 import { formatKcal } from '../components/mealText'
 import { GoalStoreError, saveGoal, subscribeGoal, type GoalStoreErrorCode, type StoredGoal } from '../data/goals'
 import { setShareEaters, subscribePrefs, type Prefs } from '../data/prefs'
+import { setTargetWeight, subscribeWeightProfile, type WeightProfile } from '../data/weights'
+import { KgSheet } from '../components/home/WeightSheets'
+import { formatKg } from '../lib/weight'
 import { signOutAndClear } from '../lib/auth'
 import { setFlash } from '../lib/flash'
 import { Button, IconButton, TopBar } from '../components/ui'
@@ -478,8 +482,17 @@ export default function GoalPage({ uid }: { uid: string }) {
 /** 설정 화면(D8)이 생길 때까지 목표 화면에 두는 설정 줄. 시안 설정 화면의 .slist·.sgroup·.srow·.toggle 모양 그대로 */
 function SettingsRows({ uid }: { uid: string }) {
   const [prefs, setPrefs] = useState<Prefs | null>(null)
+  const [weight, setWeight] = useState<WeightProfile | null>(null)
+  const [targetOpen, setTargetOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
   useEffect(() => subscribePrefs(uid, setPrefs), [uid])
+  useEffect(() => subscribeWeightProfile(uid, setWeight), [uid])
+  const targetKg = weight?.targetKg ?? null
+  function saveTarget(kg: number | null) {
+    setTargetOpen(false)
+    setError(null)
+    setTargetWeight(uid, kg).catch(() => setError('목표 몸무게를 저장하지 못했어요. 잠시 뒤 다시 해 주세요.'))
+  }
   const on = prefs?.shareEaters === true
   function toggle() {
     if (!prefs) return
@@ -489,6 +502,11 @@ function SettingsRows({ uid }: { uid: string }) {
   }
   return (
     <div className="slist">
+      <div className="sgroup">내 목표</div>
+      <button type="button" className="srow" onClick={() => setTargetOpen(true)} disabled={!weight}>
+        <span>목표 몸무게</span>
+        <small>{targetKg === null ? '– ›' : `${formatKg(targetKg)}kg ›`}</small>
+      </button>
       <div className="sgroup">기록</div>
       <button type="button" className="srow" onClick={toggle} disabled={!prefs}>
         <span>같이 먹은 사람 고르기</span>
@@ -500,6 +518,16 @@ function SettingsRows({ uid }: { uid: string }) {
           {error}
         </p>
       )}
+      <KgSheet
+        open={targetOpen}
+        onClose={() => setTargetOpen(false)}
+        title="목표 몸무게"
+        sub="정해 두면 목표까지 남은 무게를 알려 드려요"
+        value={targetKg}
+        deleteLabel={targetKg === null ? undefined : '목표 지우기'}
+        onSave={(kg) => saveTarget(kg)}
+        onDelete={() => saveTarget(null)}
+      />
     </div>
   )
 }
