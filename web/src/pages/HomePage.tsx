@@ -1,8 +1,10 @@
 // S1 홈 = 하루 요약(3단계 조각 1). 위에서부터 사용자 줄, 날짜 이동(◀ 전날 · 날짜(오늘이 아니면 [오늘로]) · 다음 날 ▶, ?date=YYYY-MM-DD), 저장·오프라인 안내,
 // 이어 할 기록 카드(awaiting_after·needs_review, 날짜와 무관하게 전부), 그날 합계 kcal·탄·단·지(subscribeDay, 클라이언트 합산),
 // 끼니별 기록 목록(누르면 S7 /meal/:mealId), 영양 정보 출처, 아래 고정 [식사 기록]·[직접 입력](보고 있는 날짜로).
-// 목표(3단계 조각 2): 합계 아래에 목표가 없으면 "목표 설정하기" 카드, 있으면 "하루 목표 ○○kcal · 수정" 줄(둘 다 /goal, push + state.fromHome).
-// 첫 값 전에는 아무것도 보이지 않는다(깜빡임 방지). 목표 비교 막대는 다음 조각에서 더한다.
+// 목표(3단계 조각 2·3): 합계 아래 목표 영역. 그날 목표(subscribeGoalForDate, dateKey <= 그날 가운데 가장 늦은 기록)가 있으면
+// "하루 목표|이 날 목표 ○○kcal" + [목표 수정] + GoalBars(먹은 양/목표 막대·남은 양) + 고지. 그날 기록이 없으면
+// 현재 목표도 없을 때 "목표 설정하기" 카드, 현재 목표는 있으면 "이 날은 목표를 정하기 전이라 합계만 보여요".
+// 링크는 모두 /goal(push + state.fromHome). 그날 목표와 합계의 첫 값 전에는 비운다(깜빡임 방지).
 import { useEffect, useState } from 'react'
 import type { User } from 'firebase/auth'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
@@ -18,7 +20,8 @@ import {
   isDateKey,
   shiftDateKey,
 } from '../components/mealText'
-import { subscribeGoal, type StoredGoal } from '../data/goals'
+import GoalBars from '../components/GoalBars'
+import { subscribeGoal, subscribeGoalForDate, type DatedGoal, type StoredGoal } from '../data/goals'
 import { deleteMeal, subscribeDay, subscribePending, type MealWithId } from '../data/meals'
 import type { DaySummary } from '../data/summary'
 import { signOutAndClear } from '../lib/auth'
@@ -71,6 +74,10 @@ const MACRO_CELLS = [
 
 const navBtn = 'flex min-h-11 min-w-20 items-center rounded-lg px-3 text-sm'
 
+// 스펙 4.7절 고지(GoalPage와 같은 문구)
+const GOAL_DISCLAIMER =
+  '이 목표는 일반 공식(Mifflin-St Jeor)으로 계산한 참고값이며 의학적 조언이 아니에요. 질환이 있거나 임신·수유 중이면 전문가와 상의하세요.'
+
 export default function HomePage({ user }: { user: User }) {
   const uid = user.uid
   const navigate = useNavigate()
@@ -87,6 +94,9 @@ export default function HomePage({ user }: { user: User }) {
   // 현재 목표(users/{uid}.goal). undefined = 첫 값 전
   const [goal, setGoal] = useState<StoredGoal | null | undefined>(undefined)
   const [goalError, setGoalError] = useState(false)
+  // 보고 있는 날짜의 비교 목표(users/{uid}/goals). forDate가 지금 날짜와 다르면 첫 값 전으로 본다.
+  const [dated, setDated] = useState<{ forDate: string; goal: DatedGoal | null } | null>(null)
+  const [datedErrorKey, setDatedErrorKey] = useState<string | null>(null)
   // 목표 설정(S6)에서 저장하고 돌아왔으면 3초 안내(lib/flash, 키는 GoalPage와 같다)
   const [goalNotice, setGoalNotice] = useState<'saved' | 'pending' | null>(() =>
     peekFlash('goal:saved') ? 'saved' : peekFlash('goal:pending') ? 'pending' : null,
@@ -173,6 +183,73 @@ export default function HomePage({ user }: { user: User }) {
   // 날짜를 옮긴 직후에는 이전 날짜 요약을 보이지 않는다.
   const summary = day && day.dateKey === dateKey ? day : null
   const dayError = dayErrorKey === dateKey
+
+  // 그날 목표: 날짜가 바뀌면 다시 구독한다. 목표를 저장하면 goals/{오늘}이 바뀌어 오늘 구독에 바로 들어온다.
+  useEffect(
+    () =>
+      subscribeGoalForDate(
+        uid,
+        dateKey,
+        (g) => {
+          setDated({ forDate: dateKey, goal: g })
+          setDatedErrorKey(null)
+        },
+        () => setDatedErrorKey(dateKey),
+      ),
+    [uid, dateKey],
+  )
+  // undefined = 이 날짜의 첫 값 전
+  const datedGoal = dated && dated.forDate === dateKey ? dated.goal : undefined
+  const datedError = datedErrorKey === dateKey
+  // 오늘은 현재 목표와 같다(스펙). 날짜별 기록이 빠진 예전 데이터라도 오늘은 현재 목표로 비교한다.
+  const dayTargets = datedGoal?.targets ?? (isToday && datedGoal === null && goal ? goal.targets : null)
+
+  function renderGoalArea() {
+    const loadError = (
+      <Link
+        to="/goal"
+        state={{ fromHome: true }}
+        className="mt-1 flex min-h-11 items-center justify-end px-1 text-sm text-amber-800"
+      >
+        목표를 불러오지 못했어요 ·<span className="ml-1 font-medium underline">목표 설정</span>
+      </Link>
+    )
+    if (datedGoal === undefined) return datedError ? loadError : null
+    if (!summary) return null
+    if (dayTargets) {
+      return (
+        <section aria-label="목표 대비" className="mt-3 rounded-xl border border-gray-200 bg-white p-4">
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-semibold">
+              {isToday ? '하루 목표' : '이 날 목표'} {formatKcal(dayTargets.target_kcal)}kcal
+            </h2>
+            <Link
+              to="/goal"
+              state={{ fromHome: true }}
+              className="-mr-2 flex min-h-11 shrink-0 items-center px-2 text-sm font-medium text-emerald-700"
+            >
+              목표 수정
+            </Link>
+          </div>
+          <GoalBars consumed={summary.totals} targets={dayTargets} />
+          <p className="mt-3 text-xs text-gray-500">{GOAL_DISCLAIMER}</p>
+        </section>
+      )
+    }
+    // 그날 목표 기록이 없다: 현재 목표가 있는지에 따라 나눈다.
+    if (goal === undefined) return goalError ? loadError : null
+    if (goal === null) {
+      return (
+        <Link to="/goal" state={{ fromHome: true }} className="mt-3 block rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+          <p className="font-semibold text-emerald-900">목표 설정하기 ›</p>
+          <p className="mt-1 text-sm text-emerald-800">
+            키·몸무게·활동량을 넣으면 하루 목표 칼로리와 탄·단·지를 추천해 드려요.
+          </p>
+        </Link>
+      )
+    }
+    return <p className="mt-2 px-1 text-xs text-gray-500">이 날은 목표를 정하기 전이라 합계만 보여요</p>
+  }
 
   useEffect(() => {
     const on = () => setOnline(true)
@@ -339,36 +416,7 @@ export default function HomePage({ user }: { user: User }) {
           )}
         </section>
 
-        {goal === null && (
-          <Link
-            to="/goal"
-            state={{ fromHome: true }}
-            className="mt-3 block rounded-xl border border-emerald-200 bg-emerald-50 p-4"
-          >
-            <p className="font-semibold text-emerald-900">목표 설정하기 ›</p>
-            <p className="mt-1 text-sm text-emerald-800">
-              키·몸무게·활동량을 넣으면 하루 목표 칼로리와 탄·단·지를 추천해 드려요.
-            </p>
-          </Link>
-        )}
-        {goal && (
-          <Link
-            to="/goal"
-            state={{ fromHome: true }}
-            className="mt-1 flex min-h-11 items-center justify-end px-1 text-sm text-gray-600"
-          >
-            하루 목표 {formatKcal(goal.targets.target_kcal)}kcal ·<span className="ml-1 font-medium text-emerald-700">수정</span>
-          </Link>
-        )}
-        {goal === undefined && goalError && (
-          <Link
-            to="/goal"
-            state={{ fromHome: true }}
-            className="mt-1 flex min-h-11 items-center justify-end px-1 text-sm text-amber-800"
-          >
-            목표를 불러오지 못했어요 ·<span className="ml-1 font-medium underline">목표 설정</span>
-          </Link>
-        )}
+        {renderGoalArea()}
 
         {summary &&
           (summary.meals.length === 0 ? (
