@@ -10,7 +10,7 @@ export type AnalysisFailReason =
   | 'invalid_response'
   | 'blocked'
   | 'bad_request'
-/** 429일 때만: 분당 한도(minute)인지 일일 한도 소진(day)인지. day면 재시도하지 않았다(한도 모드 판단용). */
+/** 429일 때만: 분당 한도(minute)인지 일일 한도 소진(day)인지. 둘 다 재시도하지 않는다(minute은 "잠시 후 다시 시도해 주세요", day는 한도 모드 판단용). */
 export type QuotaScope = 'minute' | 'day'
 
 export class AnalysisError extends Error {

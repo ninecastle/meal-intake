@@ -72,7 +72,7 @@
 
 규칙:
 - 칼로리를 계산하지 않는다. 비율만 추정한다.
-- 먹은 후 사진에서 그릇이 안 보이면 remaining_ratio=0, confidence를 0.5 이하로 두고 warnings에 적는다.
+- (b2, 2026-10-27) 먹은 후 사진에서 그릇이 안 보이거나, 먹기 전과 다른 음식·그릇·식탁처럼 보이거나, 남은 양을 판단할 수 없으면 1이나 0으로 가정하지 말고 remaining_ratio=null로 두고 이유를 warnings에 한국어로 적는다. 코드 원문은 `web/src/analysis/afterPrompt.ts`.
 - 어느 그릇인지 판단할 수 없으면 remaining_ratio=null로 두고 warnings에 적는다.
 - 목록에 없는데 먹은 후 사진에만 있는 음식은 결과에 넣지 말고 warnings에 적는다.
 - 확신이 없으면 confidence를 낮게 준다.

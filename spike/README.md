@@ -14,6 +14,7 @@
 | `summary_test.mjs` | 하루 합산 `summarizeDay`(done만, 끼니별, 날짜 섞임 없음) | `node spike/tests/summary_test.mjs .` |
 | `published_test.mjs` | 공개 중량(스펙 4.5.5)·프롬프트 a3 | `node spike/tests/published_test.mjs` |
 | `goal_test.mjs` | 목표 계산 `goal.ts`(스펙 4.7 손 계산, 미성년, 직접 조정 하한, 목표 비교) | `node spike/tests/goal_test.mjs .` |
+| `chunk_reload_test.mjs` | 화면 파일 불러오기 실패 판별·60초 1회 자동 새로고침(`lib/chunkReload.ts`) | `node spike/tests/chunk_reload_test.mjs .` |
 | `korean_unsure_test.mjs` | 프롬프트 a4·b2: 영어 경고 → 일반 안내, 확신 낮은 끝값(≥0.95·≤0.05) → null, 모델 null 유지, 분당 429 재시도 없음(가짜 모델로 `aiCall.ts`) | `node spike/tests/korean_unsure_test.mjs` |
 
 `assemble.ts`처럼 앱용 `nutrition/index.ts`·`lib/ai`(import.meta.env)를 따라가는 모듈은 Node에서 바로 못 불러온다.
