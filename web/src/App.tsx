@@ -19,6 +19,8 @@ const GoalPage = lazy(() => import('./pages/GoalPage'))
 const CalendarPage = lazy(() => import('./pages/CalendarPage'))
 // 개발 빌드에서만 등록한다. 배포 빌드에서는 import.meta.env.DEV가 false로 바뀌어 이 import가 번들에서 빠진다.
 const DevPage = import.meta.env.DEV ? lazy(() => import('./pages/DevPage')) : null
+// 공통 부품 모음(조각 D1-a, /dev/ui). 개발 빌드에서만 등록하고, 사용자 데이터를 쓰지 않아 로그인 없이 연다.
+const UiGalleryPage = import.meta.env.DEV ? lazy(() => import('./dev/UiGalleryPage')) : null
 
 const UserContext = createContext<User | null>(null)
 
@@ -87,6 +89,7 @@ const router = createBrowserRouter([
     errorElement: <RouteErrorScreen />,
     children: [
       { path: '/login', element: <LoginRoute /> },
+      ...(UiGalleryPage ? [{ path: '/dev/ui', element: <UiGalleryPage /> }] : []),
       { element: <RequireUser />, children: userRoutes },
     ],
   },

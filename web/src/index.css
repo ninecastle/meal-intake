@@ -1,1 +1,84 @@
 @import "tailwindcss";
+
+/* 디자인 시안(_workspace/design/diet-app-prototype.html) 토큰(조각 D1-a). 밝은 화면 하나(다크 모드 없음).
+   Tailwind 기본 이름(gray·emerald·amber, --radius-lg 등)은 덮어쓰지 않는다. sky·lime은 기본 색 단계(sky-500 등)와 따로
+   단계 없는 이름(bg-sky)과 -deep·-soft만 더한다. static: 인라인 style·SVG에서 var(--color-…)로 써도 늘 나오게 한다. */
+@theme static {
+  --color-ground: #f3f6f4;
+  --color-surface: #ffffff;
+  --color-ink: #1f2a2e;
+  --color-ink-2: #5d6b70;
+  --color-ink-3: #8a979b;
+  --color-line: #e3eae7;
+  --color-sky: #8dc0e3;
+  --color-sky-deep: #4783ad;
+  --color-sky-soft: #d9ebf7;
+  --color-lime: #b1da86;
+  --color-lime-deep: #57902e;
+  --color-lime-soft: #e4f2d4;
+  --color-peach: #f3af80;
+  --color-peach-deep: #c0612a;
+  --color-peach-soft: #fae2d0;
+  --color-butter: #f1d364;
+  --color-butter-soft: #f7ebbc;
+  --color-carb: #4f8db5;
+  --color-prot: #e0a02a;
+  --color-fat: #e27fa3;
+  --color-heat0: #eef2ef;
+  --color-heat1: #d6ebc0;
+  --color-heat2: #b1da86;
+  --color-heat3: #7fbe4c;
+  --color-heat4: #f3af80;
+  --color-crown: #d9a21b;
+
+  --font-jua: "Jua", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+
+  /* 시안 --r-lg 24px(카드) / --r-md 16px(선택 줄·안내 상자) / --r-sm 10px(작은 상자·칩) */
+  --radius-card: 24px;
+  --radius-tile: 16px;
+  --radius-chip: 10px;
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+  html,
+  body {
+    font-family: var(--font-jua);
+  }
+  body {
+    background-color: var(--color-ground);
+    color: var(--color-ink);
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Jua는 굵기 400 하나뿐이라 굵게(font-bold 등)를 주면 브라우저가 가짜 굵게를 만든다. 시안처럼 모든 글자를 400으로 고정한다. */
+  *,
+  ::before,
+  ::after {
+    font-weight: 400 !important;
+  }
+  svg text {
+    font-family: var(--font-jua);
+  }
+}
+
+/* 숫자: 자릿수 폭을 맞춘다(시안 .num) */
+@utility num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* 좌우 여백 20px, 노치 화면은 safe-area만큼(시안 .pad) */
+@utility pad {
+  padding-left: max(20px, env(safe-area-inset-left, 0px));
+  padding-right: max(20px, env(safe-area-inset-right, 0px));
+}
+
+/* 키보드 포커스 테두리(시안 :focus-visible, 하늘 진한 3px). 공통 부품에만 붙인다(기존 화면은 D1-b에서) */
+@utility focus-ring {
+  &:focus-visible {
+    outline: 3px solid var(--color-sky-deep);
+    outline-offset: 2px;
+  }
+}
