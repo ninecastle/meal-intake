@@ -21,21 +21,29 @@ import { METRIC_NAME } from './MetricToggle'
 
 const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일'] as const
 
-/** 진하기별 칸 바탕. 0 = 기록 없음(옅은 바탕, 칠하지 않음) */
+/** 진하기별 칸 바탕(2026-10-27 사용자 요청으로 한 단계씩 연하게: 100·300·500·700 → 50·200·400·600). 0 = 기록 없음(칠하지 않음) */
 const LEVEL_BG: Record<HeatLevel, string> = {
   0: 'bg-gray-100',
-  1: 'bg-emerald-100',
-  2: 'bg-emerald-300',
-  3: 'bg-emerald-500',
-  4: 'bg-emerald-700',
+  1: 'bg-emerald-50',
+  2: 'bg-emerald-200',
+  3: 'bg-emerald-400',
+  4: 'bg-emerald-600',
 }
-/** 진하기별 글자색(바탕과 4.5:1 이상: 1~3은 emerald-950, 4는 흰색) */
+/** 가장 연한 단계(emerald-50)는 기록 없는 칸(gray-100)과 밝기가 비슷해 얇은 초록 테두리로 구분한다(오늘 칸은 오늘 테두리가 대신한다) */
+const LEVEL_EDGE: Record<HeatLevel, string> = {
+  0: '',
+  1: 'ring-1 ring-inset ring-emerald-300',
+  2: '',
+  3: '',
+  4: '',
+}
+/** 진하기별 글자색(바탕과 4.5:1 이상: 1~3은 emerald-950 약 8~17:1, 4는 emerald-600 위 gray-950 약 5.4:1. 흰 글자는 약 3.8:1이라 쓰지 않는다) */
 const LEVEL_TEXT: Record<HeatLevel, string> = {
   0: 'text-gray-700',
   1: 'text-emerald-950',
   2: 'text-emerald-950',
   3: 'text-emerald-950',
-  4: 'text-white',
+  4: 'text-gray-950',
 }
 
 const LEGEND: { level: HeatLevel; text: string }[] = [
@@ -137,7 +145,7 @@ export default function RecordHeatmap({ month, today, metric, ready, days, goals
               aria-label={parts.join(', ')}
               aria-current={isToday ? 'date' : undefined}
               className={`relative flex aspect-square min-h-11 w-full min-w-0 flex-col items-center justify-start rounded-md pt-1 ${tone} ${
-                isToday ? 'ring-2 ring-gray-900 ring-inset' : ''
+                isToday ? 'ring-2 ring-gray-900 ring-inset' : days && !isFuture ? LEVEL_EDGE[heat?.level ?? 0] : ''
               } ${!inMonth && !isFuture ? 'opacity-40' : ''}`}
             >
               <span className={`text-xs leading-none sm:text-sm ${isToday ? 'font-bold' : 'font-medium'}`}>
@@ -168,7 +176,7 @@ export default function RecordHeatmap({ month, today, metric, ready, days, goals
             {LEGEND.map(({ level, text }) => (
               <li
                 key={level}
-                className={`rounded px-1.5 py-1 text-[10px] leading-none font-medium whitespace-nowrap ${LEVEL_BG[level]} ${LEVEL_TEXT[level]}`}
+                className={`rounded px-1.5 py-1 text-[10px] leading-none font-medium whitespace-nowrap ${LEVEL_BG[level]} ${LEVEL_TEXT[level]} ${LEVEL_EDGE[level]}`}
               >
                 {text}
               </li>
