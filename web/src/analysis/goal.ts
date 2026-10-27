@@ -1,5 +1,6 @@
 // 목표 설정 계산(3단계 조각 2, 스펙 4.7절). 순수 함수, AI 호출 없음.
-// Mifflin-St Jeor → 기초대사량(BMR)·하루 소모량(TDEE) → 목표 kcal(감량 −500, 증량 +300, BMR 아래로 내리지 않음) → 탄단지 55:20:25.
+// Mifflin-St Jeor → 기초대사량(BMR)·하루 소모량(TDEE = BMR × 활동량 계수) → 목표 kcal(감량 −400, 유지 ±0, 증량 +300,
+// BMR 아래로 내리지 않음) → 탄단지(감량 50:25:25, 유지·증량 55:20:25). 2026-10-27 사용자 결정으로 바꿈(전: 감량 −500, 모두 55:20:25).
 // 계산은 원래 정밀도로 하고 돌려줄 때 반올림한다(kcal은 10 단위, 탄·단·지는 g 정수). 하한 비교도 반올림한 값으로 한다
 // (화면에 보인 기초대사량과 같은 값을 넣으면 통과하도록).
 import type { Nutrients } from '../types/analysis'
@@ -60,14 +61,19 @@ export const ACTIVITY_FACTOR: Record<Activity, number> = {
   active: 1.725,
   very_active: 1.9,
 }
-export const GOAL_DELTA_KCAL: Record<GoalType, number> = { lose: -500, maintain: 0, gain: 300 }
+export const GOAL_DELTA_KCAL: Record<GoalType, number> = { lose: -400, maintain: 0, gain: 300 }
 export const INPUT_RANGE = {
   age: { min: 14, max: 100 },
   height_cm: { min: 120, max: 220 },
   weight_kg: { min: 30, max: 250 },
 } as const
 export const ADULT_AGE = 18
-export const MACRO_RATIO: Record<MacroKey, number> = { carbs_g: 0.55, protein_g: 0.2, fat_g: 0.25 }
+/** 목표별 탄·단·지 에너지 비율. 만 18세 미만은 goal_applied가 maintain이라 55:20:25 */
+export const MACRO_RATIO: Record<GoalType, Record<MacroKey, number>> = {
+  lose: { carbs_g: 0.5, protein_g: 0.25, fat_g: 0.25 },
+  maintain: { carbs_g: 0.55, protein_g: 0.2, fat_g: 0.25 },
+  gain: { carbs_g: 0.55, protein_g: 0.2, fat_g: 0.25 },
+}
 const KCAL_PER_G: Record<MacroKey, number> = { carbs_g: 4, protein_g: 4, fat_g: 9 }
 const MACRO_KEYS: MacroKey[] = ['carbs_g', 'protein_g', 'fat_g']
 export const TARGET_KCAL_MAX = 6000
@@ -80,12 +86,19 @@ const GOALS: readonly GoalType[] = ['lose', 'maintain', 'gain']
 const round10 = (kcal: number) => Math.round(kcal / 10) * 10
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
 
-function splitMacros(kcal: number): GoalResult['macros'] {
+function splitMacros(kcal: number, goal: GoalType): GoalResult['macros'] {
+  const r = MACRO_RATIO[goal]
   return {
-    carbs_g: Math.round((kcal * MACRO_RATIO.carbs_g) / KCAL_PER_G.carbs_g),
-    protein_g: Math.round((kcal * MACRO_RATIO.protein_g) / KCAL_PER_G.protein_g),
-    fat_g: Math.round((kcal * MACRO_RATIO.fat_g) / KCAL_PER_G.fat_g),
+    carbs_g: Math.round((kcal * r.carbs_g) / KCAL_PER_G.carbs_g),
+    protein_g: Math.round((kcal * r.protein_g) / KCAL_PER_G.protein_g),
+    fat_g: Math.round((kcal * r.fat_g) / KCAL_PER_G.fat_g),
   }
+}
+
+/** 화면 안내용 비율 글자, 예: "50:25:25" */
+export function macroRatioText(goal: GoalType): string {
+  const r = MACRO_RATIO[goal]
+  return MACRO_KEYS.map((k) => Math.round(r[k] * 100)).join(':')
 }
 
 /** 형식·범위 검사. 만 18세 미만이면 goal을 maintain으로 바꿔 돌려준다(감량·증량을 고를 수 없다). */
@@ -127,7 +140,7 @@ export function computeGoal(input: GoalInput): GoalResult {
     bmr: round10(bmr),
     tdee: round10(tdee),
     target_kcal: round10(target),
-    macros: splitMacros(target),
+    macros: splitMacros(target, goal_applied),
     goal_applied,
     clamped,
     minor,
@@ -142,7 +155,7 @@ export function targetKcalFloor(result: GoalResult): number {
 
 /**
  * 추천값 + 직접 조정 → 실제로 쓰는 목표. errors가 있으면 저장하지 않는다(targets는 화면 표시용으로 돌려준다).
- * kcal만 조정하면 조정하지 않은 탄·단·지는 그 kcal을 55:20:25로 다시 나눈다. 탄·단·지를 직접 조정했으면 그 값을 쓴다.
+ * kcal만 조정하면 조정하지 않은 탄·단·지는 그 kcal을 목표별 비율(goal_applied)로 다시 나눈다. 탄·단·지를 직접 조정했으면 그 값을 쓴다.
  * 입력이 바뀌어 하한이 올라가도 조정값은 그대로 두고 errors로 알린다.
  */
 export function applyOverride(result: GoalResult, o: GoalOverride | null): { targets: GoalTargets; errors: string[] } {
@@ -155,7 +168,7 @@ export function applyOverride(result: GoalResult, o: GoalOverride | null): { tar
     errors.push(`목표 칼로리가 ${result.minor ? '하루 소모량' : '기초대사량'}(${floor}kcal)보다 낮아요`)
   } else if (kcal > TARGET_KCAL_MAX) errors.push(`목표 칼로리는 ${TARGET_KCAL_MAX}kcal 이하로 넣어 주세요`)
 
-  const base = o?.target_kcal !== undefined && isNum(kcal) ? splitMacros(kcal) : result.macros
+  const base = o?.target_kcal !== undefined && isNum(kcal) ? splitMacros(kcal, result.goal_applied) : result.macros
   const macros = { ...base }
   for (const k of MACRO_KEYS) {
     const v = o?.[k]

@@ -17,7 +17,7 @@ export const RANGE_HIGH = 1.1
 /** 진하기 1단계 끝(목표의 50%) */
 export const LEVEL1_HIGH = 0.5
 /**
- * 그날 목표가 없을 때 진하기 기준이 되는 양(리더 결정): 일반 성인 하루 2,000kcal을 앱의 탄단지 비율 55:20:25로 나눈 값.
+ * 그날 목표가 없을 때 진하기 기준이 되는 양(리더 결정): 일반 성인 하루 2,000kcal을 유지 비율 55:20:25로 나눈 값.
  * 이 기준으로는 ✓를 붙이지 않는다(목표가 아니므로).
  */
 export const REFERENCE_AMOUNT: Record<Metric, number> = { kcal: 2000, carbs_g: 275, protein_g: 100, fat_g: 56 }

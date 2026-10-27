@@ -12,6 +12,7 @@ import {
   INPUT_RANGE,
   applyOverride,
   computeGoal,
+  macroRatioText,
   targetKcalFloor,
   validateGoalInput,
   type Activity,
@@ -429,7 +430,7 @@ export default function GoalPage({ uid }: { uid: string }) {
                       ovr.carbs_g === undefined &&
                       ovr.protein_g === undefined &&
                       ovr.fat_g === undefined && (
-                      <p className="mt-2 text-xs text-gray-500">탄·단·지는 목표 칼로리를 55:20:25로 나눠요.</p>
+                      <p className="mt-2 text-xs text-gray-500">탄·단·지는 목표 칼로리를 {macroRatioText(result?.goal_applied ?? 'maintain')}로 나눠요.</p>
                     )}
                   </>
                 )}
