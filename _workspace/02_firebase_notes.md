@@ -167,3 +167,9 @@ firebase firestore:databases:create "(default)" --location asia-northeast3 --edi
 - 읽기 비용: 달력 한 달 = 그달 식사 문서 수(모든 상태) + 목표 문서 수. Spark 하루 읽기 5만 건에 비해 작다.
 - 규칙: 바꾸지 않음(본인 `allow read`가 쿼리도 허용). 배포 안 함.
 - 규칙 테스트: 조회 시험 4개 추가(본인 meals 범위 허용·경계 포함·범위 밖 제외, 남·미로그인 meals 거부, 본인 goals 오름차순·그달 전 목표 포함, 남·미로그인 goals 거부) → **37개 통과, 실패 0**. `npx tsc -b` 통과. AI 호출 0회.
+
+## 3단계 조각 5 배포 (2026-10-27, 리더)
+- 배포 전 확인: spike 시험 전부 통과, 규칙 테스트 37개 통과(규칙은 v3 그대로, 이미 배포됨), 배포 빌드에 개발 시험 패널(`DevPage`)·목업 응답 없음, App Check(ReCaptchaEnterprise) 포함, `.env.local`은 `VITE_USE_EMULATORS=off`·`VITE_AI_MOCK` 없음(실제 호출).
+- 캐시 헤더 추가(`firebase.json` hosting.headers): 기본값이 모든 파일 `max-age=3600`이라 새 버전 배포 뒤 1시간 동안 옛 index.html이 쓰일 수 있었다(옛 청크 요청 → SPA rewrite가 index.html을 200으로 돌려줌 → 동적 import 실패 → 자동 새로고침으로만 회복). `**` → `no-cache`, `/assets/**` → `public, max-age=31536000, immutable`(뒤 규칙이 덮어씀, 배포 뒤 curl로 확인).
+- 명령: `npm --prefix web run build` → `firebase deploy --only hosting --project meal-intake-2026 -m "3단계 조각 5: …"`. 배포본 번들 `index-jHLbBu2A.js`가 로컬 빌드와 같음을 확인.
+- 남은 확인(사용자, 로그인 필요): 기록 보기·주간 추이 첫 사용 때 콘솔에 `requires an index` 오류가 없는지(에뮬레이터는 인덱스를 검사하지 않음). App Check 적용(Enforce)은 계획대로 10/29 측정 뒤.
