@@ -8,6 +8,7 @@ import { foodName } from '../../lib/foodName'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { WARN_NO_AFTER } from '../../analysis/assemble'
 import {
+  applyDetail,
   applyNutrition,
   buildAnalysis,
   newUserItem,
@@ -16,7 +17,7 @@ import {
   setKcalOverride,
   setRemainingRatio,
 } from '../../analysis/compute'
-import { resolveNutrition } from '../../analysis/nutrition'
+import { detailFor, resolveNutrition } from '../../analysis/nutrition'
 import type { MealIntakeAnalysis, MealItem, NutritionResult } from '../../types/analysis'
 import { macroPct } from '../mealText'
 import FoodCard, { FoodSearch, type RatioHint } from './FoodCard'
@@ -105,6 +106,8 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
     emit(latest.current.items.map((it) => (it.id === id ? f(it) : it)))
 
   // 이름 확정 → DB → (검색) → AI 추정. guess는 넘기지 않는다. 중량·남긴 비율·인원수는 그대로 둔다.
+  // 세부 영양소(D4): applyNutrition이 예전 음식의 값을 지우고, 새 이름이 DB에 있으면 그 행의 식약처 값을 넣는다
+  // (새 이름에는 먹기 전 분석의 추정이 없으므로 DB에 없는 키는 "–").
   async function resolveFor(id: string, name: string, dbCode?: string) {
     controllers.current.get(id)?.abort()
     const ac = new AbortController()
@@ -116,11 +119,12 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
     } catch {
       r = { source: 'user_input', per_100g: null }
     }
+    const detail = r.source === 'db' ? await detailFor(r.db_food_code).catch(() => null) : null
     if (controllers.current.get(id) !== ac || ac.signal.aborted) return // 삭제됐거나 화면을 떠남
     controllers.current.delete(id)
     setPending((p) => omit(p, id))
     if (!find(id)) return
-    update(id, (it) => dropPublished(applyNutrition({ ...it, name, user_edited: true }, r)))
+    update(id, (it) => dropPublished(applyDetail(applyNutrition({ ...it, name, user_edited: true }, r), detail, null)))
     const html = r.source === 'search' ? r.searchSuggestionHtml : null
     setSuggestions((s) => (html ? { ...s, [id]: html } : omit(s, id)))
     if (r.source === 'user_input') setFocusKcalId(id)
