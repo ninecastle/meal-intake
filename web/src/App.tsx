@@ -31,11 +31,9 @@ function useUser(): User {
   return user
 }
 
-/** 앱 틀(디자인 조각 D2-H1, 시안 .app): 모든 화면을 가운데 430px 흰(surface) 기둥에 넣는다. 바깥은 body의 ground, 기둥 테두리는 line 1px 그림자. */
+/** 앱 틀(시안 .app#app, 조각 D2-S): 모든 화면을 가운데 430px 흰(surface) 기둥에 넣는다. 모양은 styles/prototype.css의 .app 그대로. */
 function Frame({ children }: { children: ReactNode }) {
-  return (
-    <div className="relative mx-auto min-h-dvh max-w-[430px] bg-surface shadow-[0_0_0_1px_var(--color-line)]">{children}</div>
-  )
+  return <div className="app">{children}</div>
 }
 
 function Loading() {

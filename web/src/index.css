@@ -1,6 +1,17 @@
-@import "tailwindcss";
+/* 레이어 순서: 시안 CSS(prototype)를 Tailwind 기본층(preflight) 뒤, 유틸리티 앞에 둔다(조각 D2-S).
+   - 시안 클래스(.band·.meal·.btn 등)는 preflight를 이긴다 → 시안 클래스만 쓰는 화면(홈)은 시안과 같게 그려진다.
+   - 시안의 요소 규칙(button{background:none;color:inherit;font:inherit;border:0} 등)은 Tailwind 유틸리티에 진다 →
+     아직 Tailwind로 그린 다른 화면의 버튼 색·글자 크기가 그대로 남는다(레이어 없이 넣으면 모두 지워진다). */
+@layer theme, base, prototype, components, utilities;
 
-/* 디자인 시안(_workspace/design/diet-app-prototype.html) 토큰(조각 D1-a). 밝은 화면 하나(다크 모드 없음).
+@import "tailwindcss";
+/* 시안 <style> 6~416줄 그대로(_workspace/design/diet-app-prototype.html). 고치지 말고 시안이 바뀌면 다시 옮긴다. */
+@import "./styles/prototype.css" layer(prototype);
+
+/* 시안 클래스 이름 중 Tailwind 유틸리티와 같은 이름: 홈의 .ring(링 그래프)에 Tailwind ring(테두리 그림자)이 붙지 않게 만들지 않는다. */
+@source not inline("ring");
+
+/* 디자인 시안 토큰(조각 D1-a). 시안 :root 변수(--sky 등)와 같은 값을 Tailwind 이름(bg-sky 등)으로도 쓰게 한다(아직 Tailwind로 그린 화면용).
    Tailwind 기본 이름(gray·emerald·amber, --radius-lg 등)은 덮어쓰지 않는다. sky·lime은 기본 색 단계(sky-500 등)와 따로
    단계 없는 이름(bg-sky)과 -deep·-soft만 더한다. static: 인라인 style·SVG에서 var(--color-…)로 써도 늘 나오게 한다. */
 @theme static {
@@ -39,46 +50,24 @@
   --radius-chip: 10px;
 }
 
+/* 글꼴·굵기 400·body 15px/1.5·바탕 ground·.num·.pad는 시안 CSS(prototype 레이어)가 정한다(D1 기본층·유틸리티는 지웠다). */
 @layer base {
-  :root {
-    color-scheme: light;
-  }
-  html,
-  body {
-    font-family: var(--font-jua);
-  }
-  /* 시안 body: 15px, 줄 간격 1.5. 바탕 ground는 앱 틀(App.tsx Frame, 가운데 430px 흰 기둥) 바깥으로 보인다 */
-  body {
-    background-color: var(--color-ground);
-    color: var(--color-ink);
-    font-size: 15px;
-    line-height: 1.5;
-    -webkit-font-smoothing: antialiased;
-  }
-  /* Jua는 굵기 400 하나뿐이라 굵게(font-bold 등)를 주면 브라우저가 가짜 굵게를 만든다. 시안처럼 모든 글자를 400으로 고정한다. */
-  *,
-  ::before,
-  ::after {
-    font-weight: 400 !important;
-  }
-  svg text {
-    font-family: var(--font-jua);
+  /* 시안은 .app이 body 바로 아래라 .app{min-height:100%}가 화면 높이를 채운다. 우리는 사이에 #root가 있어 높이를 이어 준다. */
+  #root {
+    height: 100%;
   }
 }
 
-/* 숫자: 자릿수 폭을 맞춘다(시안 .num) */
-@utility num {
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
+@layer prototype {
+  /* 시안 파일에는 Tailwind preflight가 없어 버튼에 브라우저 기본 안쪽 여백(크롬 1px 6px)이 남아 있다(.dside 날짜·.skip 공복 글자 위치).
+     시안 화면 틀(.screen) 안에서만 되살린다. :where로 특이도를 0,0,1로 두어 여백을 정한 시안 규칙(.chipbtn·.btn 등)이 이긴다. */
+  :where(.screen) button {
+    padding-block: 1px;
+    padding-inline: 6px;
+  }
 }
 
-/* 좌우 여백 20px, 노치 화면은 safe-area만큼(시안 .pad) */
-@utility pad {
-  padding-left: max(20px, env(safe-area-inset-left, 0px));
-  padding-right: max(20px, env(safe-area-inset-right, 0px));
-}
-
-/* 키보드 포커스 테두리(시안 :focus-visible, 하늘 진한 3px). 공통 부품에만 붙인다(기존 화면은 D1-b에서) */
+/* 키보드 포커스 테두리(시안 :focus-visible, 하늘 진한 3px). 아직 Tailwind로 그린 화면의 링크 등에 붙인다 */
 @utility focus-ring {
   &:focus-visible {
     outline: 3px solid var(--color-sky-deep);

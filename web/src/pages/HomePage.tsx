@@ -1,15 +1,18 @@
-// S1 홈 = 하루 요약. 디자인 조각 D2-H1(시안 home()): 위쪽 고정 줄(기록 보기·설정 아이콘, 날짜 줄 "10.26 월 · 10.27 오늘 · 10.28 화",
-// 내일 이후 막기, 오늘이 아니면 [오늘로], ?date=YYYY-MM-DD) → 하늘 띠 "나의 하루"(DayBand: 링·탄단지·막대·작은 줄·남은 양, 목표 없으면 목표 설정 안내)
-// → 연두 띠 "식사"(MealBand: 끼니 카드·이어 할 기록·기록 시작, D2-H2 담당) → 복숭아 띠 "나의 변화"(ChangeBand: 체중 자리, D6).
-// 데이터: subscribeDay(그날 done 합산, 클라이언트), subscribePending(날짜와 무관한 이어 할 기록), subscribeGoal·subscribeGoalForDate(그날 비교 목표).
-// 저장·목표 저장 안내는 공통 토스트로, 오프라인·불러오기 오류는 날짜 줄 아래 안내 상자로 보인다. AI 호출 없음.
-// 로그아웃·개발 링크는 설정(D8)이 생길 때까지 맨 아래 작은 글자로 둔다.
+// S1 홈 = 하루 요약. 디자인 조각 D2-S: 시안 home() 마크업·클래스 그대로(CSS는 styles/prototype.css = 시안 <style> 그대로).
+// div.screen > .sticky(.topbar·.datestrip, HomeDateBar) → section.band.sky "나의 하루"(DayBand) → section.band.lime "식사"(MealBand)
+// → section.band.peach "나의 변화"(ChangeBand). 숫자만 실제 데이터, ?date=YYYY-MM-DD.
+// 데이터: subscribeDay(그날 done 합산, 클라이언트), subscribePending(날짜와 무관한 이어 할 기록), subscribeGoal·subscribeGoalForDate(그날 비교 목표). AI 호출 없음.
+// 시안에 없는 것(리더가 사용자에게 묻는 중)은 components/home의 작은 부품으로 뗐다: (a) HomeFinePrint (b) HomeAccountRow
+// (c) PendingMeals (d) GoalStates (e) DateLimits (f) HomeNotices + 아래 toastText (g) WeightValue.
+// [한눈에]·[자세히]·[기록하기]·[음식 추천]은 시안처럼 토스트 "준비 중이에요"(1.6초).
 import { useEffect, useState } from 'react'
 import type { User } from 'firebase/auth'
-import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
+import { useLocation, useNavigate, useSearchParams } from 'react-router'
 import ChangeBand from '../components/home/ChangeBand'
 import DayBand, { type DayGoalView } from '../components/home/DayBand'
+import { HomeAccountRow } from '../components/home/HomeAccountRow'
 import HomeDateBar from '../components/home/HomeDateBar'
+import { HomeStatusNotes } from '../components/home/HomeNotices'
 import MealBand from '../components/home/MealBand'
 import { formatKcal, isDateKey } from '../components/mealText'
 import { Band, Toast } from '../components/ui'
@@ -52,7 +55,7 @@ export default function HomePage({ user }: { user: User }) {
   const [online, setOnline] = useState(() => navigator.onLine)
   const [loggingOut, setLoggingOut] = useState(false)
   // [한눈에]·[자세히]·[기록하기]: 화면이 아직 없어 "준비 중이에요" 토스트(D5·D6에서 바꾼다)
-  const [soon, setSoon] = useState(false)
+  const [soon, setSoon] = useState(0)
   // 현재 목표(users/{uid}.goal). undefined = 첫 값 전
   const [goal, setGoal] = useState<StoredGoal | null | undefined>(undefined)
   const [goalError, setGoalError] = useState(false)
@@ -100,7 +103,8 @@ export default function HomePage({ user }: { user: User }) {
 
   useEffect(() => {
     if (!soon) return
-    const t = window.setTimeout(() => setSoon(false), 2000)
+    // 시안 toast(): 1.6초
+    const t = window.setTimeout(() => setSoon(0), 1600)
     return () => window.clearTimeout(t)
   }, [soon])
 
@@ -212,49 +216,29 @@ export default function HomePage({ user }: { user: User }) {
           ? '목표를 저장했어요. 연결되면 올라가요.'
           : null
 
-  const hasNotice = !online || listError || actionError != null
-  const showSoon = () => setSoon(true)
+  // 다시 누르면 1.6초를 새로 센다(시안 toast()의 clearTimeout)
+  const showSoon = () => setSoon(Date.now())
 
+  // 시안 render(): 화면이 바뀌면 .screen에 .enter(짧은 나타남)
   return (
-    <main className="pb-[120px]">
+    <main className="screen enter">
       <HomeDateBar dateKey={dateKey} today={today} />
 
-      {hasNotice && (
-        <div className="pad space-y-2 pb-3 text-[15px]">
-          {!online && <p className="rounded-tile bg-ground px-4 py-2.5 text-ink">오프라인이에요. 기록은 연결되면 저장돼요.</p>}
-          {listError && (
-            <p className="rounded-tile bg-butter-soft px-4 py-2.5 text-ink">
-              이어 할 기록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.
-            </p>
-          )}
-          {actionError && <p className="text-peach-deep">{actionError}</p>}
-        </div>
-      )}
+      <HomeStatusNotes online={online} listError={listError} actionError={actionError} />
 
       <DayBand summary={summary} dayError={dayError} isToday={isToday} goal={goalView} onSoon={showSoon} />
 
-      <Band tone="lime" title="식사">
-        <MealBand uid={uid} dateKey={dateKey} day={summary} pending={pending} />
+      <Band tone="lime" label="식사" title="식사">
+        <MealBand uid={uid} dateKey={dateKey} day={summary} pending={pending} onSoon={showSoon} />
       </Band>
 
       <ChangeBand onSoon={showSoon} />
 
-      <footer className="pad mt-6 flex flex-wrap items-center justify-center gap-x-1 text-[13px] text-ink-3">
-        <span className="max-w-full truncate">{user.displayName ?? user.email ?? '로그인됨'}</span>
-        {import.meta.env.DEV && (
-          <Link to="/dev" className="focus-ring flex min-h-11 items-center rounded-chip px-2">
-            개발
-          </Link>
-        )}
-        <button
-          type="button"
-          onClick={() => void logout()}
-          disabled={loggingOut}
-          className="focus-ring min-h-11 rounded-chip px-2 underline disabled:opacity-35"
-        >
-          로그아웃
-        </button>
-      </footer>
+      <HomeAccountRow
+        name={user.displayName ?? user.email ?? '로그인됨'}
+        loggingOut={loggingOut}
+        onLogout={() => void logout()}
+      />
 
       <Toast message={toastText} />
     </main>

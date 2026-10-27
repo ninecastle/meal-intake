@@ -1,21 +1,20 @@
-// 홈 연두 띠의 끼니 카드 하나(디자인 조각 D2). 모양·색·글자 크기는 시안 mealCard와 CSS .meal·.mtop·.micowrap·.plus·.mk·
-// .mfood·.skip·.ck·.mealhit 그대로. 카드 전체가 버튼(.mealhit, aria-label "아침 기록하기" 등)이고, 그 위의 글·그림은 누르기를 통과시킨다.
-// 위에 따로 누르는 것: 공복 토글(.skip, 기록 없는 끼니만)과 이어 할 기록 알약(이 날짜·이 끼니, 시안에 없어 .chipbtn 모양).
-import { Link } from 'react-router'
+// 홈 연두 띠의 끼니 카드 하나(조각 D2-S, 시안 home() mealCard 마크업·클래스 그대로):
+// div.meal(style background:var(--sky) 등) > button.mealhit + .mtop(span.micowrap > svg.mico, span.plus > svg) + h3
+// + (기록 있음) span.mk.num "N kcal" + span.mfood "첫 음식 외 n개" / (기록 없음) button.skip(.on) > span.ck > svg + "공복했어요".
+// 카드 전체가 버튼(.mealhit, "아침 기록하기" 등)이고, 그 위의 글·그림은 시안 CSS가 누르기를 통과시킨다(.skip만 받는다).
+// 이 날짜·이 끼니의 이어 할 기록 알약은 (c) PendingMeals 부품.
 import type { MealType, MealWithId } from '../../data/meals'
-import { formatKcal, MEAL_TYPE_LABEL } from '../mealText'
+import { MEAL_TYPE_LABEL } from '../mealText'
 import { MealArt } from '../ui'
+import { PendingPills } from './PendingMeals'
 
 /** 시안 meals[k].card */
 const CARD_BG: Record<MealType, string> = {
-  breakfast: 'bg-sky',
-  lunch: 'bg-lime',
-  dinner: 'bg-peach',
-  snack: 'bg-butter',
+  breakfast: 'var(--sky)',
+  lunch: 'var(--lime)',
+  dinner: 'var(--peach)',
+  snack: 'var(--butter)',
 }
-
-/** 카드 안 글·그림: 시안 `.meal>*:not(.mealhit){position:relative;z-index:1;pointer-events:none}` */
-const LAYER = 'pointer-events-none relative z-1'
 
 export interface MealCardProps {
   meal: MealType
@@ -36,64 +35,37 @@ export function MealCard({ meal, total, foods, pending, fasted, onToggleFasted, 
   const hasDone = total != null && total.count > 0
   // 기록이 있거나 이어 할 기록이 있는 끼니에는 공복 토글을 보이지 않는다.
   const showSkip = total != null && !hasDone && pending.length === 0 && fasted != null
-  const foodText = foods.length > 0 ? `${foods[0]}${foods.length > 1 ? ` 외 ${foods.length - 1}개` : ''}` : ''
 
   return (
-    <div
-      className={`relative flex min-h-[150px] flex-col gap-2.5 rounded-card p-4 text-left hover:ring-3 hover:ring-ink/15 ${CARD_BG[meal]}`}
-    >
-      <button
-        type="button"
-        aria-label={`${label} 기록하기`}
-        onClick={onOpen}
-        className="focus-ring absolute inset-0 z-0 rounded-[inherit]"
-      />
-      <div className={`${LAYER} flex items-start justify-between`}>
-        <MealArt meal={meal} framed />
-        <span aria-hidden="true" className="grid size-12 place-items-center rounded-full bg-surface">
-          <svg viewBox="0 0 24 24" className="block size-6 fill-none stroke-ink" strokeWidth={2.6} strokeLinecap="round">
+    <div className="meal" style={{ background: CARD_BG[meal] }}>
+      <button type="button" className="mealhit" aria-label={`${label} 기록하기`} onClick={onOpen}></button>
+      <div className="mtop">
+        <span className="micowrap">
+          <MealArt meal={meal} className="mico" />
+        </span>
+        <span className="plus" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
             <path d="M12 5v14M5 12h14" />
           </svg>
         </span>
       </div>
-      <h3 className={`${LAYER} m-0 whitespace-nowrap text-[17px]`}>{label}</h3>
+      <h3>{label}</h3>
       {hasDone && (
         <>
-          <span className={`${LAYER} num text-xl`}>{formatKcal(total.kcal)} kcal</span>
-          {foodText && <span className={`${LAYER} -mt-1.5 truncate text-[13px] text-ink opacity-75`}>{foodText}</span>}
+          <span className="mk num">{Math.round(total.kcal)} kcal</span>
+          {foods.length > 0 && (
+            <span className="mfood">
+              {foods[0]}
+              {foods.length > 1 ? ` 외 ${foods.length - 1}개` : ''}
+            </span>
+          )}
         </>
       )}
-      {pending.length > 0 && (
-        <div className={`${LAYER} mt-auto flex flex-col items-start gap-1.5`}>
-          {pending.map((m) => {
-            const after = m.status === 'awaiting_after'
-            return (
-              <Link
-                key={m.id}
-                to={after ? `/meal/${m.id}/after` : `/meal/${m.id}/review`}
-                className="focus-ring pointer-events-auto inline-flex min-h-10 max-w-full items-center whitespace-nowrap rounded-full bg-surface px-3.5 text-sm text-ink"
-              >
-                {after ? '먹은 후 사진 기다림' : '결과 확인 기다림'}
-              </Link>
-            )
-          })}
-        </div>
-      )}
+      <PendingPills meals={pending} />
       {showSkip && (
-        <button
-          type="button"
-          aria-pressed={fasted}
-          onClick={onToggleFasted}
-          className={`focus-ring relative z-1 mt-auto flex min-h-11 items-center gap-2 self-start text-[15px] text-ink ${fasted ? '' : 'opacity-55'}`}
-        >
-          <span aria-hidden="true" className={`grid size-[26px] place-items-center rounded-full ${fasted ? 'bg-ink' : 'bg-surface/70'}`}>
-            <svg
-              viewBox="0 0 16 16"
-              className={`size-4 fill-none ${fasted ? 'stroke-surface' : 'stroke-ink-3'}`}
-              strokeWidth={2.4}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
+        <button type="button" className={fasted ? 'skip on' : 'skip'} aria-pressed={fasted} onClick={onToggleFasted}>
+          <span className="ck" aria-hidden="true">
+            <svg viewBox="0 0 16 16">
               <path d="M4 8.5l2.5 2.5L12 5.5" />
             </svg>
           </span>
