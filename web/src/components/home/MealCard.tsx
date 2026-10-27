@@ -6,6 +6,7 @@
 // 누르기(2026-10-27 사용자가 고른 변경): [+](.plus, 시안은 그림이지만 버튼으로)는 새 음식 기록(끼니 화면 + 식사 기록 시트),
 // 카드의 나머지는 늘 그 끼니 화면(기다리는 기록이 있어도 시트를 바로 열지 않는다).
 import type { MealType, MealWithId } from '../../data/meals'
+import { representativeFood } from '../../lib/foodName'
 import { MEAL_TYPE_LABEL } from '../mealText'
 import { MealArt } from '../ui'
 
@@ -41,7 +42,8 @@ export function MealCard({ meal, total, foods, pending, fasted, onToggleFasted, 
   const pendingText = next ? (next.status === 'awaiting_after' ? '먹은 후 사진 기다림' : '결과 확인 기다림') : null
   // 기록이 있거나 이어 할 기록이 있는 끼니에는 공복 토글을 보이지 않는다.
   const showSkip = total != null && !hasDone && !next && fasted != null
-  const foodText = foods.length > 0 ? `${foods[0]}${foods.length > 1 ? ` 외 ${foods.length - 1}개` : ''}` : null
+  // 대표 음식: 맨밥(쌀밥 등)은 건너뛰고 다음 음식(2026-10-28 사용자 요청), "외 n개"는 전체에서 하나 뺀 수
+  const foodText = foods.length > 0 ? representativeFood(foods) : null
   const mfood = pendingText ?? (hasDone ? foodText : null)
 
   return (

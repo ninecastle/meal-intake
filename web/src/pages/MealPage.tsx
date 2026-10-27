@@ -30,7 +30,7 @@ import {
 import { afterTarget, useAfterFlow, type ReviewEntry } from '../components/meal/useAfterFlow'
 import { useBeforeFlow } from '../components/meal/useBeforeFlow'
 import { formatGrams, homeHref, isDateKey, macroPct, MEAL_TYPE_LABEL, MEAL_TYPES, sourceLabel } from '../components/mealText'
-import { foodName } from '../lib/foodName'
+import { foodName, representativeFood } from '../lib/foodName'
 import { Icon, IconButton, MealArt, Toast } from '../components/ui'
 import { deleteMeal, saveMeal, subscribeMealsFor, type MealType, type MealWithId } from '../data/meals'
 import { sumDetail } from '../data/summary'
@@ -338,7 +338,7 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
   const time = times[meal]
   const p = macroPct(totals.carbs_g, totals.protein_g, totals.fat_g)
   const afterFoods = target_ ? target_.beforeAnalysis.items : []
-  const afterSubtitle = `${label} · ${foodName(afterFoods[0]?.name ?? '')}${afterFoods.length > 1 ? ` 외 ${afterFoods.length - 1}개` : ''}`
+  const afterSubtitle = `${label} · ${representativeFood(afterFoods.map((it) => it.name))}`
   const closeSheet = () => setSheet(null)
 
   return (
