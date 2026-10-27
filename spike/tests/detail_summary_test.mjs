@@ -20,10 +20,10 @@ const d = it('사과', { fiber_g: 2.4 }, { fiber_g: 'ai_estimate' })
 
 const s = sumDetail([analysis([a, b]), analysis([c, d])])
 assert.equal(s.items, 4)
-assert.deepEqual(s.totals.sugar_g, { value: 10.1, count: 2, est: false })
-assert.deepEqual(s.totals.sodium_mg, { value: 1851, count: 2, est: true }) // b가 AI 추정
-assert.deepEqual(s.totals.satfat_g, { value: 5.6, count: 1, est: false })
-assert.deepEqual(s.totals.fiber_g, { value: 2.4, count: 1, est: true })
+assert.deepEqual(s.totals.sugar_g, { value: 10.1, count: 2 })
+assert.deepEqual(s.totals.sodium_mg, { value: 1851, count: 2 }) // b는 AI 추정이지만 표시하지 않는다
+assert.deepEqual(s.totals.satfat_g, { value: 5.6, count: 1 })
+assert.deepEqual(s.totals.fiber_g, { value: 2.4, count: 1 })
 
 // 값이 하나도 없으면 키가 없다(화면은 "–")
 assert.deepEqual(sumDetail([analysis([c])]), { items: 1, totals: {} })
@@ -35,6 +35,14 @@ assert.equal(sumDetail([analysis([it('x', { sugar_g: NaN, sodium_mg: '3' }, {})]
 const meal = (id, status, dateKey, items) => ({ id, dateKey, mealType: 'lunch', status, createdAt: null, updatedAt: null, analysis: analysis(items) })
 const day = summarizeDay(D, [meal('m1', 'done', D, [a, b]), meal('m2', 'needs_review', D, [d]), meal('m3', 'done', '2026-10-27', [d]), meal('m4', 'done', D, [c])])
 assert.equal(day.detail.items, 3)
-assert.deepEqual(day.detail.totals.sugar_g, { value: 10.1, count: 2, est: false })
+assert.deepEqual(day.detail.totals.sugar_g, { value: 10.1, count: 2 })
 assert.equal(day.detail.totals.fiber_g, undefined)
+// 2026-10-28 아홉 가지: mg 키(콜레스테롤·칼륨)는 정수, 새 g 키는 소수 첫째 자리. 4가지만 있는 예전 기록도 그대로 더한다
+const e = it('달걀', { cholesterol_mg: 186.4, potassium_mg: 70.6, transfat_g: 0.04, polyunsat_g: 1.2, monounsat_g: 1.6 }, {})
+const s9 = sumDetail([analysis([a, e])])
+assert.deepEqual(s9.totals.cholesterol_mg, { value: 186, count: 1 })
+assert.deepEqual(s9.totals.potassium_mg, { value: 71, count: 1 })
+assert.deepEqual(s9.totals.transfat_g, { value: 0, count: 1 })
+assert.deepEqual(s9.totals.polyunsat_g, { value: 1.2, count: 1 })
+assert.deepEqual(s9.totals.sugar_g, { value: 9.1, count: 1 })
 console.log('모두 통과')

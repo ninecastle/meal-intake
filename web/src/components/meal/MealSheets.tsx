@@ -6,6 +6,7 @@
 import { useState, type ReactNode } from 'react'
 import type { MealType } from '../../data/meals'
 import type { DetailSummary } from '../../data/summary'
+import type { DetailKey } from '../../types/analysis'
 import type { ErrorView } from '../capture/captureText'
 import { CameraHelp } from '../capture/CaptureControls'
 import type { CaptureSource } from '../capture/useCaptureSource'
@@ -153,8 +154,8 @@ function TimeForm({ meal, value, onSave }: { meal: MealType; value: string; onSa
   )
 }
 
-/** 세부 영양소 한 줄(D4): 값이 있는 음식만 더한 합, 하나라도 AI 추정이면 시안 "추정" 배지(.est), 일부 음식만 값이 있으면 "음식 ○개 중 ○개 기준" */
-function DetailRow({ label, k, detail, sub }: { label: string; k: 'sugar_g' | 'sodium_mg' | 'satfat_g' | 'fiber_g'; detail: DetailSummary; sub: boolean }) {
+/** 세부 영양소 한 줄(D4): 값이 있는 음식만 더한 합, 일부 음식만 값이 있으면 "음식 ○개 중 ○개 기준". "추정" 배지는 붙이지 않는다(2026-10-28 사용자 결정) */
+function DetailRow({ label, k, detail, sub }: { label: string; k: DetailKey; detail: DetailSummary; sub: boolean }) {
   const t = detail.totals[k]
   return (
     <div className={sub ? 'nrow sub' : 'nrow'}>
@@ -165,10 +166,7 @@ function DetailRow({ label, k, detail, sub }: { label: string; k: 'sugar_g' | 's
         )}
       </span>
       {t ? (
-        <span className="num">
-          {t.est && <span className="est">추정</span>}
-          {formatDetail(k, t.value, true)}
-        </span>
+        <span className="num">{formatDetail(k, t.value, true)}</span>
       ) : (
         <span className="num">–</span>
       )}
@@ -176,7 +174,7 @@ function DetailRow({ label, k, detail, sub }: { label: string; k: 'sugar_g' | 's
   )
 }
 
-/** 시안 nutrientTable(t, true)에서 정한 행만. 세부 4가지(당류·식이섬유·포화지방·나트륨)는 D4 합계(값 있는 음식만, 없으면 "–") */
+/** 시안 nutrientTable(t, true)의 행 순서 그대로, 대체감미료만 뺀다(2026-10-28 사용자 결정). 세부 아홉 가지는 D4 합계(값 있는 음식만, 없으면 "–") */
 function NutrientTable({ t, detail }: { t: MealTotals; detail: DetailSummary }) {
   return (
     <div className="ntable">
@@ -199,7 +197,12 @@ function NutrientTable({ t, detail }: { t: MealTotals; detail: DetailSummary }) 
         <span className="num">{`${r1(t.fat_g)} g`}</span>
       </div>
       <DetailRow label="포화지방" k="satfat_g" detail={detail} sub />
+      <DetailRow label="트랜스지방" k="transfat_g" detail={detail} sub />
+      <DetailRow label="다불포화지방" k="polyunsat_g" detail={detail} sub />
+      <DetailRow label="단일불포화지방" k="monounsat_g" detail={detail} sub />
+      <DetailRow label="콜레스테롤" k="cholesterol_mg" detail={detail} sub={false} />
       <DetailRow label="나트륨" k="sodium_mg" detail={detail} sub={false} />
+      <DetailRow label="칼륨" k="potassium_mg" detail={detail} sub={false} />
     </div>
   )
 }

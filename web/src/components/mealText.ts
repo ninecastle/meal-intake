@@ -2,7 +2,7 @@
 // 분석 모듈·Firebase SDK를 import하지 않는다(홈 첫 번들에 들어가도 가볍게).
 import type { MealType } from '../data/meals'
 import { APP_TIMEZONE } from '../lib/time'
-import type { MealItem } from '../types/analysis'
+import type { DetailKey, MealItem } from '../types/analysis'
 
 /** 하루 요약에 보이는 끼니 순서 */
 export const MEAL_TYPES: readonly MealType[] = ['breakfast', 'lunch', 'dinner', 'snack']
@@ -48,10 +48,11 @@ export function formatMacro(n: number): string {
   return n < 10 ? String(Math.round(n * 10) / 10) : Math.round(n).toLocaleString('ko-KR')
 }
 
-/** 세부 영양소 값(D4): g은 소수 첫째 자리, 나트륨 mg은 쉼표 정수. space면 숫자와 단위 사이를 띄운다(시안 영양정보 표 "12 g") */
-export function formatDetail(key: 'sugar_g' | 'sodium_mg' | 'satfat_g' | 'fiber_g', v: number, space = false): string {
-  const n = key === 'sodium_mg' ? Math.round(v).toLocaleString('ko-KR') : String(Math.round(v * 10) / 10)
-  return `${n}${space ? ' ' : ''}${key === 'sodium_mg' ? 'mg' : 'g'}`
+/** 세부 영양소 값(D4): g은 소수 첫째 자리, mg(나트륨·콜레스테롤·칼륨)은 쉼표 정수. space면 숫자와 단위 사이를 띄운다(시안 영양정보 표 "12 g") */
+export function formatDetail(key: DetailKey, v: number, space = false): string {
+  const mg = key.endsWith('_mg')
+  const n = mg ? Math.round(v).toLocaleString('ko-KR') : String(Math.round(v * 10) / 10)
+  return `${n}${space ? ' ' : ''}${mg ? 'mg' : 'g'}`
 }
 
 /** 시:분(서울) */

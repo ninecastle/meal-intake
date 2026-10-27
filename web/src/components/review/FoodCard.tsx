@@ -298,21 +298,12 @@ export default function FoodCard(p: FoodCardProps) {
 
 const MACRO_COLOR = { carbs_g: 'var(--carb)', protein_g: 'var(--prot)', fat_g: 'var(--fat)' } as const
 
-// 탄·단·지(읽기 전용). 값이 없으면 –, DB에 없어 AI 추정으로 채웠으면 시안 "추정" 배지(.est)
+// 탄·단·지(읽기 전용). 값이 없으면 –. DB에 없어 AI 추정으로 채운 값에도 "추정" 표시는 붙이지 않는다(2026-10-28 사용자 결정)
 function Macro({ item, k }: { item: MealItem; k: 'carbs_g' | 'protein_g' | 'fat_g' }) {
   if (!item.per_100g) return <>–</>
   const fill = k === 'protein_g' ? undefined : item.per_100g_fill?.[k]
   if (fill === 'missing') return <>–</>
-  return (
-    <>
-      <b className="num" style={{ color: MACRO_COLOR[k] }}>{`${item.consumed[k].toFixed(1)}g`}</b>
-      {fill === 'ai_estimate' && (
-        <span className="est" style={{ marginLeft: 3, marginRight: 0 }}>
-          추정
-        </span>
-      )}
-    </>
-  )
+  return <b className="num" style={{ color: MACRO_COLOR[k] }}>{`${item.consumed[k].toFixed(1)}g`}</b>
 }
 
 // 입력 중에는 문자열 그대로 두고, 숫자가 되면 올린다(live) 또는 포커스가 빠질 때 올린다.

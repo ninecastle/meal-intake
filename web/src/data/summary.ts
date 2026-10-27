@@ -15,11 +15,21 @@ export interface DaySummaryMeal {
   itemNames: string[]
 }
 
-/** 세부 영양소(D4) 키 순서: 당류·나트륨·포화지방·식이섬유 */
-export const DETAIL_KEYS: readonly DetailKey[] = ['sugar_g', 'sodium_mg', 'satfat_g', 'fiber_g']
+/** 세부 영양소(D4) 아홉 가지, 시안 영양정보 표 순서(2026-10-28 사용자 결정, 대체감미료만 뺌). analysis/compute.ts DETAIL_KEYS와 같다 */
+export const DETAIL_KEYS: readonly DetailKey[] = [
+  'sugar_g',
+  'fiber_g',
+  'satfat_g',
+  'transfat_g',
+  'polyunsat_g',
+  'monounsat_g',
+  'cholesterol_mg',
+  'sodium_mg',
+  'potassium_mg',
+]
 
-/** 세부 영양소 한 가지의 합. value는 값이 있는 음식만 더한 것, count는 그 음식 수, est는 더한 값에 AI 추정이 하나라도 있음 */
-export type DetailTotal = { value: number; count: number; est: boolean }
+/** 세부 영양소 한 가지의 합. value는 값이 있는 음식만 더한 것, count는 그 음식 수("추정" 표시는 하지 않는다, 2026-10-28 사용자 결정) */
+export type DetailTotal = { value: number; count: number }
 /** 세부 영양소 합계(2026-10-27 사용자 결정): 값이 있는 음식만 더하고 화면은 "음식 ○개(items) 중 ○개(count) 기준"을 보인다 */
 export type DetailSummary = { items: number; totals: Partial<Record<DetailKey, DetailTotal>> }
 
@@ -64,7 +74,7 @@ function toDate(t: { toDate(): Date } | null | undefined): Date | null {
   return t && typeof t.toDate === 'function' ? t.toDate() : null
 }
 
-/** 음식별 detail_consumed(먹은 양 기준 세부 영양소)를 더한다. 반올림 전 값을 더한 뒤 g은 소수 첫째 자리, mg은 정수로 한 번만 반올림한다. */
+/** 음식별 detail_consumed(먹은 양 기준 세부 영양소)를 더한다. 반올림 전 값을 더한 뒤 g은 소수 첫째 자리, mg(나트륨·콜레스테롤·칼륨)은 정수로 한 번만 반올림한다. */
 export function sumDetail(analyses: MealIntakeAnalysis[]): DetailSummary {
   let items = 0
   const totals: Partial<Record<DetailKey, DetailTotal>> = {}
@@ -74,16 +84,15 @@ export function sumDetail(analyses: MealIntakeAnalysis[]): DetailSummary {
       for (const k of DETAIL_KEYS) {
         const v = it.detail_consumed?.[k]
         if (typeof v !== 'number' || !Number.isFinite(v)) continue
-        const t = (totals[k] ??= { value: 0, count: 0, est: false })
+        const t = (totals[k] ??= { value: 0, count: 0 })
         t.value += v
         t.count++
-        if (it.detail_source?.[k] === 'ai_estimate') t.est = true
       }
     }
   }
   for (const k of DETAIL_KEYS) {
     const t = totals[k]
-    if (t) t.value = k === 'sodium_mg' ? Math.round(t.value) : round1(t.value)
+    if (t) t.value = k.endsWith('_mg') ? Math.round(t.value) : round1(t.value)
   }
   return { items, totals }
 }
