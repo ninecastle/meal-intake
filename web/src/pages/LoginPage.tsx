@@ -71,7 +71,7 @@ export default function LoginPage() {
       </Button>
 
       {showError && (
-        <p className="text-sm text-red-600">
+        <p className="text-sm text-peach-deep">
           {MESSAGES[error.code]}
           {error.code === 'AUTH_FAILED' && error.originalCode && (
             <span className="block text-xs text-ink-2">오류 코드: {error.originalCode}</span>

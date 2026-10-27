@@ -23,7 +23,7 @@ export default function MetricToggle({ value, onChange }: { value: Metric; onCha
             aria-label={METRIC_NAME[m]}
             onClick={() => onChange(m)}
             className={`focus-ring flex min-h-11 min-w-11 items-center justify-center rounded-full px-1.5 text-sm whitespace-nowrap ${
-              on ? 'bg-surface text-ink shadow-[0_1px_3px_rgba(31,42,46,.12)]' : 'text-ink-2'
+              on ? 'bg-lime text-ink' : 'text-ink-2'
             }`}
           >
             {METRIC_LABEL[m]}

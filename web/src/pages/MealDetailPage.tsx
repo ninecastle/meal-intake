@@ -213,7 +213,7 @@ function DoneMeal({ meal, deleting, onDelete }: { meal: MealWithId; deleting: bo
           type="button"
           onClick={onDelete}
           disabled={deleting}
-          className="focus-ring min-h-[52px] rounded-full border border-red-300 bg-surface text-red-600 disabled:opacity-50"
+          className="focus-ring min-h-[52px] rounded-full border border-peach-deep bg-surface text-peach-deep disabled:opacity-50"
         >
           삭제
         </button>

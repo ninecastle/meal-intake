@@ -297,7 +297,7 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
   const exitLabel = isEdit ? '기록으로' : '홈으로'
 
   return (
-    <div className="mx-auto flex h-dvh max-w-[430px] flex-col bg-ground text-ink">
+    <div className="mx-auto flex h-dvh max-w-[430px] flex-col bg-surface text-ink">
       {dataRouter && <LeaveGuard shouldBlock={shouldBlock} />}
       <TopBar
         className="shrink-0 border-b border-line bg-surface"
@@ -411,9 +411,9 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
               </div>
             )}
             {saveError && (
-              <div role="alert" className="text-sm text-red-700">
+              <div role="alert" className="text-sm text-peach-deep">
                 <p>{SAVE_ERRORS[saveError.code]}</p>
-                {saveError.code === 'MEAL_SAVE_REJECTED' && <p className="text-xs text-red-500">{saveError.detail}</p>}
+                {saveError.code === 'MEAL_SAVE_REJECTED' && <p className="text-xs text-peach-deep">{saveError.detail}</p>}
               </div>
             )}
             {!saving && editorBusy && <p className="text-sm text-ink-2">음식 정보를 다시 계산하는 중이에요. 끝나면 저장할 수 있어요.</p>}

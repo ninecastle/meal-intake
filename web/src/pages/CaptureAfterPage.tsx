@@ -240,7 +240,7 @@ export default function CaptureAfterPage({ uid }: { uid: string }) {
 
       {!meal && !loadError && <p className="mt-4 text-sm text-ink-2">불러오는 중…</p>}
       {loadError && (
-        <div role="alert" className="mt-4 rounded-tile border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+        <div role="alert" className="mt-4 rounded-tile border border-peach-deep bg-peach-soft p-3 text-sm text-ink">
           기록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.
           <Link to="/" className="focus-ring mt-2 flex min-h-11 items-center font-medium underline">
             홈으로
@@ -299,9 +299,9 @@ export default function CaptureAfterPage({ uid }: { uid: string }) {
           )}
 
           {error && (
-            <div role="alert" className="mt-3 rounded-tile border border-red-200 bg-red-50 p-3">
-              <p className="font-semibold text-red-800">{error.title}</p>
-              <p className="mt-1 text-sm text-red-700">{error.detail}</p>
+            <div role="alert" className="mt-3 rounded-tile border border-peach-deep bg-peach-soft p-3">
+              <p className="font-semibold text-peach-deep">{error.title}</p>
+              <p className="mt-1 text-sm text-ink">{error.detail}</p>
               {import.meta.env.DEV && error.devCode && <p className="mt-1 text-xs text-ink-2">{error.devCode}</p>}
             </div>
           )}

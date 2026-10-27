@@ -126,10 +126,10 @@ function toOverride(ovr: OverrideText): GoalOverride | null {
 
 const seg = (on: boolean) =>
   `focus-ring min-h-11 flex-1 rounded-tile border px-3 text-sm disabled:opacity-40 ${
-    on ? 'border-lime-deep bg-lime-soft text-ink' : 'border-line bg-surface text-ink'
+    on ? 'border-lime-deep bg-lime-soft text-ink' : 'border-transparent bg-ground text-ink'
   }`
 const numInput = (bad: boolean) =>
-  `focus-ring min-h-11 w-24 rounded-tile border bg-surface px-3 text-right text-base ${bad ? 'border-red-400' : 'border-line'}`
+  `focus-ring min-h-11 w-24 rounded-tile border bg-surface px-3 text-right text-base ${bad ? 'border-peach-deep' : 'border-line'}`
 
 export default function GoalPage({ uid }: { uid: string }) {
   const navigate = useNavigate()
@@ -299,7 +299,7 @@ export default function GoalPage({ uid }: { uid: string }) {
                       </span>
                     </label>
                     {err && (
-                      <p id={`goal-${key}-err`} className="mt-1 text-right text-sm text-red-600">
+                      <p id={`goal-${key}-err`} className="mt-1 text-right text-sm text-peach-deep">
                         {err}
                       </p>
                     )}
@@ -420,7 +420,7 @@ export default function GoalPage({ uid }: { uid: string }) {
                       })}
                     </ul>
                     {applied.errors.length > 0 && (
-                      <div role="alert" className="mt-2 space-y-1 text-sm text-red-600">
+                      <div role="alert" className="mt-2 space-y-1 text-sm text-peach-deep">
                         {applied.errors.map((e) => (
                           <p key={e}>{e}</p>
                         ))}
@@ -454,9 +454,9 @@ export default function GoalPage({ uid }: { uid: string }) {
               </div>
             )}
             {saveError && (
-              <div role="alert" className="text-sm text-red-700">
+              <div role="alert" className="text-sm text-peach-deep">
                 <p>{SAVE_ERRORS[saveError.code]}</p>
-                {saveError.code === 'GOAL_INVALID' && <p className="text-xs text-red-500">{saveError.detail}</p>}
+                {saveError.code === 'GOAL_INVALID' && <p className="text-xs text-peach-deep">{saveError.detail}</p>}
               </div>
             )}
             <Button full onClick={() => void onSave()} disabled={!canSave}>

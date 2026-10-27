@@ -75,7 +75,7 @@ function waitForFrame(v: HTMLVideoElement, ms: number): Promise<boolean> {
 
 const SLOT = 'flex h-14 w-14 items-center justify-center'
 const ROUND =
-  'focus-ring flex h-12 w-12 items-center justify-center rounded-full bg-black/45 text-white ring-1 ring-white/40 active:bg-black/70 disabled:opacity-40'
+  'focus-ring flex h-12 w-12 items-center justify-center rounded-full bg-ink/58 text-white ring-1 ring-white/35 active:bg-ink disabled:opacity-40'
 
 export default function CameraCapture({ title, hint, onShot, onAlbum, onClose, onFail, overlaySrc }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -236,13 +236,13 @@ export default function CameraCapture({ title, hint, onShot, onAlbum, onClose, o
         />
       )}
       {!live && (
-        <p className="absolute inset-0 flex items-center justify-center text-sm text-white/80">카메라를 켜는 중…</p>
+        <p className="absolute inset-0 flex items-center justify-center text-sm text-white/75">카메라를 켜는 중…</p>
       )}
 
       {/* 위: 닫기 + 제목 + (먹기 전 사진이 있으면) 겹쳐 보기 + 안내. 가로면 오른쪽 셔터 줄 자리를 비운다. */}
-      <div className="absolute top-0 right-0 left-0 bg-linear-to-b from-black/70 to-transparent pt-[max(0.5rem,env(safe-area-inset-top))] pr-3 pb-6 pl-[max(0.75rem,env(safe-area-inset-left))] landscape:right-28">
+      <div className="absolute top-0 right-0 left-0 bg-linear-to-b from-ink/58 to-transparent pt-[max(0.5rem,env(safe-area-inset-top))] pr-3 pb-6 pl-[max(0.75rem,env(safe-area-inset-left))] landscape:right-28">
         <div className="flex items-center gap-2">
-          <button type="button" onClick={onClose} aria-label="닫기" className="focus-ring flex h-11 w-11 shrink-0 items-center justify-center rounded-full active:bg-white/20">
+          <button type="button" onClick={onClose} aria-label="닫기" className="focus-ring flex h-11 w-11 shrink-0 items-center justify-center rounded-full active:bg-white/35">
             <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
@@ -255,7 +255,7 @@ export default function CameraCapture({ title, hint, onShot, onAlbum, onClose, o
               aria-label="먹기 전 사진 겹쳐 보기"
               aria-pressed={overlayOn}
               className={`focus-ring ml-auto flex h-11 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold ring-1 ${
-                overlayOn ? 'bg-lime text-ink ring-lime' : 'bg-black/45 text-white ring-white/40 active:bg-black/70'
+                overlayOn ? 'bg-lime text-ink ring-lime' : 'bg-ink/58 text-white ring-white/35 active:bg-ink'
               }`}
             >
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
@@ -266,7 +266,7 @@ export default function CameraCapture({ title, hint, onShot, onAlbum, onClose, o
             </button>
           )}
         </div>
-        <p className="mx-auto mt-1 w-fit max-w-full rounded-full bg-black/50 px-3 py-1 text-center text-sm font-medium">
+        <p className="mx-auto mt-1 w-fit max-w-full rounded-full bg-ink/58 px-3 py-1 text-center text-sm font-medium">
           {showOverlay ? OVERLAY_HINT : hint}
         </p>
         {/* 사진 전송 고지(스펙 7.1 U4)는 촬영 화면에 늘 보인다 */}
@@ -274,7 +274,7 @@ export default function CameraCapture({ title, hint, onShot, onAlbum, onClose, o
       </div>
 
       {/* 셔터 줄: 세로 = 아래 가로줄(사진첩 · 셔터 · 전환), 가로 = 오른쪽 세로줄(위 전환 · 셔터 · 아래 사진첩) */}
-      <div className="absolute right-0 bottom-0 left-0 flex items-center justify-between bg-linear-to-t from-black/70 to-transparent pt-8 pr-[max(1.5rem,env(safe-area-inset-right))] pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1.5rem,env(safe-area-inset-left))] landscape:top-0 landscape:left-auto landscape:w-28 landscape:flex-col-reverse landscape:bg-linear-to-l landscape:pt-[max(1.5rem,env(safe-area-inset-top))] landscape:pr-[env(safe-area-inset-right)] landscape:pl-0">
+      <div className="absolute right-0 bottom-0 left-0 flex items-center justify-between bg-linear-to-t from-ink/58 to-transparent pt-8 pr-[max(1.5rem,env(safe-area-inset-right))] pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-[max(1.5rem,env(safe-area-inset-left))] landscape:top-0 landscape:left-auto landscape:w-28 landscape:flex-col-reverse landscape:bg-linear-to-l landscape:pt-[max(1.5rem,env(safe-area-inset-top))] landscape:pr-[env(safe-area-inset-right)] landscape:pl-0">
         <div className={SLOT}>
           <button type="button" onClick={onAlbum} aria-label="앨범에서 고르기" className={ROUND}>
             <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
@@ -314,7 +314,7 @@ export default function CameraCapture({ title, hint, onShot, onAlbum, onClose, o
           셔터 줄 뒤에 두어 셔터 줄 위쪽 여백(그라데이션)과 겹쳐도 이 막대가 탭을 받는다. 버튼들과는 겹치지 않는다. */}
       {showOverlay && (
         <div className="pointer-events-none absolute right-0 bottom-[calc(max(1.5rem,env(safe-area-inset-bottom))_+_84px)] left-0 flex justify-center px-4 landscape:right-28 landscape:bottom-[max(1rem,env(safe-area-inset-bottom))] landscape:left-auto landscape:px-2">
-          <div className="pointer-events-auto flex h-11 w-full max-w-xs items-center gap-2 rounded-full bg-black/55 pr-3 pl-4 text-xs font-medium ring-1 ring-white/25 landscape:w-64">
+          <div className="pointer-events-auto flex h-11 w-full max-w-xs items-center gap-2 rounded-full bg-ink/58 pr-3 pl-4 text-xs font-medium ring-1 ring-white/35 landscape:w-64">
             <span aria-hidden="true" className="shrink-0">
               진하기
             </span>

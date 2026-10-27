@@ -24,7 +24,7 @@ export default function AnalyzingOverlay({
       aria-busy="true"
       aria-live="polite"
       aria-label={label}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ground/95 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-surface p-4"
     >
       <div className="mx-auto flex w-full max-w-[430px] flex-col items-center gap-3 text-center">
         <Mascot size={104} decorative />

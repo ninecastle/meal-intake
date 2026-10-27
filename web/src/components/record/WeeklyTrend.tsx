@@ -101,13 +101,13 @@ function rangeLabel(keys: readonly string[]): string {
 /** 먹은 양 선·점 색(디자인 D1-b1): 고른 항목 색. 칼로리 sky-deep(시안 홈 원 그래프), 탄·단·지 carb·prot·fat.
  *  목표는 ink-2 점선, 평균은 peach-deep 둥근 점 줄(시안 평균선)이라 선 모양·색으로 구분된다 */
 const LINE_STROKE: Record<Metric, string> = {
-  kcal: 'stroke-sky-deep',
+  kcal: 'stroke-lime-deep',
   carbs_g: 'stroke-carb',
   protein_g: 'stroke-prot',
   fat_g: 'stroke-fat',
 }
 const LINE_FILL: Record<Metric, string> = {
-  kcal: 'fill-sky-deep',
+  kcal: 'fill-lime-deep',
   carbs_g: 'fill-carb',
   protein_g: 'fill-prot',
   fat_g: 'fill-fat',
@@ -268,14 +268,14 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
         <ul aria-label="범례" className="flex items-center gap-3">
           <li className="flex items-center gap-1">
             <svg width="22" height="10" aria-hidden="true">
-              <line x1="1" y1="5" x2="21" y2="5" className={LINE_STROKE[metric]} strokeWidth="2" strokeLinecap="round" />
-              <circle cx="11" cy="5" r="3.5" className={`${LINE_FILL[metric]} stroke-surface`} strokeWidth="1.5" />
+              <line x1="1" y1="5" x2="21" y2="5" className={LINE_STROKE[metric]} strokeWidth="3" strokeLinecap="round" />
+              <circle cx="11" cy="5" r="3.5" className={`fill-surface ${LINE_STROKE[metric]}`} strokeWidth="2" />
             </svg>
             먹은 양
           </li>
           <li className="flex items-center gap-1">
             <svg width="22" height="10" aria-hidden="true">
-              <line x1="1" y1="5" x2="21" y2="5" className="stroke-ink-2" strokeWidth="1.5" strokeDasharray="4 3" />
+              <line x1="1" y1="5" x2="21" y2="5" className="stroke-ink-3" strokeWidth="1.5" strokeDasharray="4 4" />
             </svg>
             목표
           </li>
@@ -288,8 +288,7 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
                 y2="5"
                 className="stroke-peach-deep"
                 strokeWidth="2"
-                strokeDasharray="0.1 4"
-                strokeLinecap="round"
+                strokeDasharray="2 4"
               />
             </svg>
             평균
@@ -306,8 +305,8 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
             const y = yOf(t)
             return (
               <g key={k}>
-                <line x1={AXIS} x2={PLOT_R} y1={y} y2={y} className={k === 0 ? 'stroke-ink-3/60' : 'stroke-line'} strokeWidth={1} />
-                <text x={AXIS - 3} y={y + 3.5} textAnchor="end" fontSize={10} className="fill-ink-2 tabular-nums">
+                <line x1={AXIS} x2={PLOT_R} y1={y} y2={y} className="stroke-line" strokeWidth={1} />
+                <text x={AXIS - 3} y={y + 3.5} textAnchor="end" fontSize={10} className="fill-ink-3 tabular-nums">
                   {tickText(t)}
                 </text>
               </g>
@@ -316,10 +315,10 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
 
           {/* 목표: 회색 점선, 월~일 전체 폭(미래 날 위로도), 목표가 바뀐 날부터 계단 */}
           {steps && (
-            <path d={goalPath} fill="none" className="stroke-ink-2" strokeWidth={1.5} strokeDasharray="4 3" strokeLinejoin="round" />
+            <path d={goalPath} fill="none" className="stroke-ink-3" strokeWidth={1.5} strokeDasharray="4 4" strokeLinejoin="round" />
           )}
 
-          {/* 평균: peach-deep 둥근 점 줄, 월~일 전체 폭. 목표선과 겹쳐도 점 모양·색으로 구분된다 */}
+          {/* 평균: peach-deep 점선("2 4", 시안), 월~일 전체 폭. 목표선과 겹쳐도 점 모양·색으로 구분된다 */}
           {avg !== null && (
             <line
               x1={AXIS + 2}
@@ -328,8 +327,7 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
               y2={yOf(avg)}
               className="stroke-peach-deep"
               strokeWidth={2}
-              strokeDasharray="0.1 4"
-              strokeLinecap="round"
+              strokeDasharray="2 4"
             />
           )}
 
@@ -342,7 +340,7 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
                 points={run.map((p) => `${cx(p.i)},${yOf(p.v)}`).join(' ')}
                 fill="none"
                 className={LINE_STROKE[metric]}
-                strokeWidth={2}
+                strokeWidth={3}
                 strokeLinejoin="round"
                 strokeLinecap="round"
               />
@@ -353,7 +351,7 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
               cx={cx(p.i)}
               cy={yOf(p.value)}
               r={sel?.d === p.d ? 6 : 4.5}
-              className={`${LINE_FILL[metric]} stroke-surface`}
+              className={`${sel?.d === p.d ? LINE_FILL[metric] : 'fill-surface'} ${LINE_STROKE[metric]}`}
               strokeWidth={2}
             />
           ))}
@@ -375,7 +373,7 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
             const isToday = p.d === today
             const [, m, dd] = p.d.split('-').map(Number)
             const tone =
-              p.i === 5 ? 'fill-blue-600' : p.i === 6 ? 'fill-red-600' : isToday ? 'fill-ink' : 'fill-ink-2'
+              p.i === 5 ? 'fill-sky-deep' : p.i === 6 ? 'fill-peach-deep' : isToday ? 'fill-ink' : 'fill-ink-2'
             return (
               <g key={p.d} className={p.future ? 'opacity-40' : undefined}>
                 <text x={cx(p.i)} y={WD_Y} textAnchor="middle" fontSize={12} fontWeight={isToday ? 700 : 500} className={tone}>
@@ -399,7 +397,7 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
 
         {message && (
           <p className="pointer-events-none absolute inset-x-0 top-[32%] flex justify-center text-sm text-ink-2">
-            <span className="rounded-chip bg-surface/90 px-2 py-0.5">{message}</span>
+            <span className="rounded-chip bg-surface px-2 py-0.5">{message}</span>
           </p>
         )}
 

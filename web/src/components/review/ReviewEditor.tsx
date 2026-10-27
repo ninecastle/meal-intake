@@ -247,7 +247,7 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
       </button>
 
       {undo && (
-        <div className="sticky bottom-2 flex items-center justify-between gap-2 rounded-tile bg-ink px-3 py-1 text-white shadow">
+        <div className="sticky bottom-2 flex items-center justify-between gap-2 rounded-tile bg-ink px-3 py-1 text-white shadow-[0_1px_3px_rgba(31,42,46,.12)]">
           <span className="min-w-0 truncate">‘{undo.item.name || '이름 없음'}’ 삭제함</span>
           <button type="button" onClick={restore} className="focus-ring min-h-11 shrink-0 px-2 font-semibold text-butter">
             되돌리기

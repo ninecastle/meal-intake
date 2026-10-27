@@ -25,11 +25,11 @@ import MetricToggle, { METRIC_NAME } from './MetricToggle'
 const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일'] as const
 
 /** 기록 보기 카드 공통(달력 카드·주간 추이 카드, 2026-10-27 사용자 요청). 바깥 간격은 쓰는 쪽이 붙인다.
- *  좌우 안쪽 여백 6px: 360px 폰에서 카드 안쪽 폭 328 − 테두리 2 − 12 = 314px(8px면 날짜 칸이 40px 아래로 준다) */
-// 테두리: 2026-10-27 사용자 요청으로 굵게 2px(색은 디자인 조각 D1-b1에서 시안 line)
-export const RECORD_CARD = 'rounded-card border-2 border-line bg-surface px-1.5 pt-1 pb-2'
+ *  좌우 안쪽 여백 6px: 360px 폰에서 카드 안쪽 폭 328 − 테두리 6 − 12 = 310px(8px면 날짜 칸이 40px 아래로 준다) */
+// 테두리: 2026-10-27 사용자 요청으로 굵게, 디자인 조각 D2-C에서 확실히 보이게 3px ink-3(시안 chartcard에는 테두리가 없지만 사용자 결정으로 둔다)
+export const RECORD_CARD = 'rounded-card border-[3px] border-ink-3 bg-surface px-1.5 pt-1 pb-2'
 
-/** 날짜 칸 7개 + › 칸 18px. 360px 폰(카드 안쪽 314px, 칸 사이 2px)에서 날짜 칸 (314 − 14 − 18) ÷ 7 ≈ 40.3px */
+/** 날짜 칸 7개 + › 칸 18px. 360px 폰(카드 안쪽 310px, 칸 사이 2px)에서 날짜 칸 (310 − 14 − 18) ÷ 7 ≈ 39.7px */
 const GRID_COLS = 'grid-cols-[repeat(7,minmax(0,1fr))_1.125rem]'
 
 /** › 칸 aria-label용 주 범위 글("10월 19일~25일", 달이 바뀌면 "10월 26일~11월 1일"). WeeklyTrend 제목 범위와 같은 글 */
@@ -39,8 +39,7 @@ function weekRangeText(monday: string, sunday: string): string {
   return m1 === m2 ? `${m1}월 ${d1}일~${d2}일` : `${m1}월 ${d1}일~${m2}월 ${d2}일`
 }
 
-/** 진하기별 칸 바탕(2026-10-27 사용자 요청으로 한 단계씩 연하게: 100·300·500·700 → 50·200·400·600,
- *  이어서 110% 초과만 600 → 500: OKLCH 밝기 59.6% → 69.6%, 3단계 400(76.5%)보다는 여전히 진하다). 0 = 기록 없음(칠하지 않음) */
+/** 진하기별 칸 바탕 = 시안 :root heat0~heat4 그대로(heat1~3 연두 세 단계, 110% 초과 heat4 복숭아). 0 = 기록 없음 */
 const LEVEL_BG: Record<HeatLevel, string> = {
   0: 'bg-heat0',
   1: 'bg-heat1',
@@ -151,7 +150,7 @@ export default function RecordHeatmap({
           <div
             key={w}
             aria-hidden="true"
-            className={`py-1 text-xs font-medium ${i === 5 ? 'text-blue-600' : i === 6 ? 'text-red-600' : 'text-ink-2'}`}
+            className={`py-1 text-xs font-medium ${i === 5 ? 'text-sky-deep' : i === 6 ? 'text-peach-deep' : 'text-ink-3'}`}
           >
             {w}
           </div>
@@ -204,7 +203,7 @@ export default function RecordHeatmap({
                     aria-current={isToday ? 'date' : undefined}
                     className={`focus-ring relative flex aspect-square min-h-11 w-full min-w-0 flex-col items-center justify-start rounded-chip pt-1 ${tone} ${
                       isToday ? 'ring-2 ring-ink ring-inset' : days && !isFuture ? LEVEL_EDGE[heat?.level ?? 0] : ''
-                    } ${!inMonth && !isFuture ? 'opacity-40' : ''}`}
+                    } ${!inMonth && !isFuture ? 'opacity-35' : ''}`}
                   >
                     <span className={`text-xs leading-none sm:text-sm ${isToday ? 'font-bold' : 'font-medium'}`}>
                       {Number(d.slice(8))}
@@ -216,7 +215,7 @@ export default function RecordHeatmap({
                     )}
                     {valueText && (
                       <span
-                        className={`mt-auto mb-1 rounded-full bg-surface/90 px-1 py-0.5 leading-none font-semibold whitespace-nowrap text-ink tabular-nums ring-1 ring-ink/5 ${
+                        className={`mt-auto mb-1 rounded-[6px] bg-white/75 px-1 py-0.5 leading-none font-semibold whitespace-nowrap text-ink tabular-nums ${
                           valueText.length >= 6 ? 'text-[9px] sm:text-[11px]' : 'text-[10px] sm:text-[11px]'
                         }`}
                       >
@@ -245,7 +244,7 @@ export default function RecordHeatmap({
       </div>
 
       {/* 아래 줄: 왼쪽 범례(2×2 + 기준량 한 줄), 오른쪽 항목 선택(위 달력·아래 주간 추이에 함께 적용).
-          범례 묶음은 basis 0 + 자동 최소 폭(= 2×2 칸 폭 약 112px)이라 360px 카드 안쪽(314px)에서 항목 선택(약 189px)과 한 줄에 들어가고,
+          범례 묶음은 basis 0 + 자동 최소 폭(= 2×2 칸 폭 약 112px)이라 360px 카드 안쪽(310px)에서 항목 선택(약 189px)과 한 줄에 들어가고,
           그보다 좁은 화면에서만 항목 선택이 다음 줄 오른쪽으로 내려간다(가로 넘침 없음). 기준량 글은 남은 폭 안에서 줄바꿈.
           카드 안으로 들어가며 폭이 14px 줄어 범례 칸 좌우 여백 6→4px, 줄 간격 8→6px로 줄였다 */}
       <div className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-2">
