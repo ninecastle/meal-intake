@@ -1,10 +1,12 @@
 // S2 먹기 전 촬영. 사진을 고르면: 끼니·dateKey(촬영 시각) → 압축 → newMealId → IndexedDB 임시 보관
 // → 먹기 전 분석(호출 A) → awaiting_after 기록(기다리지 않음) → S3. 사진 선택 1회 = 분석 1회, 자동 재호출 없음.
+// 사진을 얻는 방법은 useCaptureSource(M19): 폰·태블릿은 앱 안 카메라 화면(고지 확인 뒤면 바로 연다), PC는 파일 고르기.
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { analyzeBefore } from '../analysis/analyze'
 import { loadNutritionDb } from '../analysis/nutrition/db'
 import AnalyzingOverlay from '../components/capture/AnalyzingOverlay'
+import { CameraHelp, CaptureButtons } from '../components/capture/CaptureControls'
 import {
   describeAnalysisError,
   isAbortError,
@@ -13,6 +15,7 @@ import {
   writeNoticeAck,
   type ErrorView,
 } from '../components/capture/captureText'
+import { captureSourceHint, useCaptureSource } from '../components/capture/useCaptureSource'
 import { createAwaitingMeal, newMealId } from '../data/meals'
 import { guessMealType, toDateKey } from '../lib/time'
 import { beforePhotoStore } from '../photos/beforePhotoStore'
@@ -21,7 +24,8 @@ import type { AfterPageState } from './CaptureAfterPage'
 
 export default function CaptureBeforePage({ uid }: { uid: string }) {
   const navigate = useNavigate()
-  const inputRef = useRef<HTMLInputElement>(null)
+  // 고지 확인 창 뒤에 이어서 할 동작(파일 고르기·카메라 열기 중 누른 것)
+  const pendingRef = useRef<(() => void) | null>(null)
   const busyRef = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
   // 분당 한도 뒤 [다시 시도]용 압축본. 이 화면 메모리에만 둔다(누를 때만 다시 호출, 자동 재시도 없음).
@@ -29,6 +33,12 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
   const [busy, setBusy] = useState(false)
   const [showNotice, setShowNotice] = useState(false)
   const [error, setError] = useState<ErrorView | null>(null)
+  const cap = useCaptureSource({
+    title: '먹기 전 사진',
+    hint: '수저를 함께, 위에서 찍어 주세요',
+    onPick: (f) => void onPick(f),
+    autoOpen: readNoticeAck(),
+  })
 
   // 결과 화면에서 쓸 식약처 DB JSON을 미리 받아 둔다(실패해도 결과 화면이 다시 시도한다).
   useEffect(() => {
@@ -37,19 +47,27 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
   // 화면을 떠나면 진행 중 분석을 끊는다.
   useEffect(() => () => abortRef.current?.abort(), [])
 
-  function startCapture() {
+  // 사진 전송 고지를 아직 확인하지 않았으면 먼저 보이고, 확인하면 누른 동작을 이어서 한다.
+  function gated(fn: () => void) {
     if (busyRef.current) return
     if (!readNoticeAck()) {
+      pendingRef.current = fn
       setShowNotice(true)
       return
     }
-    inputRef.current?.click()
+    fn()
+  }
+
+  function startCapture() {
+    gated(cap.take)
   }
 
   function acceptNotice() {
     writeNoticeAck()
     setShowNotice(false)
-    inputRef.current?.click()
+    const fn = pendingRef.current
+    pendingRef.current = null
+    fn?.()
   }
 
   function goManual() {
@@ -118,7 +136,8 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
 
       <h1 className="mt-2 text-2xl font-bold">먹기 전 사진</h1>
       <p className="mt-2 text-base text-gray-800">수저를 함께, 위에서 찍어 주세요</p>
-      <p className="mt-1 text-sm text-gray-500">카메라가 없으면 사진을 고를 수 있어요.</p>
+      <p className="mt-1 text-sm text-gray-500">{captureSourceHint(cap)}</p>
+      <CameraHelp cap={cap} disabled={busy} />
 
       {error && (
         <div role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3">
@@ -175,14 +194,7 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
           </>
         ) : (
           <>
-            <button
-              type="button"
-              onClick={startCapture}
-              disabled={busy}
-              className={`${primary} bg-emerald-600 text-white disabled:opacity-50`}
-            >
-              {error ? '다시 찍기' : '사진 찍기'}
-            </button>
+            <CaptureButtons cap={cap} cameraLabel={error ? '다시 찍기' : '카메라로 찍기'} disabled={busy} gate={gated} />
             <button
               type="button"
               onClick={goManual}
@@ -194,18 +206,7 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
         )}
       </div>
 
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0]
-          e.target.value = ''
-          if (f) void onPick(f)
-        }}
-      />
+      {cap.elements}
 
       {showNotice && (
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 p-4">

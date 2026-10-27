@@ -2,11 +2,15 @@
 // → needs_review 저장(기다리지 않음) → S4. 먹은 후 사진은 이 화면 메모리에만 둔다.
 // 남긴 비율이 불확실한(null) 음식이 있으면(먹은 후 사진이 달라 보임, 2026-10-27) 먹기 전 사진을 지우지 않고 저장도 하지 않는다
 // (문서는 awaiting_after 그대로). S4에 retake: true를 넘겨 [먹은 후 사진 다시 찍기]를 보이게 한다.
+// 사진을 얻는 방법은 useCaptureSource(M19): 폰·태블릿은 [남은 음식 찍기] → 앱 안 카메라 화면, PC는 파일 고르기.
+// 먹는 동안 카메라가 켜져 있지 않게 S3는 카메라를 바로 열지 않는다.
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { analyzeAfter, assembleAnalysis } from '../analysis/analyze'
 import AnalyzingOverlay from '../components/capture/AnalyzingOverlay'
+import { CameraHelp, CaptureButtons } from '../components/capture/CaptureControls'
 import { describeAnalysisError, isAbortError, PHOTO_NOTICE, type ErrorView } from '../components/capture/captureText'
+import { captureSourceHint, useCaptureSource } from '../components/capture/useCaptureSource'
 import { deleteMeal, getMeal, saveReview, type MealType } from '../data/meals'
 import { beforePhotoStore } from '../photos/beforePhotoStore'
 import { compressPhoto } from '../photos/compress'
@@ -38,12 +42,17 @@ export default function CaptureAfterPage({ uid }: { uid: string }) {
   const [busy, setBusy] = useState<Busy>(null)
   const [samePending, setSamePending] = useState<{ beforePhoto: Blob; afterPhoto: Blob } | null>(null)
   const [error, setError] = useState<ErrorView | null>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
   const busyRef = useRef(false)
   const opRef = useRef(0)
   const abortRef = useRef<AbortController | null>(null)
   // 분당 한도 뒤 [다시 시도]용. 압축본 두 장을 이 화면 메모리에만 둔다(어디에도 저장하지 않는다).
   const lastShot = useRef<{ beforePhoto: Blob | null; afterPhoto: Blob } | null>(null)
+  const cap = useCaptureSource({
+    title: '먹은 후 사진',
+    hint: '같은 위치·각도로 찍어 주세요',
+    onPick: (f) => void onPick(f),
+    overlaySrc: photoUrl, // 조각 2에서 겹쳐 보기로 그린다
+  })
 
   // state가 없으면 문서를 불러온다. 없거나 상태가 다르면 홈으로.
   useEffect(() => {
@@ -164,7 +173,7 @@ export default function CaptureAfterPage({ uid }: { uid: string }) {
   async function retryLast() {
     const shot = lastShot.current
     if (!shot) {
-      inputRef.current?.click()
+      cap.take()
       return
     }
     if (busyRef.current || !meal) return
@@ -181,7 +190,7 @@ export default function CaptureAfterPage({ uid }: { uid: string }) {
 
   function pickOther() {
     setSamePending(null)
-    inputRef.current?.click()
+    cap.take()
   }
 
   // 남긴 양 직접 고르기: 먹은 후 분석 없이 S4로(remaining_ratio는 모두 null). 먹기 전 사진은 남긴다.
@@ -261,6 +270,8 @@ export default function CaptureAfterPage({ uid }: { uid: string }) {
           </ul>
 
           <p className="mt-3 text-base text-gray-800">같은 위치·각도로 찍어 주세요</p>
+          <p className="mt-1 text-sm text-gray-500">{captureSourceHint(cap)}</p>
+          <CameraHelp cap={cap} disabled={busy != null} />
 
           {samePending && (
             <div role="alert" className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3">
@@ -307,7 +318,7 @@ export default function CaptureAfterPage({ uid }: { uid: string }) {
                 >
                   다시 시도
                 </button>
-                <button type="button" onClick={() => inputRef.current?.click()} disabled={busy != null} className={secondary}>
+                <button type="button" onClick={cap.take} disabled={busy != null} className={secondary}>
                   다시 찍기
                 </button>
                 <button type="button" onClick={() => void chooseManually()} className={secondary}>
@@ -319,20 +330,13 @@ export default function CaptureAfterPage({ uid }: { uid: string }) {
                 <button type="button" onClick={() => void chooseManually()} className={`${primary} bg-emerald-600 text-white`}>
                   남긴 양 직접 고르기
                 </button>
-                <button type="button" onClick={() => inputRef.current?.click()} className={secondary}>
+                <button type="button" onClick={cap.take} className={secondary}>
                   다시 찍기
                 </button>
               </>
             ) : (
               <>
-                <button
-                  type="button"
-                  onClick={() => inputRef.current?.click()}
-                  disabled={busy != null}
-                  className={`${primary} bg-emerald-600 text-white disabled:opacity-50`}
-                >
-                  {error ? '다시 찍기' : '남은 음식 찍기'}
-                </button>
+                <CaptureButtons cap={cap} cameraLabel={error ? '다시 찍기' : '남은 음식 찍기'} disabled={busy != null} />
                 {error && (
                   <button type="button" onClick={() => void chooseManually()} className={secondary}>
                     남긴 양 직접 고르기
@@ -344,18 +348,7 @@ export default function CaptureAfterPage({ uid }: { uid: string }) {
         </>
       )}
 
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0]
-          e.target.value = ''
-          if (f) void onPick(f)
-        }}
-      />
+      {cap.elements}
 
       {busy === 'after' && (
         <AnalyzingOverlay

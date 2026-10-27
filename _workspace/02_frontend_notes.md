@@ -302,3 +302,35 @@
 ### 홈 날짜 줄 통일·주 › 칸 색 (2026-10-27 사용자 요청, 리더)
 - 홈 날짜 줄: 오늘·지난 날 모두 윗줄 날짜 글자("10월 27일 (화)", 누르면 기록 보기), 아랫줄 "오늘로"(지난 날, 테두리 없는 초록 글자, 누르면 오늘) 또는 "오늘"(회색, 누를 수 없음) + 달력 아이콘. 오늘이면 "다음 날 ▶" 흐리게·비활성. 두 줄이 항상 있어 높이 72px로 같음(360px 확인).
 - 기록 보기 › 칸: 모든 주 `bg-gray-100 text-gray-500`, 고른 주 `bg-gray-300 font-bold text-gray-900`, 미래 주는 바탕 없이 `text-gray-200`·비활성.
+
+## 카메라 조각 1 (2026-10-27, M19 스펙 4.8): 사진 얻는 방법만 바꿈
+분석 호출·IndexedDB 임시 보관·같은 사진 확인·오류 처리·고지 창은 그대로이고, 얻은 사진은 기존 `onPick(file)` → `compressPhoto` 경로로 간다. AI 호출 0회.
+
+### 구조
+- `lib/cameraSupport.ts`: `detectCaptureMode(globals)` 순수 함수(가짜 전역값으로 시험), `classifyCameraError`, `openCameraStream`(facingMode `ideal`, 1920×1080 `ideal`), `stopStream`, `countVideoInputs`.
+- `components/capture/useCaptureSource.tsx`: S2·S3 공용 훅. 방식(`camera`/`pc`/`fallback`), 숨은 input 두 개(capture 없음 = 앨범·파일, `capture=environment` = 기기 카메라), 열려 있으면 `CameraCapture`. 사진을 얻으면 카메라를 닫고 `onPick(file, { source })`(source는 조각 3 EXIF용, 지금 화면은 안 씀). `captureSourceHint`(방식별 안내 한 줄).
+- `components/capture/CameraCapture.tsx`: 전체 화면 `<video playsInline muted autoPlay>`, 위 닫기·제목·안내("수저를 함께, 위에서 찍어 주세요" / "같은 위치·각도로 찍어 주세요")·사진 전송 고지(작은 글자), 셔터 줄 = 세로 아래(사진첩 · 셔터 · 전환), 가로 오른쪽 세로줄(위 전환 · 셔터 · 아래 사진첩, Tailwind `landscape:`), `env(safe-area-inset-*)`. 셔터 = 원래 해상도 canvas → JPEG 0.92 `File`(`camera-<ms>.jpg`, lastModified = 찍은 시각) → 바로 분석. `overlaySrc` 자리만 있음(조각 2).
+- `components/capture/CaptureControls.tsx`: `CaptureButtons`(방식별 아래 버튼), `CameraHelp`(대체 이유 안내 + [다시 시도]).
+- 카메라 끄기: 셔터 직후(분석 동안), 닫기·화면 떠남(언마운트), `visibilitychange` hidden·`pagehide`. 보이면 다시 켬. 요청마다 세대 번호를 올려 늦게 온 스트림은 바로 끈다(전환·StrictMode 이중 실행). 트랙이 저절로 끝나면(다른 앱) 보이는 중일 때만 시작 실패로 대체.
+
+### 구분 조건·대체
+- camera: 터치(`(pointer: coarse)` 또는 `maxTouchPoints > 0`) + `getUserMedia` + `isSecureContext`. 터치인데 둘 중 하나가 없으면 처음부터 `fallback`(이유 unsupported). 터치 없음 = pc.
+- 대체 이유: `NotAllowedError`·`SecurityError` → denied(아이폰·아이패드 사파리, 안드로이드 크롬 권한 켜는 법 + [다시 시도], PC면 PC 크롬 줄 추가), `NotFoundError`·`OverconstrainedError` → notfound, 그 밖의 오류·첫 프레임이 10초 안에 안 나옴·트랙이 저절로 끝남 → failed(셔터의 toBlob 실패는 대체하지 않고 카메라를 다시 켬), getUserMedia 없음·보안 출처 아님 → unsupported(짧은 안내만, [다시 시도] 없음).
+- fallback 버튼: [카메라로 찍기](`capture=environment`) 주 버튼 + [앨범에서 고르기]. PC: [사진 파일 고르기] 주 버튼 + `videoinput`이 있으면 [카메라로 찍기](같은 카메라 화면). PC에서 웹캠이 실패하면 PC 방식은 그대로 두고 안내 + [다시 시도]만 더한다.
+- aria 이름: 사진 찍기(셔터), 앨범에서 고르기, 카메라 전환, 닫기, 사진 파일 고르기, 카메라로 찍기, 다시 시도. 버튼 44px 이상(셔터 76px, 둥근 버튼 48px).
+
+### 다르게 정한 점
+- S2는 고지를 확인한 뒤면 들어오자마자 카메라 화면을 연다(탭 하나 줄임). 처음(고지 전)은 [카메라로 찍기] → 고지 창 → 카메라. S3는 먹는 동안 카메라가 켜져 있지 않게 바로 열지 않고 [남은 음식 찍기]로 연다.
+- S2 주 버튼 글자 "사진 찍기" → "카메라로 찍기"(카메라 화면의 셔터가 "사진 찍기"라 이름이 겹치지 않게). 닫기(X)로 나오면 기존 화면([직접 입력] 포함)이 보인다.
+- 전환 버튼은 권한을 받은 뒤 `videoinput`이 2개 이상일 때만 보인다. 전면이면 미리보기만 좌우 반전하고 사진은 원래 방향.
+- 미리보기는 `object-cover`(전체 화면)라 화면 가장자리 밖이 조금 더 찍힌다(찍힌 사진 ⊇ 보이는 화면).
+- 오류 상태의 [다시 찍기]는 방식별 기본 동작(camera → 카메라 화면, pc → 파일 고르기, fallback → 기기 카메라).
+- `index.html`에 `viewport-fit=cover`가 없어 iOS에서 안전 영역 값은 0이다(사파리가 안전 영역 안에만 그려 문제는 없음). 전체 화면을 노치까지 쓰려면 나중에 추가.
+
+### 확인한 것
+- `tsc -b`·`npm run build` 통과, 바꾼 파일 oxlint 경고 0. `detectCaptureMode` 7경우(아이폰, 아이패드 Mac UA·fine pointer, 안드로이드 http, gUM 없음, PC, matchMedia 없음·예외)·오류 분류 5경우 통과(스크래치 스크립트).
+- 헤드리스 Chrome 가짜 카메라 + StrictMode로 `CameraCapture`만 따로 그려 봄: 390×844 세로 아래 줄, 1024×768 가로 오른쪽 줄, 1920×1080 프레임, hidden → 트랙 끔·visible → 다시 켬, 셔터 두 번 눌러도 사진 1장(image/jpeg, 찍은 시각), 셔터 뒤 트랙 끔.
+
+### 남은 이슈(실기기)
+- 아이폰·아이패드 사파리: 인라인 재생, 후면 기본, 가로·세로 전환 때 줄 위치, 권한 거부 → 대체·안내, 다른 앱 갔다 오면 다시 켜짐, 표시등 꺼짐. 안드로이드 크롬 폰·태블릿: 후면 여러 개일 때 `ideal: environment`가 주 카메라를 고르는지, 사진첩 열었다 닫을 때 카메라 다시 켜짐. 터치 노트북은 camera 방식이 된다(웹캠 + 사진첩으로 동작).
+- 조각 2(S3 겹쳐 보기 `overlaySrc`), 조각 3(HEIC·EXIF, `PickMeta.source` 사용).
