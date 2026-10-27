@@ -70,11 +70,16 @@ export interface RecordHeatmapProps {
   days: ReadonlyMap<string, Nutrients> | null
   /** 격자 끝 날짜까지의 날짜별 목표. ready인데 null이면 목표를 못 불러옴(색 없이 숫자만) */
   goals: readonly DatedGoal[] | null
+  /** 아래 ① 주간 추이가 보고 있는 주의 월요일. 그 주 줄을 옅은 회색 테두리로 표시한다(없으면 표시 안 함) */
+  weekStart?: string
   onOpenDay: (dateKey: string) => void
 }
 
-export default function RecordHeatmap({ month, today, metric, ready, days, goals, onOpenDay }: RecordHeatmapProps) {
+export default function RecordHeatmap({ month, today, metric, ready, days, goals, weekStart, onOpenDay }: RecordHeatmapProps) {
   const cells = monthGrid(month)
+  // 고른 주 줄(0부터). 격자 1줄은 요일 머리줄이라 grid-row는 +2
+  const weekIndex = weekStart ? cells.findIndex((c) => c.dateKey === weekStart) : -1
+  const weekRow = weekIndex >= 0 ? Math.floor(weekIndex / 7) : -1
   const unit = METRIC_UNIT[metric]
   const daysError = ready && days === null
   const goalsError = ready && days !== null && goals === null
@@ -96,7 +101,16 @@ export default function RecordHeatmap({ month, today, metric, ready, days, goals
         ) : null}
       </p>
 
-      <div className="mt-1 grid grid-cols-7 gap-0.5 text-center sm:gap-1">
+      <div className="relative mt-1 grid grid-cols-7 gap-0.5 text-center sm:gap-1">
+        {/* 고른 주 줄 표시: 절대 위치 격자 자식이라 칸 배치에 끼지 않고 그 줄 영역을 기준으로 놓인다.
+            테두리는 안쪽(ring-inset) 2px라 칸 사이 틈(2px)에만 그려져 칸 색·오늘 테두리를 가리지 않는다 */}
+        {weekRow >= 0 && (
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute -inset-0.5 rounded-lg ring-2 ring-gray-400 ring-inset sm:-inset-1"
+            style={{ gridColumn: '1 / -1', gridRow: weekRow + 2 }}
+          />
+        )}
         {WEEKDAYS.map((w, i) => (
           <div
             key={w}

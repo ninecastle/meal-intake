@@ -1,7 +1,10 @@
 // S10 기록 보기(3단계 조각 3-1, 스펙 4.7절 "기록 보기", 2026-10-27 사용자 결정으로 히트맵 달력). AI 호출 없음.
 // 주소 /calendar?month=YYYY-MM(없거나 틀리거나 이번 달보다 뒤면 이번 달, lib/calendar.ts parseMonth).
 // 상태는 페이지가 갖는다: 보고 있는 달(?month)과 고른 항목(metric, localStorage 'record-view-metric').
-// 위쪽 [◀ 10월 ▶] · [칼로리|탄|단|지]가 아래 섹션 모두에 같이 적용된다. 지금은 달력(RecordHeatmap)만 있다.
+// 위쪽 [◀ 10월 ▶] · [칼로리|탄|단|지]가 아래 섹션 모두에 같이 적용된다. 달력(RecordHeatmap) 아래 ① 주간 추이(WeeklyTrend).
+// 고른 주 = ?week=월요일 dateKey(lib/week.ts parseWeek: 틀리거나 미래 주이거나 그달 격자 밖이면 그달 기본 주).
+// 주 이동은 ?month·?week를 replace(옮긴 주가 격자 밖이면 monthForWeek로 달도 따라감). 달 이동은 ?week를 빼서 기본 주로.
+// 고른 주는 항상 그달 격자 안이라 주간 추이도 아래 두 구독 값을 그대로 쓴다(새 구독 없음).
 // 달력 조회: 격자 첫 칸~마지막 칸(gridRange, 앞뒤 달 날짜 포함, 최대 42일) 기록(subscribeDaysInRange)과 마지막 칸까지의
 // 날짜별 목표(subscribeGoalsUpTo). 두 구독의 첫 값이 모두 오기 전에는 숫자·색을 비우고 "불러오는 중…".
 // 방문 기록: 홈에서 push(state.fromHome)로 들어온다. 달 이동은 ?month만 replace(state는 그대로 넘겨 fromHome을 지킨다).
@@ -14,9 +17,11 @@ import { homeHref } from '../components/mealText'
 import MetricToggle from '../components/record/MetricToggle'
 import MonthNav from '../components/record/MonthNav'
 import RecordHeatmap from '../components/record/RecordHeatmap'
+import WeeklyTrend from '../components/record/WeeklyTrend'
 import { subscribeGoalsUpTo, type DatedGoal } from '../data/goals'
 import { subscribeDaysInRange } from '../data/meals'
 import { gridRange, METRICS, parseMonth, shiftMonth, type Metric } from '../lib/calendar'
+import { isCurrentOrLaterWeek, monthForWeek, parseWeek, shiftWeek } from '../lib/week'
 import { toDateKey } from '../lib/time'
 import type { Nutrients } from '../types/analysis'
 
@@ -49,6 +54,7 @@ export default function CalendarPage({ uid }: { uid: string }) {
   const [params] = useSearchParams()
   const today = toDateKey(new Date())
   const month = parseMonth(params.get('month'), today)
+  const week = parseWeek(params.get('week'), month, today)
   const { start, end } = gridRange(month)
   const fromHome = (location.state as { fromHome?: unknown } | null)?.fromHome === true
   const leaving = useRef(false)
@@ -96,6 +102,17 @@ export default function CalendarPage({ uid }: { uid: string }) {
     if (next > today.slice(0, 7)) return
     // state를 그대로 넘겨야 fromHome이 남는다(달을 옮겨도 ‹·날짜 누르기가 홈 한 칸으로 돌아간다)
     navigate({ pathname: '/calendar', search: `?month=${next}` }, { replace: true, state: location.state })
+  }
+
+  /** 주간 추이 ◀ 지난주 / 다음 주 ▶. 격자 밖으로 나가면 달력 달도 그 주 월요일의 달로 */
+  function moveWeek(delta: number) {
+    if (delta > 0 && isCurrentOrLaterWeek(week, today)) return
+    const next = shiftWeek(week, delta)
+    const nextMonth = monthForWeek(month, next)
+    navigate(
+      { pathname: '/calendar', search: `?month=${nextMonth}&week=${next}` },
+      { replace: true, state: location.state },
+    )
   }
 
   function goHome() {
@@ -146,12 +163,25 @@ export default function CalendarPage({ uid }: { uid: string }) {
           ready={ready}
           days={dayTotals}
           goals={goalList}
+          weekStart={week}
           onOpenDay={(d) => void openDay(d)}
         />
       </div>
 
-      {/* 아래 섹션(앞으로, 같은 metric·month를 props로 받는다):
-          ① 주간 추이 그래프(조각 4) ② PREMIUM 주간 분석 리포트 ③ PREMIUM 월간 그래프·요약 */}
+      {/* 아래 섹션 순서(같은 metric·month·week와 두 구독 값을 props로 받는다):
+          ① 주간 추이 그래프(무료, 조각 4) → ② PREMIUM 주간 분석 리포트 → ③ PREMIUM 월간 그래프·요약 */}
+      <WeeklyTrend
+        weekStart={week}
+        today={today}
+        metric={metric}
+        ready={ready}
+        days={dayTotals}
+        goals={goalList}
+        onMoveWeek={moveWeek}
+        onOpenDay={(d) => void openDay(d)}
+      />
+      {/* ② PREMIUM 주간 분석 리포트: 프리미엄 단계에서 만든다(PREMIUM 배지·"프리미엄 기능(월 요금 예정)" 미리보기·[체험하기]) */}
+      {/* ③ PREMIUM 월간 그래프·요약: 프리미엄 단계에서 만든다 */}
     </main>
   )
 }

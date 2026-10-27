@@ -1,0 +1,350 @@
+// 기록 보기(S10) ① 주간 추이(3단계 조각 4, M17, 스펙 4.7절 "주간 추이"). AI 호출 없음.
+// 그리기만 한다: 고른 주(?week → parseWeek)·항목·조회 결과는 페이지(CalendarPage)가 넘긴다. 고른 주는 항상 그달 격자 안이라
+// 달력이 이미 구독한 격자 범위 값(날짜별 totals·목표 기록)을 그대로 쓴다(새 구독 없음).
+// 계산은 lib/calendar.ts(metricOf·targetOf·goalForDate)와 lib/week.ts(weekDays·axisTicks·isCurrentOrLaterWeek) 그대로.
+// 그래프는 인라인 SVG(외부 차트 라이브러리 없음, viewBox + 폭 100%). 날짜 칸 누르기는 SVG 위에 겹친 HTML 버튼 7개:
+// 칸 폭 = 전체 폭 ÷ 7(360px 폰에서 약 47px), 높이 = 그래프 전체. 그래서 눈금 숫자는 왼쪽 여백 대신 보조선 위 안쪽에 둔다.
+import { useState } from 'react'
+import type { DatedGoal } from '../../data/goals'
+import { goalForDate, metricOf, METRIC_UNIT, REFERENCE_AMOUNT, targetOf, type Metric } from '../../lib/calendar'
+import { axisTicks, isCurrentOrLaterWeek, weekDays } from '../../lib/week'
+import type { Nutrients } from '../../types/analysis'
+import { dateKeyLabel, formatGrams, formatKcal } from '../mealText'
+import { METRIC_NAME } from './MetricToggle'
+
+const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일'] as const
+
+// SVG 좌표(viewBox). 360px 폰(본문 328px)에서 약 0.98배, 태블릿(본문 최대 416px)에서 약 1.24배로 그려진다.
+const COL = 48
+const W = COL * 7
+const TOP = 16 // 맨 위 보조선(위에 눈금 숫자 자리)
+const BASE = 152 // 세로축 0
+const WD_Y = 170 // 요일 글자 기준선(요일·날짜 글자 12, 360px 폰에서 약 11.7px)
+const DATE_Y = 187 // 날짜 글자 기준선
+const H = 196
+const cx = (i: number) => COL * i + COL / 2
+
+/** 눈금 숫자: 소수 눈금(예: 1.5g)을 반올림하지 않게 한 자리까지 */
+const tickText = (t: number) => t.toLocaleString('ko-KR', { maximumFractionDigits: 1 })
+
+interface DayPoint {
+  i: number
+  d: string
+  future: boolean
+  /** 그날 고른 항목 합계. 기록 없음·미래·불러오기 전이면 null(0으로 그리지 않는다) */
+  value: number | null
+  /** 그날 목표(goalForDate). 목표 기록 없음·미래·목표를 못 불러왔으면 null */
+  target: number | null
+}
+
+/** 값이 이어지는 날끼리 묶는다(null에서 끊긴다) */
+function runs(points: readonly DayPoint[], pick: (p: DayPoint) => number | null): { i: number; v: number }[][] {
+  const out: { i: number; v: number }[][] = []
+  let cur: { i: number; v: number }[] = []
+  for (const p of points) {
+    const v = pick(p)
+    if (v === null) {
+      if (cur.length > 0) out.push(cur)
+      cur = []
+    } else cur.push({ i: p.i, v })
+  }
+  if (cur.length > 0) out.push(cur)
+  return out
+}
+
+/** "10월 26일~11월 1일", 같은 달이면 "11월 2일~8일" */
+function rangeLabel(keys: readonly string[]): string {
+  const [, m1, d1] = keys[0].split('-').map(Number)
+  const [, m2, d2] = keys[6].split('-').map(Number)
+  return m1 === m2 ? `${m1}월 ${d1}일~${d2}일` : `${m1}월 ${d1}일~${m2}월 ${d2}일`
+}
+
+export interface WeeklyTrendProps {
+  /** 고른 주의 월요일 dateKey(페이지가 ?week를 parseWeek로 읽은 값, 항상 그달 격자 안) */
+  weekStart: string
+  /** 오늘 dateKey */
+  today: string
+  metric: Metric
+  /** 두 구독(기록·목표)의 첫 값(또는 오류)이 모두 왔는지 */
+  ready: boolean
+  /** 격자 범위 날짜별 하루 합계(done만). ready인데 null이면 기록을 못 불러옴 */
+  days: ReadonlyMap<string, Nutrients> | null
+  /** 격자 끝 날짜까지의 날짜별 목표. ready인데 null이면 목표를 못 불러옴(점선 없이) */
+  goals: readonly DatedGoal[] | null
+  /** ◀ 지난주(-1) / 다음 주 ▶(+1). 주·달 바꾸기는 페이지가 한다 */
+  onMoveWeek: (delta: number) => void
+  /** [그날 기록 보기] = 달력 날짜 누르기와 같은 처리 */
+  onOpenDay: (dateKey: string) => void
+}
+
+export default function WeeklyTrend({ weekStart, today, metric, ready, days, goals, onMoveWeek, onOpenDay }: WeeklyTrendProps) {
+  const [picked, setPicked] = useState<string | null>(null)
+  const keys = weekDays(weekStart)
+  const range = rangeLabel(keys)
+  const unit = METRIC_UNIT[metric]
+  const loaded = ready && days !== null
+  const goalsKnown = ready && goals !== null
+
+  const points: DayPoint[] = keys.map((d, i) => {
+    const future = d > today
+    const totals = ready && !future ? days?.get(d) : undefined
+    const t = ready && !future && goals ? targetOf(goalForDate(goals, d), metric) : null
+    return { i, d, future, value: totals ? metricOf(totals, metric) : null, target: t !== null && t > 0 ? t : null }
+  })
+  const recorded = points.filter((p): p is DayPoint & { value: number } => p.value !== null)
+  const targetDays = points.filter((p) => p.target !== null).length
+
+  const ticks = axisTicks(
+    points.flatMap((p) => [p.value, p.target]).filter((v): v is number => v !== null),
+    REFERENCE_AMOUNT[metric],
+  )
+  const max = ticks[ticks.length - 1]
+  const yOf = (v: number) => BASE - (v / max) * (BASE - TOP)
+
+  const valueRuns = runs(points, (p) => p.value)
+  const targetRuns = runs(points, (p) => p.target)
+
+  // 고른 날: 다른 주로 옮기면 그 주에 없으니 저절로 풀린다
+  const sel = loaded ? (points.find((p) => p.d === picked && !p.future) ?? null) : null
+
+  const fmt = (n: number) => (unit === 'kcal' ? formatKcal(n) : formatGrams(n))
+  const amount = (n: number) => `${fmt(n)}${unit}`
+  /** 먹은 양: kcal은 "511kcal", g 항목은 "탄수화물 230g" */
+  const eaten = (n: number) => (unit === 'kcal' ? amount(n) : `${METRIC_NAME[metric]} ${amount(n)}`)
+
+  function detailText(p: DayPoint): string {
+    const head = p.value === null ? '기록 없음' : eaten(p.value)
+    if (!goalsKnown) return head
+    if (p.target === null) return `${head} · 목표 없음`
+    if (p.value === null) return `${head} · 목표 ${amount(p.target)}`
+    return `${head} / 목표 ${amount(p.target)}(${Math.round((p.value / p.target) * 100)}%)`
+  }
+
+  function dayLabel(p: DayPoint): string {
+    const parts: string[] = [dateKeyLabel(p.d)]
+    if (p.d === today) parts.push('오늘')
+    if (p.future) parts.push('아직 오지 않은 날')
+    else if (!ready) parts.push('불러오는 중')
+    else if (days === null) parts.push('기록을 불러오지 못함')
+    else {
+      parts.push(p.value === null ? '기록 없음' : eaten(p.value))
+      if (goalsKnown) parts.push(p.target === null ? '목표 없음' : `목표 ${amount(p.target)}`)
+    }
+    return parts.join(', ')
+  }
+
+  const message = !ready
+    ? '불러오는 중…'
+    : days === null
+      ? '기록을 불러오지 못했어요'
+      : recorded.length === 0
+        ? '이 주에는 기록이 없어요'
+        : null
+
+  let summary = `${METRIC_NAME[metric]} 주간 꺾은선그래프, ${range}. `
+  if (message) summary += message.replace('…', '')
+  else {
+    const avg = recorded.reduce((s, p) => s + p.value, 0) / recorded.length
+    const top = recorded.reduce((a, b) => (b.value > a.value ? b : a))
+    summary += `기록 ${recorded.length}일, 하루 평균 ${amount(avg)}, 가장 많은 날 ${dateKeyLabel(top.d)} ${amount(top.value)}`
+  }
+  if (targetDays > 0) summary += '. 점선은 그날 목표'
+
+  return (
+    <section aria-labelledby="weekly-trend-title" className="mt-6 border-t border-gray-100 pt-4">
+      <div className="flex flex-wrap items-center justify-between gap-x-2">
+        <h2 id="weekly-trend-title" className="text-base font-bold whitespace-nowrap">
+          주간 추이 <span className="font-medium text-gray-600">· {range}</span>
+        </h2>
+        <nav aria-label="주 이동" className="-mr-2 ml-auto flex">
+          <button
+            type="button"
+            onClick={() => onMoveWeek(-1)}
+            className="flex min-h-11 items-center rounded-lg px-2 text-sm whitespace-nowrap text-gray-700"
+          >
+            ◀ 지난주
+          </button>
+          <button
+            type="button"
+            onClick={() => onMoveWeek(1)}
+            disabled={isCurrentOrLaterWeek(weekStart, today)}
+            className="flex min-h-11 items-center rounded-lg px-2 text-sm whitespace-nowrap text-gray-700 disabled:text-gray-300"
+          >
+            다음 주 ▶
+          </button>
+        </nav>
+      </div>
+
+      {/* 범례 "— 먹은 양 · - - 목표"와 단위 */}
+      <div className="mt-1 flex items-center justify-between text-xs text-gray-600">
+        <ul aria-label="범례" className="flex items-center gap-3">
+          <li className="flex items-center gap-1">
+            <svg width="22" height="10" aria-hidden="true">
+              <line x1="1" y1="5" x2="21" y2="5" className="stroke-emerald-600" strokeWidth="2" strokeLinecap="round" />
+              <circle cx="11" cy="5" r="3.5" className="fill-emerald-600 stroke-white" strokeWidth="1.5" />
+            </svg>
+            먹은 양
+          </li>
+          <li className="flex items-center gap-1">
+            <svg width="22" height="10" aria-hidden="true">
+              <line x1="1" y1="5" x2="21" y2="5" className="stroke-gray-500" strokeWidth="1.5" strokeDasharray="4 3" />
+            </svg>
+            목표
+          </li>
+        </ul>
+        <span>단위 {unit}</span>
+      </div>
+
+      <div className="relative mt-1">
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={summary} className="block h-auto w-full">
+          {/* 가로 보조선과 눈금 숫자(데이터보다 먼저 그려 아래에 깔린다. 숫자는 흰 테두리로 보조선을 끊는다) */}
+          {ticks.map((t, k) => {
+            const y = yOf(t)
+            return (
+              <g key={k}>
+                <line x1={0} x2={W} y1={y} y2={y} className={k === 0 ? 'stroke-gray-300' : 'stroke-gray-200'} strokeWidth={1} />
+                <text
+                  x={2}
+                  y={y - 3}
+                  fontSize={10}
+                  className="fill-gray-500 tabular-nums"
+                  stroke="white"
+                  strokeWidth={3}
+                  strokeLinejoin="round"
+                  style={{ paintOrder: 'stroke' }}
+                >
+                  {tickText(t)}
+                </text>
+              </g>
+            )
+          })}
+
+          {/* 그날 목표: 회색 점선. 목표 기록 없는 날에서 끊기고, 하루만 있으면 그날 짧은 가로 점선 */}
+          {targetRuns.map((run, k) =>
+            run.length === 1 ? (
+              <line
+                key={k}
+                x1={cx(run[0].i) - 14}
+                x2={cx(run[0].i) + 14}
+                y1={yOf(run[0].v)}
+                y2={yOf(run[0].v)}
+                className="stroke-gray-500"
+                strokeWidth={1.5}
+                strokeDasharray="4 3"
+              />
+            ) : (
+              <polyline
+                key={k}
+                points={run.map((p) => `${cx(p.i)},${yOf(p.v)}`).join(' ')}
+                fill="none"
+                className="stroke-gray-500"
+                strokeWidth={1.5}
+                strokeDasharray="4 3"
+                strokeLinejoin="round"
+              />
+            ),
+          )}
+
+          {/* 먹은 양: emerald 실선과 점. 기록 없는 날은 0으로 그리지 않고 선을 끊는다. 오늘 이후는 그리지 않는다 */}
+          {valueRuns
+            .filter((run) => run.length > 1)
+            .map((run, k) => (
+              <polyline
+                key={k}
+                points={run.map((p) => `${cx(p.i)},${yOf(p.v)}`).join(' ')}
+                fill="none"
+                className="stroke-emerald-600"
+                strokeWidth={2}
+                strokeLinejoin="round"
+                strokeLinecap="round"
+              />
+            ))}
+          {recorded.map((p) => (
+            <circle
+              key={p.d}
+              cx={cx(p.i)}
+              cy={yOf(p.value)}
+              r={sel?.d === p.d ? 6 : 4.5}
+              className="fill-emerald-600 stroke-white"
+              strokeWidth={2}
+            />
+          ))}
+
+          {/* 가로축: 요일과 날짜(토 파랑, 일 빨강). 주의 첫날과 1일은 "11/1"처럼 달을 붙인다. 오늘은 굵게 + 밑줄 */}
+          {points.map((p) => {
+            const isToday = p.d === today
+            const [, m, dd] = p.d.split('-').map(Number)
+            const tone =
+              p.i === 5 ? 'fill-blue-600' : p.i === 6 ? 'fill-red-600' : isToday ? 'fill-gray-900' : 'fill-gray-600'
+            return (
+              <g key={p.d} className={p.future ? 'opacity-40' : undefined}>
+                <text x={cx(p.i)} y={WD_Y} textAnchor="middle" fontSize={12} fontWeight={isToday ? 700 : 500} className={tone}>
+                  {WEEKDAYS[p.i]}
+                </text>
+                <text
+                  x={cx(p.i)}
+                  y={DATE_Y}
+                  textAnchor="middle"
+                  fontSize={12}
+                  fontWeight={isToday ? 700 : 400}
+                  className={`${tone} tabular-nums`}
+                >
+                  {p.i === 0 || dd === 1 ? `${m}/${dd}` : dd}
+                </text>
+                {isToday && <rect x={cx(p.i) - 8} y={DATE_Y + 3} width={16} height={2} rx={1} className="fill-gray-900" />}
+              </g>
+            )
+          })}
+        </svg>
+
+        {message && (
+          <p className="pointer-events-none absolute inset-x-0 top-[32%] flex justify-center text-sm text-gray-500">
+            <span className="rounded bg-white/90 px-2 py-0.5">{message}</span>
+          </p>
+        )}
+
+        {/* 누르는 곳: 날짜 칸 세로 띠 전체(폭 = 전체 ÷ 7, 높이 = 그래프 전체) */}
+        <div className="absolute inset-0 grid grid-cols-7">
+          {points.map((p) => {
+            const on = sel?.d === p.d
+            return (
+              <button
+                key={p.d}
+                type="button"
+                disabled={!loaded || p.future}
+                aria-pressed={on}
+                aria-label={dayLabel(p)}
+                onClick={() => setPicked(on ? null : p.d)}
+                className={`min-w-0 rounded-md focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-emerald-600 ${
+                  on ? 'bg-gray-900/5' : ''
+                }`}
+              />
+            )
+          })}
+        </div>
+      </div>
+
+      {/* 고른 날: 값과 목표, [그날 기록 보기](달력 날짜 누르기와 같은 onOpenDay) */}
+      <div aria-live="polite" className="mt-2 flex min-h-14 items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-1.5">
+        {sel ? (
+          <>
+            <p className="min-w-0 text-sm leading-snug text-gray-800">
+              <span className="block font-semibold">{dateKeyLabel(sel.d)}</span>
+              <span className="sr-only"> · </span>
+              <span className="block tabular-nums">{detailText(sel)}</span>
+            </p>
+            <button
+              type="button"
+              onClick={() => onOpenDay(sel.d)}
+              className="min-h-11 shrink-0 rounded-lg border border-emerald-600 bg-white px-3 text-sm font-semibold whitespace-nowrap text-emerald-700"
+            >
+              그날 기록 보기
+            </button>
+          </>
+        ) : (
+          <p className="text-sm text-gray-500">점이나 날짜를 누르면 그날 값을 볼 수 있어요</p>
+        )}
+      </div>
+    </section>
+  )
+}
