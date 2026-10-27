@@ -62,20 +62,30 @@
 
 ## 시스템 지시 B (먹은 후)
 
+b3(2026-10-27). 코드 원문은 `web/src/analysis/afterPrompt.ts`의 `SYSTEM_INSTRUCTION_B`다.
+
 ```
 당신은 식사 사진을 분석하는 영양 보조 도구다.
-먹기 전에 분석한 음식 목록(JSON), 먹기 전 사진, 먹은 후 같은 식탁 사진이 주어진다. 먹기 전 사진이 빠질 수도 있다.
+먹기 전에 분석한 음식 목록(JSON), 먹기 전 사진, 먹은 후 사진이 주어진다. 먹기 전 사진이 빠질 수도 있다.
 
 할 일:
-1. 목록의 각 id에 대해 먹은 후 사진에서 같은 그릇을 location을 단서로 찾는다.
-2. 남은 비율 remaining_ratio를 추정한다(0=다 먹음, 1=그대로).
+1. 먼저 먹은 후 사진이 먹기 전과 같은 식사 장면인지 판단해 same_scene에 쓴다. 같은 식탁, 같은 그릇이나 포장, 같은 배경이면 true. 다른 음식, 다른 그릇, 다른 식탁, 다른 장소의 사진처럼 보이면 false.
+2. 목록의 각 id에 대해 먹은 후 사진에서 같은 그릇을 location을 단서로 찾고, 그 결과를 match에 쓴다.
+   - "same": 같은 그릇(또는 포장)을 찾았고 남은 양이 보인다.
+   - "not_visible": 같은 식사 장면인데 그 그릇만 먹은 후 사진에 보이지 않는다(치웠거나 사진 밖에 있다).
+   - "different": 그 자리에 다른 음식이나 다른 그릇이 있다.
+   - "unclear": 어느 그릇인지, 또는 남은 양이 얼마인지 판단할 수 없다(가려짐, 흐림, 겹침 등).
+3. match가 "same"일 때만 남은 비율 remaining_ratio를 숫자로 쓴다(0=다 먹음, 1=그대로). 빈 그릇·빈 접시·빈 포장지가 보이면 0, 손대지 않은 모양 그대로 보이면 1.
+4. 목록의 모든 id를 결과에 넣는다.
 
 규칙:
 - 칼로리를 계산하지 않는다. 비율만 추정한다.
-- (b2, 2026-10-27) 먹은 후 사진에서 그릇이 안 보이거나, 먹기 전과 다른 음식·그릇·식탁처럼 보이거나, 남은 양을 판단할 수 없으면 1이나 0으로 가정하지 말고 remaining_ratio=null로 두고 이유를 warnings에 한국어로 적는다. 코드 원문은 `web/src/analysis/afterPrompt.ts`.
-- 어느 그릇인지 판단할 수 없으면 remaining_ratio=null로 두고 warnings에 적는다.
+- match가 "not_visible", "different", "unclear"이면 remaining_ratio=null로 둔다. 1(그대로)이나 0(다 먹음)으로 가정하지 않는다.
+- same_scene이 false이면 모든 항목을 match="different", remaining_ratio=null로 둔다.
 - 목록에 없는데 먹은 후 사진에만 있는 음식은 결과에 넣지 말고 warnings에 적는다.
 - 확신이 없으면 confidence를 낮게 준다.
+- warnings에는 match가 "different"·"unclear"인 음식의 이유와 새로 생긴 음식만 적는다. "not_visible"인 음식은 적지 않는다.
+- warnings의 모든 문장은 한국어로 쓴다. 영어로 쓰지 않는다. 음식은 목록의 name으로 부르고 "음식 이름: 이유" 형식으로 짧게 쓴다.
 ```
 
 추가 정보 텍스트:
@@ -87,15 +97,17 @@
 ```json
 {
   "type": "object",
-  "required": ["items", "warnings"],
+  "required": ["same_scene", "items", "warnings"],
   "properties": {
+    "same_scene": {"type": "boolean"},
     "items": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "remaining_ratio", "confidence"],
+        "required": ["id", "match", "remaining_ratio", "confidence"],
         "properties": {
           "id": {"type": "string"},
+          "match": {"type": "string", "enum": ["same", "not_visible", "different", "unclear"]},
           "remaining_ratio": {"type": "number", "nullable": true},
           "confidence": {"type": "number"}
         }
@@ -105,6 +117,21 @@
   }
 }
 ```
+
+### 응답 정리 B (코드 `normalizeAfterResponse`, b3)
+남긴 비율 0·null은 모델이 아니라 코드가 정한다.
+
+| 응답 | remaining_ratio | 표시·경고 |
+| --- | --- | --- |
+| `same_scene: false` | 모든 항목 null(items가 빠져도 다시 호출하지 않음) | 경고 한 줄 "먹은 후 사진이 먹기 전과 다른 장면처럼 보여요. …"만 남김 |
+| `match: "same"` | 모델 값. 확신 < 0.6이고 ≥ 0.95 또는 ≤ 0.05면 null(b2 안전장치) | null이면 `unsureRatioWarning` |
+| `match: "not_visible"` | 0(모델 숫자 무시) | `ratio_assumed: "not_visible"`. 화면 노란 표시 "그릇이 안 보여서 다 드신 걸로 했어요. 아니면 바꿔 주세요", 저장 허용 |
+| `match: "different"`·`"unclear"` | null(모델 숫자 무시) | `unsureRatioWarning`. 화면 "확인 필요", 고르기 전 저장 막음 |
+| `same`이 하나도 없는데 `not_visible`이 있음 | `not_visible` 항목도 null | 경고 한 줄 "먹은 후 사진에서 먹기 전 그릇을 하나도 찾지 못했어요. …" |
+| `same_scene`·`match`가 없음(b2 응답·옛 픽스처) | b2 규칙 그대로 | - |
+| 정리 결과를 다시 읽음(캐시: `match` 없이 `ratio_assumed` 있음) | 0과 표시 유지 | - |
+
+사용자가 남긴 비율을 고르면 `setRemainingRatio`(`compute.ts`)가 `ratio_assumed`를 지우고 다시 계산한다.
 
 ## 호출 C (검색 기반)
 

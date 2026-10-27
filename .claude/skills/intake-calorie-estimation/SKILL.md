@@ -28,7 +28,7 @@ description: "먹기 전·후 음식 사진을 촬영 즉시 Gemini(Firebase AI 
 1. **먹기 전 분석(호출 A)**: 먹기 전 사진 한 장 → 음식 목록(`id`, `name`, `location`, `before_grams`, `confidence`, `per_100g_guess`). 프롬프트는 `references/prompt-template.md`의 호출 A. 결과를 `awaiting_after` 상태로 Firestore에 저장하고, 사진은 IndexedDB에 임시 보관한다.
    - `location`(예: "왼쪽 위 밥공기")은 먹은 후 분석에서 그릇을 찾는 단서다.
    - `per_100g_guess`를 미리 받아 두면 3단계(AI 추정)에 추가 호출이 필요 없다.
-2. **먹은 후 분석(호출 B)**: IndexedDB의 먹기 전 사진 + 먹은 후 사진 + 호출 A 결과 JSON(텍스트) → 항목별 `remaining_ratio`, `confidence`, `warnings`. 두 장을 함께 보내 매칭 정확도를 높인다. 성공하면 IndexedDB의 먹기 전 사진을 지운다. 먹기 전 사진이 없으면 텍스트만으로 호출하고 `warnings`에 "먹기 전 사진 없이 분석"을 남긴다.
+2. **먹은 후 분석(호출 B)**: IndexedDB의 먹기 전 사진 + 먹은 후 사진 + 호출 A 결과 JSON(텍스트) → `same_scene`, 항목별 `match`·`remaining_ratio`·`confidence`, `warnings`(b3, 0·null은 코드가 정한다. "판단 기준" 참고). 두 장을 함께 보내 매칭 정확도를 높인다. 성공하면 IndexedDB의 먹기 전 사진을 지운다. 먹기 전 사진이 없으면 텍스트만으로 호출하고 `warnings`에 "먹기 전 사진 없이 분석"을 남긴다.
 3. **영양값 조회 `resolveNutrition(name)`** — 항목마다 다음 순서로 100g당 kcal·탄수화물·단백질·지방(g)을 구한다.
    1. **DB**: 앱에 포함한 식약처 식품영양성분 DB JSON(음식 표준데이터 전체)에서 이름 정규화(공백·괄호 제거) 후 정확 일치 → 별칭 → 부분 일치 순으로 찾는다. 찾으면 `nutrition_source: "db"`, `db_food_code` 기록.
    2. **검색 기반**: DB에 없으면 Gemini + Google 검색 그라운딩(`tools: [{ googleSearch: {} }]`, 호출 C)으로 찾는다. 성공하면 `nutrition_source: "search"`. 응답의 `groundingMetadata.searchEntryPoint.renderedContent`를 화면에 넘겨 사용 조건대로 검색 추천을 표시하게 한다.
@@ -59,7 +59,10 @@ description: "먹기 전·후 음식 사진을 촬영 즉시 Gemini(Firebase AI 
 
 ## 판단 기준
 - **나눠 먹은 반찬**: 모델은 공유 여부를 판단하지 않는다. 모든 음식의 `eaters` 기본값은 1이고, 사용자가 결과 수정 화면에서 반찬별로 인원수만 고른다. 전·후 차이가 여러 사람의 섭취량이므로 인원수로 나눈다.
-- **먹은 후 사진에 없는 음식, 먹기 전과 다른 음식·장면처럼 보일 때**: 다 먹었는지, 프레임 밖인지, 다른 사진인지 구분할 수 없다. 0(다 먹음)이나 1(그대로)로 가정하지 않고 `remaining_ratio: null`로 두고 한국어 경고를 남긴다. 화면은 "확인 필요"로 보이고 사용자가 남긴 양을 고르기 전에는 저장하지 않는다(2026-10-27 사용자 결정, 프롬프트 b2).
+- **먹은 후 사진에서 그릇을 찾은 결과(2026-10-27 사용자 결정, 프롬프트 b3)**: 호출 B는 맨 위 `same_scene`(같은 식사 장면인가)과 항목마다 `match`(`same`·`not_visible`·`different`·`unclear`)를 답하고, 남긴 비율 0·null은 코드가 정한다.
+  - **같은 장면인데 그 그릇만 안 보임(`not_visible`)**: "모름"으로 막지 않는다. `remaining_ratio: 0`(다 먹음)으로 미리 골라 두고 `ratio_assumed: "not_visible"`을 붙인다. 화면은 노란 표시 "그릇이 안 보여서 다 드신 걸로 했어요. 아니면 바꿔 주세요"를 보이고 저장을 허용한다. 사용자가 비율을 고르면 `setRemainingRatio`가 표시를 지운다.
+  - **다른 음식·그릇(`different`), 판단할 수 없음(`unclear`), 다른 장면(`same_scene: false`)**: 0(다 먹음)이나 1(그대로)로 가정하지 않고 `remaining_ratio: null`과 한국어 경고를 남긴다. 화면은 "확인 필요"로 보이고 사용자가 남긴 양을 고르기 전에는 저장하지 않는다.
+  - **같은 그릇(`same`)을 하나도 못 찾았는데 안 보이는 그릇이 있을 때**: 같은 장면이라는 근거가 식탁·배경뿐이라 다른 사진일 가능성이 크다. 안 보이는 그릇도 null로 둔다(전부 다 먹음으로 조용히 저장되는 것을 막는다).
 - **먹은 후 사진에 새로 생긴 음식**: 리필·추가 주문일 수 있다. 계산에서 빼고 경고로 알린다.
 - **크기 기준**: 숟가락·젓가락·표준 공기(밥 210g 기준)를 크기 단서로 쓰라고 프롬프트에 적는다. 촬영 안내 화면에서 "같은 위치·각도, 수저를 함께"를 요청한다.
 - **국물 음식**: 건더기와 국물을 나눠 추정한다. 국물은 대부분 남기므로 한 덩어리로 보면 칼로리가 크게 틀린다.

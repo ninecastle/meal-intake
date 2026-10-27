@@ -41,7 +41,7 @@ export function recomputeItem(item: MealItem): MealItem {
   if (p) for (const k of NUTRIENT_KEYS) consumed[k] = (Math.max(0, num(p[k], 0)) * consumed_grams) / 100
   const kcal_overridden = p === null || item.kcal_overridden === true
   if (kcal_overridden) consumed.kcal = Math.max(0, num(item.consumed?.kcal, 0))
-  return {
+  const out: MealItem = {
     ...item,
     eaters,
     before_grams,
@@ -52,6 +52,9 @@ export function recomputeItem(item: MealItem): MealItem {
     kcal_overridden,
     needs_review: confidence < LOW_CONFIDENCE || remaining_ratio === null,
   }
+  // b3: 그릇이 안 보여 0으로 둔 표시(ratio_assumed)는 남긴 비율이 0일 때만 남긴다(setRemainingRatio를 거치지 않고 비율이 바뀐 경우 대비)
+  if ('ratio_assumed' in out && !(out.ratio_assumed === 'not_visible' && remaining_ratio === 0)) delete out.ratio_assumed
+  return out
 }
 
 function copyReference(r: DbReference): DbReference {
@@ -206,6 +209,7 @@ function toStoredItem(it: MealItem): MealItem {
     before_grams: round1(it.before_grams),
     ...publishedFields(it),
     remaining_ratio: it.remaining_ratio,
+    ...(it.ratio_assumed === 'not_visible' && it.remaining_ratio === 0 ? { ratio_assumed: 'not_visible' as const } : {}),
     consumed_grams: round1(it.consumed_grams),
     per_100g: it.per_100g ? { ...it.per_100g } : null,
     ...(fill ? { per_100g_fill: fill } : {}),

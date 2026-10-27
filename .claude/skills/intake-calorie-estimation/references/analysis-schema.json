@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "MealIntakeAnalysis v2",
-  "description": "먹기 전·후 사진 분석으로 계산한 한 끼 섭취 결과. Firestore meals/{id}.analysis에 그대로 저장한다. 프런트·분석 모듈·QA가 공유하는 계약(타입: web/src/types/analysis.ts, 검증: scripts/validate_analysis.mjs, web/src/analysis/validate.ts). 사진 관련 필드는 두지 않는다. v2(스펙 3.3절): db_name, db_match, per_100g_fill, db_ml_converted, db_reference 추가. 공개 중량(스펙 4.5.5): grams_source, published_g, unit_count 추가(세 필드는 함께, before_grams ≈ published_g × unit_count ±1g은 검증 스크립트가 검사). 계산식 검사(섭취 중량·섭취 값·합계, 허용 오차 2% 또는 1)는 JSON Schema로 표현할 수 없어 검증 스크립트가 한다.",
+  "description": "먹기 전·후 사진 분석으로 계산한 한 끼 섭취 결과. Firestore meals/{id}.analysis에 그대로 저장한다. 프런트·분석 모듈·QA가 공유하는 계약(타입: web/src/types/analysis.ts, 검증: scripts/validate_analysis.mjs, web/src/analysis/validate.ts). 사진 관련 필드는 두지 않는다. v2(스펙 3.3절): db_name, db_match, per_100g_fill, db_ml_converted, db_reference 추가. 공개 중량(스펙 4.5.5): grams_source, published_g, unit_count 추가(세 필드는 함께, before_grams ≈ published_g × unit_count ±1g은 검증 스크립트가 검사). b3(2026-10-27): ratio_assumed(not_visible, remaining_ratio=0일 때만) 추가. 계산식 검사(섭취 중량·섭취 값·합계, 허용 오차 2% 또는 1)는 JSON Schema로 표현할 수 없어 검증 스크립트가 한다.",
   "type": "object",
   "required": ["items", "totals", "warnings"],
   "additionalProperties": false,
@@ -54,6 +54,7 @@
           "published_g": {"type": "number", "exclusiveMinimum": 0, "description": "공개 중량(g, 식약처 DB 식품중량, ml은 1ml=1g)"},
           "unit_count": {"type": "integer", "minimum": 1, "maximum": 10, "description": "통째로 보인 개수(호출 A whole_count)"},
           "remaining_ratio": {"type": ["number", "null"], "minimum": 0, "maximum": 1, "description": "남은 양 비율(0=다 먹음, 1=그대로). null=매칭 실패(0으로 계산, needs_review=true)"},
+          "ratio_assumed": {"const": "not_visible", "description": "b3(2026-10-27). 같은 식사 장면인데 먹은 후 사진에 그 그릇만 안 보여 remaining_ratio=0(다 먹음)으로 미리 골라 둔 경우만. remaining_ratio=0일 때만 넣는다. 화면: 노란 표시 \"그릇이 안 보여서 다 드신 걸로 했어요. 아니면 바꿔 주세요\"(저장 허용). 사용자가 남긴 비율을 고르면 지운다"},
           "consumed_grams": {"type": "number", "minimum": 0, "description": "before_grams × (1 − remaining_ratio) ÷ eaters"},
           "per_100g": {"oneOf": [{"$ref": "#/$defs/nutrients"}, {"type": "null"}], "description": "user_input일 때만 null 허용"},
           "per_100g_fill": {
@@ -74,6 +75,10 @@
           {
             "if": {"anyOf": [{"required": ["grams_source"]}, {"required": ["published_g"]}, {"required": ["unit_count"]}]},
             "then": {"required": ["grams_source", "published_g", "unit_count"]}
+          },
+          {
+            "if": {"required": ["ratio_assumed"]},
+            "then": {"properties": {"remaining_ratio": {"const": 0}}}
           },
           {
             "if": {"properties": {"nutrition_source": {"const": "db"}}, "required": ["nutrition_source"]},

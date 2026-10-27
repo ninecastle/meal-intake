@@ -42,7 +42,7 @@ const ok = (cond, msg) => {
 }
 
 // ── 프롬프트 버전·문구 ──
-ok(A.PROMPT_VERSION_A === 'a4' && B.PROMPT_VERSION_B === 'b2', `버전 a4·b2 (${A.PROMPT_VERSION_A}·${B.PROMPT_VERSION_B})`)
+ok(A.PROMPT_VERSION_A === 'a4' && B.PROMPT_VERSION_B === 'b3', `버전 a4·b3 (${A.PROMPT_VERSION_A}·${B.PROMPT_VERSION_B})`)
 ok(/한국어로 쓴다/.test(A.SYSTEM_INSTRUCTION_A) && /한국어로 쓴다/.test(B.SYSTEM_INSTRUCTION_B), 'A·B 지시에 한국어 규칙')
 ok(/다른 음식, 다른 그릇, 다른 식탁/.test(B.SYSTEM_INSTRUCTION_B) && /remaining_ratio=null/.test(B.SYSTEM_INSTRUCTION_B), 'B 지시에 다른 장면 → null 규칙')
 ok(!/안 보이면 remaining_ratio=0/.test(B.SYSTEM_INSTRUCTION_B), 'b1의 "그릇이 안 보이면 0" 규칙 없음')
@@ -104,11 +104,11 @@ ok(rb.ok && rb.items[0].remaining_ratio === null && rb.items[1].remaining_ratio 
 ok(rb.ok && !rb.warnings.includes(unsure('불고기 버거')) && rb.warnings.includes(unsure('감자튀김')), 'B: 이름 있는 모델 경고면 추가 안 함, 없으면 한국어 경고 추가')
 ok(rb.ok && rb.warnings.filter((w) => w === K.GENERIC_MODEL_NOTE).length === 1, 'B: 일반 안내는 한 번만')
 
-// 목업 픽스처(after-bibimbap): i6 배추김치 1·0.6은 경계라 그대로, 결과 변화 없음
+// 목업 픽스처(after-bibimbap, b3 형식): i4 unclear → null, i5 not_visible → 0, i6 1·0.6은 경계라 그대로(b3 규칙은 b3_test.mjs)
 const fxB = JSON.parse(readFileSync(W + 'src/analysis/__fixtures__/after-bibimbap.json', 'utf8'))
 const fxA = A.normalizeBeforeResponse(JSON.parse(readFileSync(W + 'src/analysis/__fixtures__/before-bibimbap.json', 'utf8')))
 rb = fxA.ok ? B.normalizeAfterResponse(fxB, fxA.items) : { ok: false }
-ok(rb.ok && JSON.stringify(rb.items.map((i) => i.remaining_ratio)) === JSON.stringify(fxB.items.map((i) => i.remaining_ratio)), '목업 픽스처 남긴 비율 그대로')
+ok(rb.ok && JSON.stringify(rb.items.map((i) => i.remaining_ratio)) === JSON.stringify([0.3, 0, 1, null, 0, 1]), `목업 픽스처 남긴 비율 (${JSON.stringify(rb.ok && rb.items.map((i) => i.remaining_ratio))})`)
 
 // ── aiCall: 가짜 모델 ──
 const okResponse = (text) => ({ response: { candidates: [{ finishReason: 'STOP' }], text: () => text } })

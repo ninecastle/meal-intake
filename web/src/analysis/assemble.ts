@@ -42,7 +42,7 @@ async function mapLimit<T, R>(xs: T[], limit: number, fn: (x: T) => Promise<R>):
   return out
 }
 
-function draftItem(b: BeforeItem, ratio: number | null, confidence: number): MealItem {
+function draftItem(b: BeforeItem, ratio: number | null, confidence: number, assumed = false): MealItem {
   return {
     id: b.id,
     name: b.name,
@@ -51,6 +51,7 @@ function draftItem(b: BeforeItem, ratio: number | null, confidence: number): Mea
     eaters: 1,
     before_grams: b.before_grams,
     remaining_ratio: ratio,
+    ...(assumed && ratio === 0 ? { ratio_assumed: 'not_visible' as const } : {}),
     consumed_grams: 0,
     per_100g: null,
     nutrition_source: 'user_input',
@@ -79,6 +80,7 @@ function joinVersion(a: string | undefined, b: string | undefined): string | und
 /** A·B를 id로 합치고 항목마다 resolveNutrition(name, { guess: per_100g_guess })(동시 최대 4개) → applyNutrition → buildAnalysis.
  *  after가 null이면 remaining_ratio를 모두 null로 둔다(남긴 비율 직접 고르기 경로). 항목 confidence는 A·B 중 낮은 값.
  *  조회가 실패(예외·중단)하면 guess가 있으면 AI 추정, 없으면 직접 입력으로 둔다. eaters는 1. 오류를 던지지 않는다.
+ *  AfterItem.ratio_assumed('not_visible', remaining_ratio=0일 때만)는 MealItem.ratio_assumed로 옮긴다(b3).
  *  공개 중량 조건(publishedGrams)을 모두 만족하면 before_grams = published_g × whole_count, grams_source·published_g·unit_count를 넣는다. */
 export async function assembleAnalysis(
   before: BeforeAnalysis,
@@ -123,7 +125,9 @@ export async function assembleAnalysis(
         if (guess && !signal?.aborted) warnings.push(`${b.name}: 영양값 조회에 실패해 AI 추정값을 썼습니다`)
       }
       if (r.source === 'user_input') warnings.push(`${b.name}: 영양값을 찾지 못했습니다. 칼로리를 직접 입력해 주세요`)
-      const draft = draftItem(b, ratio, confidence)
+      // b3: 같은 장면인데 그릇이 안 보여 0으로 둔 항목은 표시(ratio_assumed)를 MealItem으로 옮긴다
+      const assumed = a?.ratio_assumed === 'not_visible' && ratio === 0
+      const draft = draftItem(b, ratio, confidence, assumed)
       const pub = publishedGrams(b, r)
       if (pub) Object.assign(draft, { before_grams: pub.published_g * pub.unit_count, grams_source: 'published' as const, ...pub })
       return applyNutrition(draft, r)

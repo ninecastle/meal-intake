@@ -16,6 +16,7 @@
 | `goal_test.mjs` | 목표 계산 `goal.ts`(스펙 4.7 손 계산, 미성년, 직접 조정 하한, 목표 비교) | `node spike/tests/goal_test.mjs .` |
 | `chunk_reload_test.mjs` | 화면 파일 불러오기 실패 판별·60초 1회 자동 새로고침(`lib/chunkReload.ts`) | `node spike/tests/chunk_reload_test.mjs .` |
 | `korean_unsure_test.mjs` | 프롬프트 a4·b2: 영어 경고 → 일반 안내, 확신 낮은 끝값(≥0.95·≤0.05) → null, 모델 null 유지, 분당 429 재시도 없음(가짜 모델로 `aiCall.ts`) | `node spike/tests/korean_unsure_test.mjs` |
+| `b3_test.mjs` | 프롬프트 b3: `same_scene`·`match` 규칙(같은 장면 + 안 보임 → 0과 `ratio_assumed`, 다른 그릇·판단 불가·다른 장면 → null, 같은 그릇 0개면 안 보임도 null, match 없음 → b2), 캐시 다시 읽기, assemble·compute 전달, `setRemainingRatio`, validate.ts·`validate_analysis.mjs`·스키마 | `node spike/tests/b3_test.mjs` |
 
 `assemble.ts`처럼 앱용 `nutrition/index.ts`·`lib/ai`(import.meta.env)를 따라가는 모듈은 Node에서 바로 못 불러온다.
 `piece4_integration.mjs`는 `module.registerHooks`로 두 모듈을 빈 모듈로 바꿔 돌린다. 10/29 측정 스크립트도 이 방식을 쓴다.

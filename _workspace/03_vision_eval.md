@@ -146,3 +146,20 @@
 - 호출 D(d1)는 숫자만 받으므로 그대로.
 - 응답 스키마 제안(이번에는 넣지 않음): 호출 B 항목에 `match: "same" | "different" | "not_visible" | "unclear"`를 받으면 null 이유를 코드가 문구로 정하고, 모델 경고 언어에 기대지 않아도 된다. 픽스처·검증·after_test까지 바뀌므로 4단계 평가 때 정한다.
 - 시험 `spike/tests/korean_unsure_test.mjs`(19개 통과, 실제 호출 없음, 가짜 모델) + 기존 시험 모두 통과, `tsc -b` 통과. a3·b1 캐시는 prompt_version이 달라 다시 분석된다. 실제 응답 확인은 10/29 측정 때.
+
+## 프롬프트 b3 (2026-10-27, 사용자 결정)
+- 결정: 같은 식사 장면인데 그 그릇만 먹은 후 사진에 안 보이면 "모름"으로 막지 않고 남긴 비율 0(다 먹음)으로 미리 골라 둔다. 화면은 노란 표시 "그릇이 안 보여서 다 드신 걸로 했어요. 아니면 바꿔 주세요"를 보이고 저장을 허용한다. 다른 음식·다른 장면·판단 불가는 b2처럼 null("확인 필요", 고르기 전 저장 막음). 계약은 리더가 정했다(`d747fe6`: `MealItem`·`AfterItem.ratio_assumed?: 'not_visible'`, `setRemainingRatio`).
+- 프롬프트 b3·응답 스키마 B: 맨 위 `same_scene: boolean`, 항목마다 `match: same | not_visible | different | unclear`(`Schema.enumString`, 모두 필수). 모델은 match가 same일 때만 숫자를 쓰고 나머지는 null. not_visible은 warnings에 적지 않게 했다(화면이 항목마다 노란 표시로 알린다). 0·null은 코드가 정하므로 null 이유가 모델 경고 언어에 기대지 않는다.
+- 정리 규칙(`normalizeAfterResponse`):
+  - `same_scene=false`: 모든 항목 null, 경고는 "먹은 후 사진이 먹기 전과 다른 장면처럼 보여요. 음식마다 남긴 양을 직접 골라 주세요" 한 줄만(모델 경고·항목별 경고는 버린다). items 배열이 빠져도 형식 오류로 다시 호출하지 않는다(결론이 이미 나와 한도를 아낀다).
+  - `not_visible`: remaining_ratio 0 + `ratio_assumed: 'not_visible'`(모델 숫자 무시, confidence는 모델 값).
+  - `different`·`unclear`: null + `unsureRatioWarning`(모델 숫자 무시).
+  - `same`, 그리고 4개 값 밖이거나 빠진 match: b2 규칙(0~1 밖이면 null, 확신 < 0.6이고 ≥0.95·≤0.05면 null, 모델 null 유지).
+  - same_scene·match가 하나도 없는 응답: b2 동작 그대로(`korean_unsure_test`의 b2 사례가 b3 코드에서 그대로 통과).
+- 같은 그릇(same)이 하나도 없을 때(판단): same이 0개인데 not_visible이 있으면 not_visible도 모두 null + "먹은 후 사진에서 먹기 전 그릇을 하나도 찾지 못했어요. 음식마다 남긴 양을 직접 골라 주세요". 근거: ① not_visible은 "같은 장면"이 전제인데, 먹기 전 그릇이 하나도 안 보이면 같은 장면이라는 근거가 식탁·배경뿐이라 약하다. ② 다른 사진인데 모델이 same_scene을 true로 잘못 주면 모든 그릇이 not_visible → 전부 다 먹음(칼로리 최대)으로 조용히 저장된다. b2가 막은 오류(전부 그대로·0kcal)의 반대 방향이다. ③ 대가는 다 먹고 그릇을 모두 치운 뒤 찍은 경우에 음식마다 한 번 고르는 것이다. 빈 그릇이 보이면 same(0)이라 여기에 걸리지 않는다. 지시 예("모든 그릇이 not_visible")보다 조금 넓혀, not_visible에 different·unclear만 섞인 경우도 같게 처리한다. 같은 그릇을 하나도 못 찾았다는 점이 같기 때문이다. 한 그릇 식사에서 그 그릇이 안 보이는 경우도 여기에 들어간다.
+- 캐시 호환: 캐시는 정리 결과(AfterAnalysis)를 저장했다가 `normalizeAfterResponse`로 다시 읽는다. match 없이 `ratio_assumed`가 붙은 항목은 이 함수가 만든 결과이므로 0과 표시를 그대로 둔다(확신이 낮아도 안전장치를 다시 걸지 않는다). 다시 읽어도 결과가 같은지 시험했다. b1·b2 캐시는 prompt_version이 달라 다시 분석한다.
+- 계산 경로: `assembleAnalysis`가 `AfterItem.ratio_assumed`(remaining_ratio=0일 때만)를 `MealItem`으로 옮긴다. `toStoredItem`(buildAnalysis)이 표시를 저장한다. 키를 하나씩 골라 담는 함수라 넣지 않으면 저장할 때 빠졌다. `recomputeItem`은 remaining_ratio가 0이 아니면 표시를 지운다(`setRemainingRatio`를 거치지 않고 비율이 바뀐 경우 대비). applyNutrition(이름 변경)·setBeforeGrams·setKcalOverride·인원수 변경은 표시를 유지한다. needs_review 공식은 그대로다(not_visible이어도 확신 < 0.6이면 true).
+- 검증: `validate.ts`·`validate_analysis.mjs`·`analysis-schema.json`(`const: "not_visible"`, 있으면 `remaining_ratio const 0`)이 표시를 remaining_ratio=0일 때만 허용한다.
+- 목업 픽스처 `after-bibimbap.json`을 b3 형식으로 바꿨다: same_scene true, i4 배추김치 unclear → null, i5 콩나물무침 not_visible → 0 + 표시(목업 화면에서 노란 표시를 확인할 수 있다). `run-tests`·`piece4_integration`은 픽스처 원본을 정리 없이 넣으므로 i5가 null로 들어간다(출력만 바뀌고 검증은 통과).
+- 시험: `spike/tests/b3_test.mjs` 38개 통과(가짜 응답, 실제 호출 없음). 기존 시험 11개 모두 통과(`korean_unsure_test`는 버전 b3와 픽스처 기대값만 바꿈), `tsc -b` 통과. 실제 응답 확인은 10/29 측정 때 한다. 확인할 것: 모델이 same_scene을 먼저 판단하는지, 치운 그릇을 not_visible로 답하는지, 다른 사진에서 same_scene=false를 주는지.
+- 스킬 문서: `SKILL.md` 판단 기준의 b2 줄을 b3 규칙으로 바꾸고, `prompt-template.md` 호출 B를 b3 원문, 스키마, 정리 표로 바꿨다.

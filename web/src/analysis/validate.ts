@@ -19,7 +19,7 @@ const TOP_KEYS = new Set(['items', 'totals', 'warnings', 'model', 'prompt_versio
 const REQUIRED = ['id', 'name', 'db_food_code', 'eaters', 'before_grams', 'remaining_ratio', 'consumed_grams',
   'per_100g', 'nutrition_source', 'consumed', 'kcal_overridden', 'confidence', 'needs_review']
 const ITEM_KEYS = new Set([...REQUIRED, 'location', 'db_name', 'db_match', 'db_ml_converted', 'db_reference',
-  'per_100g_fill', 'user_edited', 'grams_source', 'published_g', 'unit_count'])
+  'per_100g_fill', 'user_edited', 'grams_source', 'published_g', 'unit_count', 'ratio_assumed'])
 const REF_KEYS = new Set(['db_food_code', 'db_name', 'db_match', 'kcal_per_100g', 'ml_converted'])
 
 /** 오류·경고 목록만 모은다(형식·범위·출처별 필드·공식 일치·사진 키). */
@@ -163,6 +163,11 @@ export function checkAnalysis(r: unknown): { errors: string[]; warnings: string[
       if (it.needs_review !== true) errors.push(`${tag}: 매칭 실패(remaining_ratio=null)인데 needs_review=false`)
     } else if (!inRange(it.remaining_ratio, 0, 1)) {
       errors.push(`${tag}: remaining_ratio 범위(0~1) 벗어남`)
+    }
+    // b3(2026-10-27): ratio_assumed는 not_visible(그릇이 안 보여 다 먹음으로 둠)만, remaining_ratio=0일 때만
+    if ('ratio_assumed' in it) {
+      if (it.ratio_assumed !== 'not_visible') errors.push(`${tag}: ratio_assumed는 not_visible만 허용(지금 ${String(it.ratio_assumed)})`)
+      else if (it.remaining_ratio !== 0) errors.push(`${tag}: ratio_assumed(not_visible)는 remaining_ratio=0일 때만 넣는다(지금 ${String(it.remaining_ratio)})`)
     }
     const ratio = inRange(it.remaining_ratio, 0, 1) ? it.remaining_ratio : 0
     if (eatersOk && isNum(it.before_grams)) {
