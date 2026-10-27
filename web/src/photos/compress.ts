@@ -37,21 +37,65 @@ function decodeWithImg(file: Blob): Promise<Decoded> {
   })
 }
 
+/** 브라우저 디코드: createImageBitmap → <img>. 둘 다 실패하면 null */
+async function decodeNative(file: Blob): Promise<Decoded | null> {
+  const bmp = await decodeWithBitmap(file)
+  if (bmp) return bmp
+  try {
+    return await decodeWithImg(file)
+  } catch {
+    return null
+  }
+}
+
+// HEIC/HEIF 판별(스펙 4.8절): MIME, 또는 바이트 4~8이 'ftyp'이고 주 브랜드(8~12)가 아래 중 하나
+const HEIC_MIME = new Set(['image/heic', 'image/heif', 'image/heic-sequence', 'image/heif-sequence'])
+const HEIC_BRANDS = new Set(['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'mif1', 'msf1'])
+
+async function isHeicFile(file: Blob): Promise<boolean> {
+  if (HEIC_MIME.has((file.type || '').toLowerCase())) return true
+  try {
+    const b = new Uint8Array(await file.slice(0, 12).arrayBuffer())
+    if (b.length < 12) return false
+    const four = (at: number) => String.fromCharCode(b[at], b[at + 1], b[at + 2], b[at + 3])
+    return four(4) === 'ftyp' && HEIC_BRANDS.has(four(8))
+  } catch {
+    return false
+  }
+}
+
+// 3순위(HEIC/HEIF만): 브라우저 디코드가 모두 실패했을 때만 변환 라이브러리를 그때 불러와 JPEG로 바꾸고 다시 디코드한다.
+// heic-to는 LGPL-3.0이라 정적 import 없이 동적 import로만 쓴다(별도 청크, 첫 화면 번들에 넣지 않음).
+async function decodeHeic(file: Blob): Promise<Decoded | null> {
+  const { heicTo } = await import('heic-to')
+  const jpeg = await heicTo({ blob: file, type: 'image/jpeg', quality: 0.92 })
+  return decodeNative(jpeg)
+}
+
 function invalid(detail: string): AnalysisError {
   return new AnalysisError('PHOTO_INVALID', `사진을 읽을 수 없어요 (${detail})`)
 }
 
-/** 긴 변 1280px, JPEG 품질 0.8, EXIF 회전 반영. 오류: AnalysisError(PHOTO_INVALID) */
+function unsupported(cause?: unknown): AnalysisError {
+  return new AnalysisError('PHOTO_INVALID', '이 사진 형식을 열지 못했어요 (HEIC 변환 실패)', {
+    reason: 'unsupported_format',
+    cause,
+  })
+}
+
+/** 긴 변 1280px, JPEG 품질 0.8, EXIF 회전 반영. HEIC/HEIF는 브라우저가 못 열 때만 변환. 오류: AnalysisError(PHOTO_INVALID, HEIC 변환 실패는 reason 'unsupported_format') */
 export async function compressPhoto(file: Blob): Promise<Blob> {
   if (!file || file.size === 0) throw invalid('빈 파일')
 
-  let decoded = await decodeWithBitmap(file)
+  let decoded = await decodeNative(file)
   if (!decoded) {
+    if (!(await isHeicFile(file))) throw invalid('디코드 실패') // HEIC가 아닌 파일은 지금 문구 그대로
     try {
-      decoded = await decodeWithImg(file)
-    } catch {
-      throw invalid('디코드 실패')
+      decoded = await decodeHeic(file)
+    } catch (e) {
+      throw unsupported(e)
     }
+    if (!decoded) throw unsupported()
   }
 
   try {

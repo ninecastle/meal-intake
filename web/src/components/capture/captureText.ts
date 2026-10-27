@@ -61,6 +61,10 @@ export function describeAnalysisError(e: unknown): ErrorView {
     return { title: '음식을 찾지 못했어요', detail: '음식이 잘 보이게 위에서 다시 찍어 주세요.', preferManual: false, devCode }
   }
   if (e.code === 'PHOTO_INVALID') {
+    if (e.reason === 'unsupported_format') {
+      // HEIC/HEIF 변환까지 실패(스펙 4.8절)
+      return { title: '이 사진 형식을 열지 못했어요', detail: '다른 사진을 골라 주세요.', preferManual: false, devCode }
+    }
     return { title: '사진을 읽지 못했어요', detail: '다른 사진으로 다시 해 주세요.', preferManual: false, devCode }
   }
   switch (e.reason) {

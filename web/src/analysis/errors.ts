@@ -10,6 +10,8 @@ export type AnalysisFailReason =
   | 'invalid_response'
   | 'blocked'
   | 'bad_request'
+  /** PHOTO_INVALID 중 HEIC/HEIF를 브라우저도 변환 라이브러리도 열지 못한 경우("이 사진 형식을 열지 못했어요", 스펙 4.8절) */
+  | 'unsupported_format'
 /** 429일 때만: 분당 한도(minute)인지 일일 한도 소진(day)인지. 둘 다 재시도하지 않는다(minute은 "잠시 후 다시 시도해 주세요", day는 한도 모드 판단용). */
 export type QuotaScope = 'minute' | 'day'
 
