@@ -4,6 +4,8 @@
 // (앱 안 카메라 화면, 이때만 연다)·[앨범에서 고르기]·[직접 입력], PC [사진 파일 고르기]·웹캠이 있으면 [카메라로 찍기]·[직접 입력].
 // 날짜(2026-10-27 사용자 결정): 카메라로 찍은 사진은 오늘, 앨범 사진(PC 파일 포함)과 [직접 입력]은 ?date=YYYY-MM-DD(홈에서 보던
 // 날짜, 없으면 오늘). 끼니: 앨범 사진은 EXIF 찍은 시각(없거나 미래면 지금), 카메라는 지금. 사진 날짜는 쓰지 않는다.
+// 홈 끼니 카드로 들어오면(?meal=breakfast|lunch|dinner|snack, 디자인 조각 D2): 끼니는 그것으로 고정(EXIF로 채우지 않음),
+// 날짜는 카메라·앨범·[직접 입력] 모두 ?date(홈에서 보던 날짜). [직접 입력]에도 &meal=을 넘긴다. ?meal이 없으면 위 규칙 그대로.
 // 기록: 홈 → S2는 push 한 번. 카메라 화면은 같은 주소 칸을 하나 더 쌓아 열고(location.state 카메라 키, ?date= 유지),
 // 닫기 X·셔터·기기 뒤로 가기는 그 칸을 빼서 이 선택 화면으로 돌아온다(useCaptureSource). S2 → S3·S4는 replace.
 import { Button } from '../components/ui'
@@ -22,16 +24,16 @@ import {
   type ErrorView,
 } from '../components/capture/captureText'
 import { useCaptureSource, type PickSource } from '../components/capture/useCaptureSource'
-import { dateKeyLabel, isDateKey } from '../components/mealText'
-import { createAwaitingMeal, newMealId } from '../data/meals'
+import { dateKeyLabel, isDateKey, MEAL_TYPE_LABEL, MEAL_TYPES } from '../components/mealText'
+import { createAwaitingMeal, newMealId, type MealType } from '../data/meals'
 import { guessMealType, toDateKey } from '../lib/time'
 import { beforePhotoStore } from '../photos/beforePhotoStore'
 import { compressPhoto } from '../photos/compress'
 import { readTakenAt } from '../photos/exif'
 import type { AfterPageState } from './CaptureAfterPage'
 
-/** 기록 날짜와 끼니를 정할 시각 */
-type When = { dateKey: string; mealAt: Date }
+/** 기록 날짜와 끼니를 정할 시각. mealType이 있으면(홈 끼니 카드로 들어옴) 시각 대신 그 끼니 */
+type When = { dateKey: string; mealAt: Date; mealType?: MealType }
 
 export default function CaptureBeforePage({ uid }: { uid: string }) {
   const navigate = useNavigate()
@@ -41,6 +43,9 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
   const rawDate = params.get('date')
   // 선택 화면 [직접 입력] 날짜 = 홈에서 보던 날짜(없거나 틀리거나 미래면 오늘)
   const manualDate = isDateKey(rawDate) && rawDate <= today ? rawDate : today
+  // 홈 끼니 카드로 들어왔으면 그 끼니(틀린 값이면 없는 것으로 본다)
+  const rawMeal = params.get('meal')
+  const fixedMeal: MealType | null = (MEAL_TYPES as readonly (string | null)[]).includes(rawMeal) ? (rawMeal as MealType) : null
   // 고지 확인 창 뒤에 이어서 할 동작(파일 고르기·카메라 열기 중 누른 것)
   const pendingRef = useRef<(() => void) | null>(null)
   const busyRef = useRef(false)
@@ -91,16 +96,20 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
   // replace: 결과 화면에서 저장(→ '/' replace)하거나 뒤로 가면 홈으로 간다(예전 홈 [직접 입력]과 같은 기록 쌓임).
   function goManual(dateKey: string) {
     abortRef.current?.abort()
-    navigate(`/meal/new/review?date=${dateKey}`, { replace: true })
+    navigate(`/meal/new/review?date=${dateKey}${fixedMeal ? `&meal=${fixedMeal}` : ''}`, { replace: true })
   }
   // 분석이 안 될 때의 [직접 입력]은 방금 고른 사진과 같은 날짜(카메라면 오늘, 앨범이면 홈에서 보던 날짜)
   const goManualNow = () => goManual(lastWhen.current?.dateKey ?? toDateKey(new Date()))
 
   // 앨범 사진(PC 파일 포함): 날짜는 [직접 입력]과 같은 manualDate, 끼니는 EXIF 찍은 시각(없거나 미래면 지금, 스펙 4.8절).
   // 카메라·capture input 사진은 오늘·지금 시각. EXIF는 이 계산에만 쓰고 저장하지 않는다(압축본에는 EXIF가 없다).
+  // 끼니 카드로 들어왔으면 어느 방식이든 manualDate·그 끼니(EXIF를 읽지 않는다).
   async function onPick(file: File, source: PickSource) {
-    const getWhen =
-      source === 'album' ? async () => ({ dateKey: manualDate, mealAt: (await readTakenAt(file)) ?? new Date() }) : undefined
+    const getWhen = fixedMeal
+      ? async (): Promise<When> => ({ dateKey: manualDate, mealAt: new Date(), mealType: fixedMeal })
+      : source === 'album'
+        ? async (): Promise<When> => ({ dateKey: manualDate, mealAt: (await readTakenAt(file)) ?? new Date() })
+        : undefined
     await run(() => compressPhoto(file), getWhen)
   }
 
@@ -128,7 +137,7 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
       const when = (await getWhen?.()) ?? { dateKey: toDateKey(now), mealAt: now }
       lastWhen.current = when
       const { dateKey } = when
-      const mealType = guessMealType(when.mealAt)
+      const mealType = when.mealType ?? guessMealType(when.mealAt)
       const photo = await getPhoto()
       lastPhoto.current = photo
       id = newMealId(uid)
@@ -161,14 +170,14 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
         </Link>
       </div>
 
-      <h1 className="mt-2 text-2xl font-bold">식사 기록</h1>
+      <h1 className="mt-2 text-2xl">{fixedMeal ? `${MEAL_TYPE_LABEL[fixedMeal]} 기록` : '식사 기록'}</h1>
       <p className="mt-2 text-base text-ink">먹기 전 사진은 수저를 함께, 위에서 찍어 주세요</p>
       <CameraHelp cap={cap} disabled={busy} />
 
       {error && (
-        <div role="alert" className="mt-4 rounded-tile border border-red-200 bg-red-50 p-3">
-          <p className="font-semibold text-red-800">{error.title}</p>
-          <p className="mt-1 text-sm text-red-700">{error.detail}</p>
+        <div role="alert" className="mt-4 rounded-tile border border-peach bg-peach-soft p-3">
+          <p className="text-peach-deep">{error.title}</p>
+          <p className="mt-1 text-sm text-ink">{error.detail}</p>
           {import.meta.env.DEV && error.devCode && <p className="mt-1 text-xs text-ink-2">{error.devCode}</p>}
         </div>
       )}
@@ -228,7 +237,11 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
               gate={gated}
               onManual={() => goManual(manualDate)}
             />
-            {manualDate !== today && (
+            {fixedMeal ? (
+              <p className="mt-2 text-center text-xs text-ink-2">
+                {manualDate === today ? '오늘' : dateKeyLabel(manualDate)} {MEAL_TYPE_LABEL[fixedMeal]} 기록으로 들어가요
+              </p>
+            ) : manualDate !== today && (
               <p className="mt-2 text-center text-xs text-ink-2">
                 {cap.mode === 'pc' && !cap.hasWebcam
                   ? `고른 사진과 직접 입력은 ${dateKeyLabel(manualDate)} 기록으로 들어가요`
@@ -242,9 +255,9 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
       {cap.elements}
 
       {showNotice && (
-        <div role="dialog" aria-modal="true" className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 p-4">
+        <div role="dialog" aria-modal="true" className="fixed inset-0 z-40 flex items-end justify-center bg-ink/40 p-4">
           <div className="w-full max-w-[430px] rounded-card bg-surface p-4">
-            <p className="font-semibold">사진을 보내기 전에 알려 드려요</p>
+            <p>사진을 보내기 전에 알려 드려요</p>
             <p className="mt-2 text-sm leading-relaxed text-ink">{PHOTO_NOTICE}</p>
             <Button full type="button" onClick={acceptNotice} className="mt-4">
               확인하고 찍기
