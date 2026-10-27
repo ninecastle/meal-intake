@@ -7,6 +7,8 @@ import { readFileSync } from 'node:fs'
 import { after, before, beforeEach, describe, test } from 'node:test'
 import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebase/rules-unit-testing'
 import {
+  arrayRemove,
+  arrayUnion,
   collection,
   deleteDoc,
   doc,
@@ -17,6 +19,7 @@ import {
   query,
   serverTimestamp,
   setDoc,
+  Timestamp,
   updateDoc,
   where,
   writeBatch,
@@ -444,5 +447,97 @@ describe('달력·주간 추이 조회(3단계 조각 3-1, 스펙 4.7절 "달력
     await seed(goalPath('2026-10-25'), { dateKey: '2026-10-25', targets: targets(), updatedAt: serverTimestamp() })
     await assertFails(getDocs(goalsUpTo(db('bob'), 'alice', '2026-10-31')))
     await assertFails(getDocs(goalsUpTo(db(), 'alice', '2026-10-31')))
+  })
+})
+
+describe('하루 문서 공복 표시(users/{uid}/days/{dateKey}, 디자인 조각 D2-B)', () => {
+  const KEY = '2026-10-27'
+  const dayPath = (uid = 'alice', key = KEY) => `users/${uid}/days/${key}`
+  /** web/src/data/fasting.ts와 같은 쓰기: merge setDoc + arrayUnion/arrayRemove + serverTimestamp */
+  const write = (fs, op, path = dayPath(), key = KEY) =>
+    setDoc(doc(fs, path), { dateKey: key, fasted: op, updatedAt: serverTimestamp() }, { merge: true })
+  const mark = (fs, meal, path, key) => write(fs, arrayUnion(meal), path, key)
+  const unmark = (fs, meal, path, key) => write(fs, arrayRemove(meal), path, key)
+  const seedDay = (fasted = ['lunch']) => seed(dayPath(), { dateKey: KEY, fasted, updatedAt: serverTimestamp() })
+
+  test('본인: 생성(추가) → 추가 → 같은 끼니 다시 추가 → 빼기 → 읽기 → 삭제', async () => {
+    const fs = alice()
+    await assertSucceeds(mark(fs, 'breakfast'))
+    await assertSucceeds(mark(fs, 'lunch'))
+    await assertSucceeds(mark(fs, 'lunch'))
+    await assertSucceeds(unmark(fs, 'breakfast'))
+    const snap = await assertSucceeds(getDoc(doc(fs, dayPath())))
+    assert.deepEqual(snap.data().fasted, ['lunch'])
+    assert.equal(snap.data().dateKey, KEY)
+    assert.deepEqual(Object.keys(snap.data()).sort(), ['dateKey', 'fasted', 'updatedAt'])
+    await assertSucceeds(deleteDoc(doc(fs, dayPath())))
+  })
+
+  test('본인: 없는 문서에 빼기(빈 목록으로 생성), 네 끼니 모두 표시', async () => {
+    const fs = alice()
+    await assertSucceeds(unmark(fs, 'dinner'))
+    assert.deepEqual((await getDoc(doc(fs, dayPath()))).data().fasted, [])
+    for (const m of ['breakfast', 'lunch', 'dinner', 'snack']) await assertSucceeds(mark(fs, m))
+    assert.equal((await getDoc(doc(fs, dayPath()))).data().fasted.length, 4)
+  })
+
+  test('남의 uid: 읽기·생성·수정·삭제 거부', async () => {
+    await seedDay()
+    const bob = db('bob')
+    await assertFails(getDoc(doc(bob, dayPath())))
+    await assertFails(mark(bob, 'dinner'))
+    await assertFails(mark(bob, 'dinner', dayPath('alice', '2026-10-28'), '2026-10-28'))
+    await assertFails(deleteDoc(doc(bob, dayPath())))
+  })
+
+  test('미로그인: 읽기·생성·수정·삭제 거부', async () => {
+    await seedDay()
+    const anon = db(null)
+    await assertFails(getDoc(doc(anon, dayPath())))
+    await assertFails(mark(anon, 'dinner'))
+    await assertFails(mark(anon, 'dinner', dayPath('alice', '2026-10-28'), '2026-10-28'))
+    await assertFails(deleteDoc(doc(anon, dayPath())))
+  })
+
+  test('모르는 필드 거부(생성·병합 수정)', async () => {
+    await assertFails(
+      setDoc(doc(alice(), dayPath()), { dateKey: KEY, fasted: [], updatedAt: serverTimestamp(), weight_kg: 60 }),
+    )
+    await seedDay()
+    await assertFails(
+      setDoc(doc(alice(), dayPath()), { dateKey: KEY, updatedAt: serverTimestamp(), photo: 'data:image/jpeg;base64,AAAA' }, { merge: true }),
+    )
+  })
+
+  test('잘못된 끼니 값·목록이 아닌 fasted 거부', async () => {
+    await assertFails(mark(alice(), 'brunch'))
+    await assertFails(setDoc(doc(alice(), dayPath()), { dateKey: KEY, fasted: 'lunch', updatedAt: serverTimestamp() }))
+    await seedDay()
+    await assertFails(mark(alice(), 'Lunch'))
+  })
+
+  test('5개 이상·중복 목록 거부', async () => {
+    const full = ['breakfast', 'lunch', 'dinner', 'snack']
+    await assertFails(setDoc(doc(alice(), dayPath()), { dateKey: KEY, fasted: [...full, 'snack'], updatedAt: serverTimestamp() }))
+    await assertFails(setDoc(doc(alice(), dayPath()), { dateKey: KEY, fasted: ['lunch', 'lunch'], updatedAt: serverTimestamp() }))
+  })
+
+  test('dateKey 불일치·빠짐·형식 오류 거부', async () => {
+    await assertFails(mark(alice(), 'lunch', dayPath(), '2026-10-28'))
+    await assertFails(setDoc(doc(alice(), dayPath()), { fasted: [], updatedAt: serverTimestamp() }))
+    for (const bad of ['2026-1027', '26-10-27', '2026-10-27x', '20261027']) {
+      await assertFails(mark(alice(), 'lunch', dayPath('alice', bad), bad))
+    }
+    await seedDay()
+    await assertFails(mark(alice(), 'dinner', dayPath(), '2026-10-26'))
+  })
+
+  test('updatedAt 위조·빠짐 거부', async () => {
+    const fake = Timestamp.fromDate(new Date('2026-10-27T00:00:00Z'))
+    await assertFails(setDoc(doc(alice(), dayPath()), { dateKey: KEY, fasted: arrayUnion('lunch'), updatedAt: fake }, { merge: true }))
+    await assertFails(setDoc(doc(alice(), dayPath()), { dateKey: KEY, fasted: ['lunch'] }))
+    await seedDay()
+    // 옛 updatedAt이 그대로 남는 병합 쓰기
+    await assertFails(setDoc(doc(alice(), dayPath()), { dateKey: KEY, fasted: arrayUnion('dinner') }, { merge: true }))
   })
 })

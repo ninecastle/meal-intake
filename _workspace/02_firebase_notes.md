@@ -173,3 +173,9 @@ firebase firestore:databases:create "(default)" --location asia-northeast3 --edi
 - 캐시 헤더 추가(`firebase.json` hosting.headers): 기본값이 모든 파일 `max-age=3600`이라 새 버전 배포 뒤 1시간 동안 옛 index.html이 쓰일 수 있었다(옛 청크 요청 → SPA rewrite가 index.html을 200으로 돌려줌 → 동적 import 실패 → 자동 새로고침으로만 회복). `**` → `no-cache`, `/assets/**` → `public, max-age=31536000, immutable`(뒤 규칙이 덮어씀, 배포 뒤 curl로 확인).
 - 명령: `npm --prefix web run build` → `firebase deploy --only hosting --project meal-intake-2026 -m "3단계 조각 5: …"`. 배포본 번들 `index-jHLbBu2A.js`가 로컬 빌드와 같음을 확인.
 - 남은 확인(사용자, 로그인 필요): 기록 보기·주간 추이 첫 사용 때 콘솔에 `requires an index` 오류가 없는지(에뮬레이터는 인덱스를 검사하지 않음). App Check 적용(Enforce)은 계획대로 10/29 측정 뒤.
+
+## 디자인 조각 D2-B 공복 표시 하루 문서 (2026-10-27, firebase-engineer)
+- 문서 `users/{uid}/days/{dateKey}`: 필드 `dateKey`(== 경로)·`fasted`(끼니 열거값 목록, 중복 없이 4개 이하)·`updatedAt`(== request.time). 쓰기는 `web/src/data/fasting.ts`의 merge setDoc + arrayUnion/arrayRemove라 병합 결과 전체를 검사한다. 읽기는 단일 문서 onSnapshot이라 인덱스 불필요.
+- `firestore.rules` v4: 본인만 읽기·쓰기·삭제(삭제는 "내 기록 전체 삭제"용), id 형식 `[0-9]{4}-[0-9]{2}-[0-9]{2}`, 키는 `dayFields()` 한곳의 허용 목록(`hasOnly`), dateKey·updatedAt 필수, fasted는 있으면 `validFasted`(목록·4개 이하·`hasOnly`·중복 없음). D6 체중은 `dayFields()`에 키를 더하고 `validDay`에 선택 필드 검사 한 줄.
+- 규칙 테스트: 하루 문서 시험 9개 추가 → **46개 통과, 실패 0**. AI 호출 0회.
+- **배포 안 함.** 배포본 규칙은 v3라 실제 앱에서 공복 표시 쓰기가 permission-denied가 된다. 화면 배포 전에 `firebase deploy --only firestore:rules --project meal-intake-2026` 필요.
