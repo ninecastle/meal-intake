@@ -1,0 +1,893 @@
+<title>식단 기록 앱 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Jua&display=swap">
+<style>
+/* Layout: one phone-width column; home is three pastel bands (sky → lime → peach) stacked as the user scrolls. Single light look by choice. */
+:root{
+  color-scheme: light;
+  --ground:#F3F6F4;
+  --surface:#FFFFFF;
+  --ink:#1F2A2E;
+  --ink-2:#5D6B70;
+  --ink-3:#8A979B;
+  --line:#E3EAE7;
+  --sky:#8DC0E3; --sky-deep:#4783AD; --sky-soft:#D9EBF7;
+  --lime:#B1DA86; --lime-deep:#57902E; --lime-soft:#E4F2D4;
+  --peach:#F3AF80; --peach-deep:#C0612A; --peach-soft:#FAE2D0;
+  --butter:#F1D364; --butter-soft:#F7EBBC;
+  --carb:#4F8DB5; --prot:#E0A02A; --fat:#E27FA3;
+  --heat0:#EEF2EF; --heat1:#D6EBC0; --heat2:#B1DA86; --heat3:#7FBE4C; --heat4:#F3AF80;
+  --crown:#D9A21B;
+  --f-num:"Jua","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --f-body:"Jua","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --f-head:"Jua","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --r-lg:24px; --r-md:16px; --r-sm:10px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+*{font-weight:400!important}
+svg text{font-family:var(--f-body)}
+input{font-family:var(--f-body)!important}
+body{background:var(--ground);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--sky-deep);outline-offset:2px;border-radius:8px}
+.num{font-family:var(--f-num);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+h1,h2,h3,h4,b,.chipbtn,.btn,.tab,.segment button,.linkrow button,.state,.todaypill,.dow,.nchip,.fn,.weight .q,.remain,.ratio div,.bar label,.badge,.gmeal b,.sgroup,.srow,.choice button,.school p,.gcard .kc,.mtotal,.leftcard b,.rec b,.callout b,.more,.meal .empty{font-family:var(--f-head);font-weight:400!important}
+.nrow,.rank li,.rank .meta,.food,.mgrams>div{font-family:var(--f-head)}
+.donut{position:relative;width:210px;height:210px;margin:6px auto 0}
+.donut svg{width:100%;height:100%;transform:rotate(-90deg)}
+.donut .dc{position:absolute;inset:0;display:grid;place-content:center;text-align:center}
+.donut .dc .num{font-size:36px;font-weight:600;line-height:1}
+.donut .dc span:last-child{font-size:15px;color:var(--ink-2);font-family:var(--f-head)}
+.mgrams small{display:block;font-family:var(--f-num);font-size:14px;color:var(--ink-2)}
+.scale{display:block;width:220px;max-width:100%;height:auto;margin:18px auto 0}
+.app{max-width:430px;margin:0 auto;min-height:100%;background:var(--surface);position:relative;box-shadow:0 0 0 1px var(--line)}
+.pad{padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
+.screen{padding-bottom:120px}
+
+/* top bars */
+.topbar{display:flex;align-items:center;justify-content:space-between;height:56px;padding-block:6px}
+.topbar h1{font-size:17px;font-weight:800;margin:0}
+.iconbtn{width:44px;height:44px;display:grid;place-items:center;border-radius:12px}
+.iconbtn svg{width:24px;height:24px;stroke:var(--ink);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.iconbtn:hover{background:var(--ground)}
+.sticky{position:sticky;top:env(safe-area-inset-top,0px);background:var(--surface);z-index:5}
+
+/* date strip */
+.datestrip{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;padding-block:4px 14px}
+.dside{display:flex;align-items:center;gap:6px;color:var(--ink-3);min-height:44px;font-size:18px}
+.dside.r{justify-content:flex-end}
+.dside .num{font-size:20px;font-weight:600}
+.dow{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:12px;font-weight:700;background:var(--line);color:var(--ink-2)}
+.dcenter{display:flex;align-items:center;gap:8px}
+.dcenter .num{font-size:26px;font-weight:700}
+.todaypill{background:var(--ink);color:#fff;font-size:13px;font-weight:700;border-radius:999px;padding:4px 11px}
+
+/* bands */
+.band{padding-block:28px 32px}
+.band.sky{background:var(--sky-soft)}
+.band.lime{background:var(--lime-soft)}
+.band.peach{background:var(--peach-soft)}
+.bandhead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+.bandhead h2{font-size:22px;font-weight:800;margin:0;letter-spacing:-.02em}
+.seg-mini{display:flex;gap:6px}
+.chipbtn{min-height:40px;padding:0 14px;border-radius:999px;font-weight:700;font-size:14px;background:var(--surface);color:var(--ink)}
+.chipbtn.dark{background:var(--ink);color:#fff}
+
+.summary{display:grid;grid-template-columns:auto 1fr;gap:20px;align-items:center}
+.ring{position:relative;width:170px;height:170px}
+.ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.ring .center{position:absolute;inset:0;display:grid;place-content:center;text-align:center;padding-top:8px}
+.ring .big{font-size:38px;font-weight:700;line-height:1}
+.ring .unit{font-size:15px;font-weight:600;color:var(--ink-2)}
+.ring .sub{font-size:13px;color:var(--ink-2);margin-bottom:12px}
+.ratio{display:grid;gap:10px}
+.ratio div{display:flex;align-items:center;gap:8px;font-weight:700}
+.dot{width:10px;height:10px;border-radius:50%;flex:none}
+.ratio .num{margin-left:auto;font-size:22px}
+.ratio small{font-size:13px;color:var(--ink-2);font-weight:600}
+
+.bars{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:24px}
+.bar label{display:block;font-size:13px;font-weight:700;color:var(--ink-2);margin-bottom:6px}
+.track{height:8px;border-radius:99px;background:rgba(31,42,46,.08);overflow:hidden}
+.fill{height:100%;border-radius:99px}
+.bar .num{display:block;margin-top:6px;font-size:15px;font-weight:600}
+.bar .num span{color:var(--ink-3)}
+.remain{margin-top:22px;background:var(--surface);border-radius:var(--r-md);padding:14px 16px;text-align:center;font-weight:700}
+.remain .num{color:var(--lime-deep);font-size:20px}
+.minor{display:flex;justify-content:center;gap:18px;margin-top:12px;font-size:13px;color:var(--ink-2)}
+
+/* meals grid */
+.meals{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.meal{background:var(--surface);border-radius:var(--r-lg);padding:16px;text-align:left;display:flex;flex-direction:column;gap:10px;min-height:150px}
+.meal .mtop{display:flex;justify-content:space-between;align-items:flex-start}
+.meal .plus svg{width:24px;height:24px;stroke:var(--ink);stroke-width:2.6;stroke-linecap:round;fill:none;display:block}
+.meal .plus{width:48px!important;height:48px!important;border-radius:50%;background:var(--surface);display:grid;place-items:center;font-size:22px;font-weight:700;color:var(--ink)}
+.meal h3{margin:0;font-size:17px;font-weight:800}
+.meal .mk{font-size:20px;font-weight:700}
+.meal .mfood{font-size:13px;color:var(--ink);opacity:.75;margin-top:-6px}
+.meal .empty{font-size:13px;color:var(--ink);opacity:.6}
+.meal:hover{box-shadow:0 0 0 3px rgba(31,42,46,.15)}
+.meal{position:relative}
+.mealhit{position:absolute;inset:0;border-radius:inherit;z-index:0}
+.meal>*:not(.mealhit){position:relative;z-index:1;pointer-events:none}
+.meal>.skip{pointer-events:auto;align-self:flex-start;display:flex;align-items:center;gap:8px;min-height:40px;font-family:var(--f-head);font-size:15px;color:var(--ink);opacity:.55;margin-top:auto}
+.skip .ck{width:26px;height:26px;border-radius:50%;background:rgba(255,255,255,.7);display:grid;place-items:center}
+.skip .ck svg{width:16px;height:16px;stroke:var(--ink-3);fill:none;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.meal>.skip.on{opacity:1}
+.skip.on .ck{background:var(--ink)}
+.skip.on .ck svg{stroke:#fff}
+.tmeal{padding-block:10px 18px}
+.thead{display:flex;justify-content:space-between;align-items:flex-end;position:relative;z-index:1;margin-bottom:-12px}
+.thead h3{margin:0;font-size:16px}
+.tk{font-size:30px;font-weight:600;line-height:1.2}
+.tcard{border-radius:24px;padding:26px 20px 20px;display:grid;gap:14px}
+.tcard .badges i{background:var(--surface)}
+.tfoods{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.tfoods li{display:flex;justify-content:space-between;gap:12px;font-family:var(--f-head)}
+.tempty{display:grid;justify-items:center;gap:6px;padding:12px 0;color:var(--ink);opacity:.55;font-family:var(--f-head)}
+.cell.hw{background:var(--sky-soft)}
+.kedit{display:grid;gap:10px;justify-items:center;width:100%}
+.krow{display:flex;align-items:center;gap:12px}
+.kstep{width:48px;height:48px;border-radius:50%;background:var(--surface);font-size:26px;box-shadow:inset 0 0 0 1.5px var(--line);flex:none}
+.kval{display:flex;align-items:baseline;gap:4px}
+.kval input{width:4.2ch;border:0;border-bottom:3px solid var(--lime-deep);background:none;font-size:48px;text-align:center;color:var(--ink);padding:0;-moz-appearance:textfield;appearance:textfield}
+.kval input::-webkit-inner-spin-button,.kval input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.kval span{font-size:20px;color:var(--ink-2)}
+.kmeta{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:8px;min-height:44px;font-size:14px;color:var(--ink-2);text-align:center}
+.kcust{background:var(--butter-soft);color:#7A5C0C;padding:2px 10px;border-radius:999px;white-space:nowrap}
+.kinfo{font-size:13px;color:var(--ink-2);text-align:center}
+.kwhy{margin:0;font-size:14px;color:var(--lime-deep);text-align:center}
+.kedit .macro3{width:100%}
+.macro3 small{display:block;color:var(--ink-3);font-size:13px}
+.sheet .macro3>div{background:var(--ground)}
+.macro3>div{text-align:center}
+.terms h4{margin:18px 0 6px;font-size:16px}
+.terms ul{margin:0;padding-left:18px;display:grid;gap:6px;color:var(--ink-2);font-size:15px;line-height:1.5}
+.shot{position:relative;border-radius:14px;overflow:hidden;min-width:0}
+.shot svg{display:block;width:100%;height:auto}
+.shot>span{position:absolute;left:8px;top:8px;background:rgba(255,255,255,.92);border-radius:8px;padding:1px 8px;font-size:12px;color:var(--ink)}
+.coach-modal{position:fixed;z-index:51;left:50%;top:50%;transform:translate(-50%,-50%);width:min(390px,calc(100% - 32px));max-height:calc(100% - 40px);overflow:auto;background:var(--surface);border-radius:24px;padding:20px;box-shadow:0 10px 30px rgba(0,0,0,.2)}
+.coach-modal h3{margin:0 0 12px;font-size:21px}
+.shots{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.tips{list-style:none;padding:0;margin:14px 0 16px;display:grid;gap:9px}
+.tips li{display:flex;gap:10px;align-items:flex-start;font-size:15px;line-height:1.45}
+.tck{width:22px;height:22px;border-radius:50%;background:var(--lime-soft);display:grid;place-items:center;flex:none;margin-top:1px}
+.tck svg{width:14px;height:14px;stroke:var(--lime-deep);fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.album-pair .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ob{padding-bottom:150px}
+html.lock,html.lock body{overflow:hidden;overscroll-behavior:none;height:100%}
+html.lock .app{height:100%}
+html.lock .ob{height:100%;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;padding-bottom:calc(118px + env(safe-area-inset-bottom,0px))}
+html.lock .ob .dots{flex:none;margin:16px 0!important}
+html.lock .slides{touch-action:pan-x;flex:none;min-height:0}
+html.lock .slide{padding-block:20px 4px;align-content:center}
+html.lock .slide .art{width:min(100%,360px,48vh)}
+html.lock .slide .art svg[aria-label="앱 마스코트"]{width:130px;height:auto}
+html.lock .slide .micowrap{width:160px!important;height:160px!important}
+html.lock .slide .micowrap .mico{width:120px!important;height:120px!important}
+html.lock .slide h2{font-size:25px}
+html.lock .dots{margin-top:12px}
+.slides{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;scrollbar-width:none}
+.slides::-webkit-scrollbar{display:none}
+.slide{flex:0 0 100%;scroll-snap-align:center;display:grid;justify-items:center;gap:16px;text-align:center;padding-block:36px 6px}
+.slide .art{width:100%;max-width:320px;aspect-ratio:1/.9;border-radius:32px;display:grid;place-items:center}
+.slide h2{margin:0;font-size:27px;line-height:1.3;text-wrap:balance}
+.slide p{margin:0;color:var(--ink-2);font-size:16px}
+.dots{display:flex;justify-content:center;margin-top:16px}
+.dots>div{display:flex;align-items:center;gap:2px;background:var(--ground);border-radius:99px;padding:4px 8px}
+.dots button{height:28px;padding:0 4px;display:grid;place-items:center}
+.dots button::after{content:"";display:block;width:8px;height:8px;border-radius:99px;background:#C9D3CF;transition:width .35s cubic-bezier(.3,.7,.2,1),background .35s}
+.dots button[aria-current="true"]::after{width:28px;background:var(--lime-deep)}
+.link{min-height:48px;color:var(--ink-2);text-decoration:underline;text-underline-offset:3px;white-space:nowrap}
+.progress{position:relative;height:10px;border-radius:99px;background:var(--line);overflow:hidden;margin-block:10px 4px}
+.pfill{position:absolute;inset:0 auto 0 0;width:0;border-radius:99px;background:var(--lime-deep);transition:width .5s cubic-bezier(.3,.7,.2,1)}
+.pfill::after{content:"";position:absolute;right:3px;top:3px;width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.75)}
+.pticks i{position:absolute;top:0;bottom:0;width:3px;margin-left:-1.5px;background:var(--surface)}
+.q h2{font-size:27px;margin:26px 0 6px;line-height:1.3}
+.q .help{color:var(--ink-2);margin:0 0 22px;min-height:1em}
+.opts{display:grid;gap:10px}
+.opts.two{grid-template-columns:1fr 1fr}
+.opt{min-height:62px;border-radius:var(--r-md);background:var(--ground);display:flex;align-items:center;padding:8px 18px;font-size:18px;text-align:left;border:2px solid transparent}
+.opt small{color:var(--ink-3);font-size:14px;display:block}
+.opt[aria-pressed="true"]{background:var(--lime-soft);border-color:var(--lime-deep)}
+.field{display:flex;align-items:center;gap:10px;border-bottom:3px solid var(--lime-deep);padding-block:6px}
+.field input{flex:1;min-width:0;border:0;background:none;font-size:46px;color:var(--ink);outline:none}
+.field span{font-size:22px;color:var(--ink-2)}
+.note{margin-top:18px;background:var(--sky-soft);border-radius:var(--r-md);padding:12px 14px;font-size:15px;color:var(--ink-2)}
+.allagree{background:var(--ground);border-radius:var(--r-md);padding:2px 14px;margin-bottom:8px}
+.arow{display:flex;align-items:center;gap:8px}
+.arow .lbl{flex:1;display:flex;align-items:center;gap:10px;min-height:52px;text-align:left;font-size:16px}
+.arow .view{color:var(--ink-3);font-size:14px;min-height:44px;padding:0 6px;text-decoration:underline;white-space:nowrap}
+.cbox{width:28px;height:28px;border-radius:50%;background:var(--line);display:grid;place-items:center;flex:none}
+.cbox svg{width:16px;height:16px;stroke:var(--surface);fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.cbox.on{background:var(--lime-deep)}
+.tagreq,.tagopt{font-size:12px;padding:1px 7px;border-radius:6px;white-space:nowrap;flex:none}
+.tagreq{color:var(--lime-deep);background:var(--lime-soft)}
+.tagopt{color:var(--ink-3);background:var(--ground)}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.rec-res{background:var(--lime-soft);border-radius:28px;padding:28px 18px;display:grid;gap:18px;text-align:center}
+.rec-res .big{font-size:56px;line-height:1}
+.macro3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.macro3>div{background:var(--surface);border-radius:var(--r-md);padding:12px 4px}
+.macro3 .num{font-size:24px}
+.gbtn{background:var(--surface);box-shadow:inset 0 0 0 1.5px var(--line)}
+.coach-block{position:fixed;inset:0;z-index:49}
+.coach-hole{position:fixed;border-radius:22px;box-shadow:0 0 0 9999px rgba(31,42,46,.58);z-index:50;pointer-events:none;transition:all .25s}
+.coach-tip{position:fixed;z-index:51;background:var(--surface);border-radius:20px;padding:16px;width:min(300px,calc(100% - 32px));box-shadow:0 10px 30px rgba(0,0,0,.2)}
+.coach-tip p{margin:0 0 12px;font-size:18px;line-height:1.4}
+.crow{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px}
+.crow>:first-child{justify-self:start}
+.crow>:last-child{justify-self:end;padding:0 24px}
+.micowrap{width:58px;height:58px;border-radius:50%;background:var(--surface);display:grid;place-items:center;box-shadow:0 2px 6px rgba(31,42,46,.08)}
+.micowrap .mico{width:42px;height:42px}
+.ratio div{font-size:17px}
+.ratio .num{font-size:28px}
+.ratio small{font-size:15px}
+.bar label{font-size:15px}
+.bar .num{font-size:19px}
+.minor{font-size:15px}
+.remain{font-size:17px}
+.remain .num{font-size:24px}
+.ring .big{font-size:46px}
+.ring .unit{font-size:18px}
+.ring .sub{font-size:14px}
+.goalw{display:flex;justify-content:center;gap:8px;align-items:center;margin-top:8px;font-family:var(--f-head);font-size:15px}
+.goalw .num{font-size:17px}
+.goalw .tag{background:var(--surface);border-radius:999px;padding:3px 10px;color:var(--peach-deep)}
+.nchips{flex-wrap:wrap}
+.mico{width:40px;height:40px}
+.linkrow{display:grid;grid-template-columns:1fr 1fr;margin-top:14px;background:var(--surface);border-radius:var(--r-md);overflow:hidden}
+.linkrow button{min-height:56px;display:flex;align-items:center;justify-content:center;gap:8px;font-weight:800}
+.linkrow button+button{border-left:1px solid var(--line)}
+
+/* weight */
+.weight{text-align:center}
+.weight .q{font-weight:700;color:var(--ink-2)}
+.weight .kg{font-size:56px;font-weight:700;line-height:1.1}
+.weight .kg span{font-size:22px;color:var(--ink-2)}
+.weight .delta{font-size:14px;color:var(--peach-deep);font-weight:700}
+.btn{min-height:52px;border-radius:999px;font-weight:800;font-size:16px;padding:0 22px;display:inline-flex;align-items:center;justify-content:center;gap:8px}
+.btn.peach{background:var(--peach);width:100%;margin-top:18px}
+.btn.ink{background:var(--ink);color:#fff}
+.btn.lime{background:var(--lime)}
+.btn.sky{background:var(--sky)}
+.btn.ghost{background:var(--ground)}
+
+.crown{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;flex:none;background:#FBF0CF;border-radius:50%}
+.crown svg{width:14px;height:14px;fill:var(--crown)}
+.todaypill,.dow,.chipbtn,.linkrow button,.tab,.segment button,.btn,.state,.nchip,.dside,.dcenter,.bandhead h2,.meal h3,.srow span{white-space:nowrap}
+.dcenter .num{font-size:24px}
+@media (max-width:380px){.dside .num{font-size:17px}.chipbtn{padding:0 11px}.datestrip{gap:4px}}
+
+/* fixed bottom */
+.bottom{position:fixed;left:0;right:0;bottom:0;z-index:20;pointer-events:none}
+.bottom .inner{max-width:430px;margin:0 auto;padding-top:14px;padding-bottom:calc(16px + env(safe-area-inset-bottom,0px));background:linear-gradient(to top,var(--surface) 70%,rgba(255,255,255,0));display:flex;gap:10px;pointer-events:auto}
+.bottom .btn{flex:1}
+.bottom .btn.narrow{flex:0 0 auto}
+
+/* tabs */
+.tabs{display:flex;gap:8px;padding-block:6px 18px}
+.tab{min-height:42px;padding:0 16px;border-radius:999px;background:var(--ground);font-weight:700;color:var(--ink-2)}
+.tab[aria-selected="true"]{background:var(--ink);color:#fff}
+.segment{display:grid;grid-auto-flow:column;grid-auto-columns:1fr;background:var(--ground);border-radius:999px;padding:5px;gap:4px}
+.segment button{min-height:44px;border-radius:999px;font-weight:700;color:var(--ink-2);display:flex;align-items:center;justify-content:center;gap:4px}
+.segment button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(31,42,46,.12)}
+
+/* glance card */
+.gcard{background:var(--sky);border-radius:28px;padding:28px 22px;display:grid;gap:22px;justify-items:center;text-align:center}
+.gcard .kc{font-size:20px;font-weight:800}
+.gcard .kc .num{font-size:34px}
+.badges{display:flex;gap:14px;flex-wrap:wrap;justify-content:center}
+.badge{display:flex;align-items:center;gap:6px;font-weight:700}
+.badge i{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-style:normal;font-size:13px;font-weight:800;background:var(--surface)}
+.gmeals{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px 24px;width:100%}
+.gmeal{display:flex;align-items:center;gap:10px;text-align:left}
+.gmeal .ic{width:48px;height:48px;border-radius:50%;background:var(--surface);display:grid;place-items:center;flex:none}
+.gmeal b{display:block;font-size:14px}
+.gmeal .num{font-size:18px;font-weight:600}
+.subline{font-size:13px;color:var(--ink);opacity:.75}
+
+.mealblock{display:grid;gap:12px;padding-block:6px 26px}
+.mealblock header{display:flex;justify-content:space-between;align-items:flex-end}
+.mealblock h3{margin:0;font-size:16px}
+.mealblock .num{font-size:30px;font-weight:700}
+.photo{border-radius:var(--r-lg);min-height:150px;display:grid;place-items:center;color:var(--ink-2);font-weight:700;font-size:14px;position:relative;overflow:hidden}
+.photo.ph{background:repeating-linear-gradient(135deg,rgba(255,255,255,.35) 0 10px,transparent 10px 20px)}
+.photo .cap{position:absolute;left:12px;bottom:10px;background:rgba(255,255,255,.85);border-radius:8px;padding:2px 8px;font-size:12px}
+
+/* nutrient detail */
+.circles{position:relative;height:200px;margin:8px auto 0;width:220px}
+.circ{position:absolute;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:20px}
+.mgrams{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));text-align:center;margin-top:20px}
+.mgrams div+div{border-left:1px solid rgba(31,42,46,.12)}
+.mgrams .num{font-size:24px;font-weight:600}
+.ntable{display:grid}
+.nrow{display:flex;justify-content:space-between;align-items:baseline;padding:14px 0;border-bottom:1px solid var(--line)}
+.nrow.sub{padding:8px 0 8px 14px;border-bottom:0;color:var(--ink-2);font-size:14px}
+.nrow.sub+.nrow:not(.sub){border-top:1px solid var(--line)}
+.nrow .num{font-weight:600}
+.nrow.total .num{font-size:24px}
+.est{font-size:11px;font-weight:700;color:var(--sky-deep);background:var(--sky-soft);padding:1px 6px;border-radius:6px;margin-right:6px;font-family:var(--f-body)}
+
+.rank{display:grid;gap:14px;padding-block:20px;border-bottom:1px solid var(--line)}
+.rank header{display:flex;align-items:center;justify-content:space-between}
+.rank h3{margin:0;font-size:17px;display:flex;align-items:center;gap:10px}
+.state{font-size:13px;font-weight:700;padding:5px 12px;border-radius:999px;background:var(--ground);color:var(--ink-2)}
+.state.ok{background:var(--lime-soft);color:var(--lime-deep)}
+.state.hi{background:var(--peach-soft);color:var(--peach-deep)}
+.rank .meta{display:flex;justify-content:space-between;font-size:14px}
+.rank .meta .num{font-weight:600}
+.rank ol{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.rank li{display:flex;align-items:center;gap:12px}
+.rank li .n{width:32px;height:32px;border-radius:50%;background:var(--ground);display:grid;place-items:center;font-weight:700;color:var(--ink-2);flex:none}
+.rank li .v{margin-left:auto;text-align:right;font-weight:600}
+.rank li .v small{display:block;font-size:12px;color:var(--ink-3);font-weight:500}
+.more{justify-self:center;min-height:40px;color:var(--ink-3);font-weight:700}
+
+/* meal screen */
+.mealhero{background:var(--sky-soft);padding-block:10px 40px;position:relative}
+.mealhero .art{display:grid;place-items:center;height:150px}
+.cam{position:absolute;right:max(20px,env(safe-area-inset-right,0px));bottom:52px;width:56px;height:56px;border-radius:50%;background:var(--sky-deep);display:grid;place-items:center}
+.cam svg{width:26px;height:26px;stroke:#fff;fill:none;stroke-width:2}
+.sheetbody{background:var(--surface);border-radius:28px 28px 0 0;margin-top:-26px;position:relative;padding-block:24px}
+.mtotal{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.mtotal .num{font-size:30px;font-weight:700}
+.stack{display:flex;gap:4px;margin-top:18px}
+.stack div{height:30px;border-radius:999px;color:#fff;font-weight:700;font-size:13px;display:flex;align-items:center;padding-left:12px;min-width:56px}
+.legend{display:flex;justify-content:center;gap:16px;margin-top:12px;font-size:13px;font-weight:600;flex-wrap:wrap}
+.legend span{display:flex;align-items:center;gap:5px}
+.foods{margin-top:20px;display:grid}
+.food{display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--line)}
+.food .fn{font-weight:700}
+.food .fs{font-size:13px;color:var(--ink-3)}
+.food .num{margin-left:auto;font-weight:600;font-size:18px}
+.srcb{font-size:11px;font-weight:700;padding:1px 6px;border-radius:6px;background:var(--lime-soft);color:var(--lime-deep);margin-left:6px;vertical-align:2px}
+.timebox{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink-2);margin-top:6px}
+
+/* overlay sheet */
+.overlay{position:fixed;inset:0;background:rgba(31,42,46,.4);z-index:40;display:flex;align-items:flex-end;justify-content:center}
+.overlay[hidden]{display:none!important}
+.sheet{background:var(--surface);width:100%;max-width:430px;border-radius:26px 26px 0 0;max-height:86%;overflow:auto;padding-top:20px;padding-bottom:calc(24px + env(safe-area-inset-bottom,0px))}
+.sheet header{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.sheet h2{margin:0;font-size:19px}
+.choice{display:grid;gap:10px;margin-top:14px}
+.choice button{min-height:60px;border-radius:var(--r-md);background:var(--ground);display:flex;align-items:center;gap:14px;padding:0 18px;font-weight:700;text-align:left}
+.choice svg{width:24px;height:24px;stroke:var(--ink);fill:none;stroke-width:2}
+.school{background:var(--butter-soft);border-radius:var(--r-md);padding:14px 16px;display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:10px}
+.school p{margin:0;font-weight:700;font-size:14px}
+
+/* recommend */
+.leftcard{background:var(--lime-soft);border-radius:var(--r-lg);padding:18px;display:grid;gap:10px}
+.leftcard .num{font-weight:700}
+.rec{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;padding:16px 0;border-bottom:1px solid var(--line)}
+.rec .ic{width:52px;height:52px;border-radius:16px;display:grid;place-items:center}
+.rec b{display:block}
+.rec small{color:var(--ink-2);font-size:13px}
+.rec .num{font-weight:700}
+
+/* calendar */
+.calhead{display:flex;align-items:center;justify-content:space-between;padding-block:4px 8px}
+.calhead h2{margin:0;font-size:22px}
+.monthsum{display:flex;gap:16px;font-size:13px;color:var(--ink-2);margin-bottom:14px}
+.monthsum b{color:var(--ink)}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.cal .wd{text-align:center;font-size:12px;font-weight:700;color:var(--ink-3);padding-bottom:4px}
+.cell{aspect-ratio:1/1.12;max-width:100%;border-radius:10px;padding:5px 4px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;font-size:12px;font-weight:700;background:var(--heat0)}
+.cell.out{opacity:.35}
+.cell .v{font-family:var(--f-num);font-size:10px;font-weight:600;background:rgba(255,255,255,.75);border-radius:6px;padding:0 4px;line-height:1.5}
+.cell.today{box-shadow:inset 0 0 0 2px var(--ink)}
+.cell.h1{background:var(--heat1)}.cell.h2{background:var(--heat2)}.cell.h3{background:var(--heat3)}.cell.h4{background:var(--heat4)}
+.legendrow{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--ink-2);margin-top:12px}
+.legendrow span{display:flex;align-items:center;gap:4px}
+.legendrow i{width:14px;height:14px;border-radius:4px;display:inline-block}
+.nchips{display:flex;gap:6px;margin-top:12px}
+.nchip{min-height:36px;padding:0 14px;border-radius:999px;background:var(--ground);font-weight:700;font-size:13px;color:var(--ink-2)}
+.nchip[aria-pressed="true"]{background:var(--lime);color:var(--ink)}
+.chartcard{margin-top:16px;background:var(--ground);border-radius:var(--r-lg);padding:18px}
+.chartcard header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.chartcard h3{margin:0;font-size:16px}
+.chartcard svg{width:100%;height:auto;display:block}
+.callout{background:var(--surface);border-radius:var(--r-md);padding:12px 14px;font-size:14px;margin-top:10px}
+.score{display:flex;align-items:center;gap:18px}
+.score .big{font-size:52px;font-weight:700;line-height:1}
+.score .big span{font-size:18px;color:var(--ink-3)}
+.report h4{margin:16px 0 6px;font-size:14px}
+.report ul{margin:0;padding-left:18px;display:grid;gap:4px;font-size:14px}
+.aitag{font-size:11px;font-weight:700;color:var(--sky-deep);background:var(--sky-soft);padding:2px 8px;border-radius:999px}
+
+/* album */
+.pairs{display:grid;gap:18px;margin-top:18px}
+.pair h3{margin:0 0 8px;font-size:15px;display:flex;justify-content:space-between}
+.pair .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.pair .photo{min-height:130px}
+
+/* settings */
+.slist{display:grid}
+.sgroup{font-size:12px;font-weight:700;color:var(--ink-3);letter-spacing:.04em;padding-block:20px 6px}
+.srow{display:flex;justify-content:space-between;align-items:center;min-height:54px;border-bottom:1px solid var(--line);font-weight:600;width:100%;text-align:left}
+.srow small{color:var(--ink-3);font-weight:500}
+.toggle{width:46px;height:28px;border-radius:999px;background:var(--lime);position:relative}
+.toggle::after{content:"";position:absolute;top:3px;right:3px;width:22px;height:22px;border-radius:50%;background:#fff}
+.toggle.off{background:var(--line)}.toggle.off::after{right:auto;left:3px}
+.danger{color:var(--peach-deep)}
+.toast{position:fixed;left:50%;bottom:calc(96px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:#fff;padding:10px 16px;border-radius:999px;font-size:14px;z-index:60;font-weight:600}
+@media (prefers-reduced-motion:no-preference){.screen.enter{animation:fade .18s ease-out}@keyframes fade{from{opacity:.5}to{opacity:1}}}
+</style>
+
+<div class="app" id="app"></div>
+<div class="overlay" id="overlay" hidden><div class="sheet pad" id="sheet" role="dialog" aria-modal="true"></div></div>
+<div class="toast" id="toast" hidden></div>
+<div id="coach" hidden></div>
+
+<script>
+const C={sky:'var(--sky)',lime:'var(--lime)',peach:'var(--peach)'};
+let goal={kcal:1900,carb:240,prot:100,fat:55,sugar:50,R:[.5,.2,.3],bmr:0,tdee:0,rec:1900};
+function calcGoal(){
+  const P=state.prof,w=+P.weight||58,h=+P.height||163,a=+P.age||24;
+  const bmr=Math.round(10*w+6.25*h-5*a+(P.sex==='m'?5:-161));
+  const tdee=Math.round(bmr*[1.2,1.375,1.55,1.725,1.9][(+P.act||2)-1]);
+  const adj={lose:-400,keep:0,gain:300}[P.goal]||0;
+  const rec=Math.max(P.sex==='m'?1500:1200,Math.round((tdee+adj)/10)*10);
+  const kcal=state.kcalCustom??rec;
+  const R={lose:[.45,.30,.25],keep:[.50,.20,.30],gain:[.55,.20,.25]}[P.goal]||[.5,.2,.3];
+  const r5=x=>Math.round(x/5)*5;
+  return {bmr,tdee,rec,kcal,R,carb:r5(kcal*R[0]/4),prot:r5(kcal*R[1]/4),fat:r5(kcal*R[2]/9),sugar:r5(kcal*.1/4)};
+}
+function kcalEditor(){
+  const g=goal,custom=state.kcalCustom!=null&&state.kcalCustom!==g.rec;
+  const gl={lose:'체중 감량',keep:'체중 유지',gain:'체중 증량'}[state.prof.goal];
+  const why={lose:'감량 목표라 근육을 지키도록 단백질 비율을 높였어요',keep:'유지 목표라 탄·단·지를 고르게 나눠어요',gain:'증량 목표라 탄수화물을 넉넉하게 잡았어요'}[state.prof.goal];
+  const m3=(c,l,v,r)=>`<div><span class="dot" style="background:${c};display:inline-block;margin-right:4px"></span>${l}<div class="num">${v}g</div><small class="num">${Math.round(r*100)}%</small></div>`;
+  return `<div class="kedit"><div class="krow"><button class="kstep" data-kcal="-50" aria-label="50kcal 줄이기">−</button><label class="kval"><input id="kcal-input" data-kcalinput="1" type="number" inputmode="numeric" value="${g.kcal}" aria-label="하루 목표 칼로리"><span>kcal</span></label><button class="kstep" data-kcal="50" aria-label="50kcal 늘리기">+</button></div>
+  <div class="kmeta">${custom?`<span class="kcust">직접 조정</span><button class="link" data-kcalreset="1">추천값으로 (${g.rec.toLocaleString()}kcal)</button>`:'<span>추천값이에요 · 숫자를 눌러 직접 바꿀 수 있어요</span>'}</div>
+  <div class="kinfo">기초대사량 <b class="num">${g.bmr.toLocaleString()}</b> · 하루 소모량 <b class="num">${g.tdee.toLocaleString()}</b>kcal · ${gl}</div>
+  <div class="macro3">${m3('var(--carb)','탄수화물',g.carb,g.R[0])}${m3('var(--prot)','단백질',g.prot,g.R[1])}${m3('var(--fat)','지방',g.fat,g.R[2])}</div>
+  <p class="kwhy">${why}</p></div>`;
+}
+const meals={
+  breakfast:{name:'아침',color:'var(--sky-soft)',card:'var(--sky)',time:'08:10',foods:[{n:'그릭요거트 & 블루베리',s:'1그릇 (200g)',k:210,c:18,p:15,f:9,sug:12,fib:1.2,src:'DB'}]},
+  lunch:{name:'점심',color:'var(--lime-soft)',card:'var(--lime)',time:'12:40',foods:[{n:'제육덮밥',s:'1인분 (380g) · 20% 남김',k:560,c:78,p:24,f:18,sug:9,fib:2.4,src:'DB 환산'},{n:'미역국',s:'1그릇 (250g)',k:45,c:4,p:3,f:2,sug:1,fib:0.6,src:'DB'},{n:'콩나물무침',s:'1접시 (70g)',k:75,c:10,p:1,f:2,sug:4,fib:1.1,src:'AI 추정'}]},
+  dinner:{name:'저녁',color:'var(--peach-soft)',card:'var(--peach)',time:'',foods:[]},
+  snack:{name:'간식',color:'var(--butter-soft)',card:'var(--butter)',time:'',foods:[]}
+};
+const icons={
+  breakfast:`<svg class="mico" viewBox="0 0 64 64" aria-hidden="true"><g fill="#FFCF4D"><rect x="29.5" y="2" width="5" height="10" rx="2.5"/><rect x="29.5" y="52" width="5" height="10" rx="2.5"/><rect x="2" y="29.5" width="10" height="5" rx="2.5"/><rect x="52" y="29.5" width="10" height="5" rx="2.5"/><rect x="29.5" y="2" width="5" height="10" rx="2.5" transform="rotate(45 32 32)"/><rect x="29.5" y="2" width="5" height="10" rx="2.5" transform="rotate(135 32 32)"/><rect x="29.5" y="2" width="5" height="10" rx="2.5" transform="rotate(225 32 32)"/><rect x="29.5" y="2" width="5" height="10" rx="2.5" transform="rotate(315 32 32)"/></g><circle cx="32" cy="32" r="16" fill="#FFC93C"/><circle cx="32" cy="32" r="16" fill="none" stroke="#F5B323" stroke-width="2"/><path d="M22 26a11 11 0 0 1 8-7" stroke="#FFE9A3" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="27" cy="32" r="1.8" fill="#3B2F2A"/><circle cx="37" cy="32" r="1.8" fill="#3B2F2A"/><path d="M29.5 36.5q2.5 2 5 0" stroke="#3B2F2A" stroke-width="1.8" fill="none" stroke-linecap="round"/><circle cx="23.5" cy="35.5" r="2.3" fill="#F7A27A" opacity=".7"/><circle cx="40.5" cy="35.5" r="2.3" fill="#F7A27A" opacity=".7"/></svg>`,
+  lunch:`<svg class="mico" viewBox="0 0 64 64" aria-hidden="true"><g fill="#FFCF4D"><circle cx="22" cy="6" r="2.6"/><circle cx="8" cy="14" r="2.6"/><circle cx="5" cy="28" r="2.6"/><circle cx="36" cy="12" r="2.6"/></g><circle cx="23" cy="25" r="12" fill="#FFC93C"/><path d="M16 22a8 8 0 0 1 5-5" stroke="#FFE9A3" stroke-width="2.5" fill="none" stroke-linecap="round"/><path d="M40 18c3-4 10-4 12 0 4-1 7 2 6 5H38c-1-3 0-5 2-5z" fill="#FFFFFF" stroke="#D9EAF5" stroke-width="1.5"/><path d="M2 54 C12 36 22 34 30 44 C38 30 50 28 62 46 V58 H2 Z" fill="#A9D884"/><path d="M8 58 C18 42 30 40 42 50 C48 44 56 44 62 50 V58 Z" fill="#7CBF4E"/><path d="M16 48 c4-4 8-5 12-3" stroke="#C6E8A6" stroke-width="2.5" fill="none" stroke-linecap="round"/><rect x="2" y="56" width="60" height="4" rx="2" fill="#5E9F38"/></svg>`,
+  dinner:`<svg class="mico" viewBox="0 0 64 64" aria-hidden="true"><path d="M34 6a24 24 0 1 0 24 30A19 19 0 0 1 34 6z" fill="#FFD45C"/><path d="M34 6a24 24 0 1 0 24 30A19 19 0 0 1 34 6z" fill="none" stroke="#F2B92E" stroke-width="2" stroke-linejoin="round"/><path d="M17 22a18 18 0 0 1 7-9" stroke="#FFF0B8" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M18 36q3 2.4 6 0M29 38q3 2.4 6 0" stroke="#3B2F2A" stroke-width="1.8" fill="none" stroke-linecap="round"/><circle cx="18" cy="42" r="2.4" fill="#F7A27A" opacity=".7"/><circle cx="36" cy="44" r="2.4" fill="#F7A27A" opacity=".7"/><path d="M26 44q1.5 1.2 3 0" stroke="#3B2F2A" stroke-width="1.6" fill="none" stroke-linecap="round"/><text x="44" y="20" font-family="Jua,sans-serif" font-size="9" font-weight="600" fill="#5B7DB8">z</text><text x="50" y="13" font-family="Jua,sans-serif" font-size="7" font-weight="600" fill="#5B7DB8">z</text><path d="M38 54c0-4 4-6 7-4 1-4 7-5 9-1 4 0 6 4 4 6H39c-1 0-1-1-1-1z" fill="#FFFFFF" stroke="#C9DCEE" stroke-width="1.5"/><path d="M8 10l1.2 2.8 2.8 1.2-2.8 1.2L8 18l-1.2-2.8L4 14l2.8-1.2z" fill="#8DB3E0"/></svg>`,
+  snack:`<svg class="mico" viewBox="0 0 64 64" aria-hidden="true"><ellipse cx="32" cy="56" rx="26" ry="4" fill="rgba(31,42,46,.1)"/><path d="M6 40 L50 22 L58 40 Z" fill="#FFF4E2"/><path d="M6 40h52v14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2z" fill="#E9A867"/><rect x="6" y="45" width="52" height="4" fill="#FFF4E2"/><rect x="50" y="40" width="8" height="16" rx="2" fill="#D38E4E"/><path d="M6 40 L50 22 L58 40" fill="none" stroke="#F7D7B3" stroke-width="2" stroke-linejoin="round"/><path d="M16 36c4-2 8-3 12-3" stroke="#FFFFFF" stroke-width="2.5" fill="none" stroke-linecap="round"/><path d="M46 18c0-6 4-10 8-11" stroke="#5E9F38" stroke-width="2" fill="none" stroke-linecap="round"/><circle cx="46" cy="20" r="6" fill="#E8574A"/><circle cx="44" cy="18" r="1.8" fill="#F7A39A"/></svg>`
+};
+const ico={
+  back:'<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>',
+  close:'<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  cal:'<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/></svg>',
+  gear:'<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>',
+  camera:'<svg viewBox="0 0 24 24"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>',
+  image:'<svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="M20 16l-5-5-8 8"/></svg>',
+  pen:'<svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
+  share:'<svg viewBox="0 0 24 24"><path d="M12 15V4M8 8l4-4 4 4M5 13v6h14v-6"/></svg>'
+};
+const crown=`<span class="crown" role="img" aria-label="프리미엄"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 12 L1 4 L5 7 L8 2 L11 7 L15 4 L14 12 Z"/></svg></span>`;
+const mascot=`<svg viewBox="0 0 120 110" width="120" height="110" role="img" aria-label="앱 마스코트"><ellipse cx="60" cy="98" rx="34" ry="6" fill="rgba(31,42,46,.12)"/><path d="M60 14c22 0 40 18 40 44 0 26-18 38-40 38S20 84 20 58c0-26 18-44 40-44z" fill="#FFFFFF"/><path d="M60 14c6-10 18-10 20-2-8 0-14 2-20 2z" fill="#8CC75A"/><circle cx="47" cy="56" r="4" fill="#1F2A2E"/><circle cx="73" cy="56" r="4" fill="#1F2A2E"/><path d="M54 68q6 5 12 0" stroke="#1F2A2E" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="39" cy="66" r="5" fill="#F7BE94" opacity=".8"/><circle cx="81" cy="66" r="5" fill="#F7BE94" opacity=".8"/></svg>`;
+
+function foodPhoto(after){
+  const grains=(cx,cy,r,n)=>{let s='';for(let i=0;i<n;i++){const a=i*2.4,d=r*Math.sqrt((i+.5)/n),x=(cx+Math.cos(a)*d).toFixed(1),y=(cy+Math.sin(a)*d).toFixed(1);s+=`<ellipse cx="${x}" cy="${y}" rx="2.3" ry="1.3" transform="rotate(${(i*47)%180} ${x} ${y})" fill="#FFFFFF"/>`}return s};
+  const kimchi=after?'<path d="M38 46l6-4 4 5-6 3z" fill="#E2603D"/>':'<g fill="#E2603D"><path d="M30 40l10-6 6 8-9 6z"/><path d="M42 50l10-5 5 7-10 5z"/><path d="M44 34l9-2 2 8-8 2z"/><path d="M30 52l7-3 4 6-7 3z"/></g><g fill="#F49A6E"><circle cx="38" cy="39" r="2"/><circle cx="50" cy="47" r="2"/></g>';
+  const spinach=after?'<path d="M96 48q4-4 8 0" stroke="#4E8A2E" stroke-width="3" fill="none" stroke-linecap="round"/>':'<g stroke="#4E8A2E" stroke-width="3.2" fill="none" stroke-linecap="round"><path d="M86 40q6-8 12 0t12 0"/><path d="M88 48q6-6 12 0t10 0"/><path d="M92 34q5-4 10 0"/><path d="M90 54q5-4 12 0"/></g><g fill="#EBDDA8"><circle cx="96" cy="42" r="1.4"/><circle cx="104" cy="50" r="1.4"/><circle cx="100" cy="36" r="1.4"/></g>';
+  const sprout=after?'<path d="M148 46q6 2 10-4"/><path d="M152 52q5 0 8-6"/>':'<path d="M142 38q8 4 14-4"/><path d="M146 46q8 3 16-6"/><path d="M144 52q7 2 14-3"/><path d="M152 34q6 3 12-2"/><path d="M150 56q6 1 12-5"/><path d="M158 44q4 3 8-2"/>';
+  const heads=after?'<circle cx="158" cy="42" r="2"/>':'<circle cx="156" cy="32" r="2.2"/><circle cx="162" cy="46" r="2.2"/><circle cx="148" cy="52" r="2.2"/><circle cx="142" cy="38" r="2"/>';
+  const rice=after?`<path d="M44 114q8-16 24-6q6 10-8 13q-12 2-16-7z" fill="#EFE7D3"/>${grains(57,113,9,9)}`:`<circle cx="62" cy="108" r="26" fill="#EFE7D3"/>${grains(62,108,23,42)}`;
+  const soup=after?'<circle cx="140" cy="110" r="16" fill="#E2B47B"/><rect x="136" y="106" width="7" height="7" rx="1.5" fill="#FFF6E2"/>':'<circle cx="140" cy="108" r="26" fill="#D6964D"/><g fill="#FFF6E2"><rect x="128" y="98" width="9" height="9" rx="2"/><rect x="143" y="104" width="9" height="9" rx="2"/><rect x="132" y="114" width="9" height="9" rx="2"/></g><g fill="#7DBA4F"><circle cx="148" cy="96" r="2.4"/><circle cx="126" cy="112" r="2.4"/><circle cx="150" cy="118" r="2.4"/><circle cx="140" cy="94" r="2"/></g><path d="M124 100q4-6 10-6" stroke="#EDBE87" stroke-width="2.5" fill="none" stroke-linecap="round"/>';
+  return `<svg viewBox="0 0 200 160" role="img" aria-label="${after?'먹은 후':'먹기 전'} 식판 예시 사진"><rect width="200" height="160" fill="#E6CDAA"/><path d="M0 30h200M0 80h200M0 130h200" stroke="#DCBF97" stroke-width="2"/><rect x="10" y="10" width="180" height="142" rx="16" fill="#F4F1EA" stroke="#E0D9CB" stroke-width="2"/><circle cx="44" cy="44" r="22" fill="#FFFFFF" stroke="#E6E1D6"/>${kimchi}<circle cx="100" cy="44" r="22" fill="#FFFFFF" stroke="#E6E1D6"/>${spinach}<circle cx="156" cy="44" r="22" fill="#FFFFFF" stroke="#E6E1D6"/><g stroke="#F1D27C" stroke-width="2.4" stroke-linecap="round" fill="none">${sprout}</g><g fill="#E8C25A">${heads}</g><circle cx="62" cy="108" r="32" fill="#FFFFFF" stroke="#E6E1D6"/><circle cx="62" cy="108" r="27" fill="#F6F3EC"/>${rice}<circle cx="140" cy="108" r="32" fill="#FFFFFF" stroke="#E6E1D6"/><circle cx="140" cy="108" r="27" fill="#F6F1E8"/>${soup}<g transform="rotate(-6 100 146)"><rect x="42" y="141" width="84" height="4" rx="2" fill="#C9A26B"/><rect x="42" y="147" width="84" height="4" rx="2" fill="#B88F57"/></g></svg>`;
+}
+function totals(list){const t={k:0,c:0,p:0,f:0,sug:0,fib:0};list.forEach(f=>{for(const x in t)t[x]+=f[x]});return t}
+const all=()=>Object.values(meals).flatMap(m=>m.foods);
+const r1=n=>Math.round(n*10)/10;
+function pct(t){const kc=t.c*4+t.p*4+t.f*9||1;return{c:Math.round(t.c*4/kc*100),p:Math.round(t.p*4/kc*100),f:Math.round(t.f*9/kc*100)}}
+
+let state={slide:0,step:0,agree:{},prof:{sex:'f',age:'24',height:'163',weight:'58.4',act:'2',goal:'lose',school:''},coach:null,skip:{},photoKeep:true,screen:'intro',glanceTab:'day',detailTab:'info',mealKey:'lunch',statTab:'week',calNut:'kcal',albumDay:27};
+const app=document.getElementById('app');
+function go(s,extra={}){state={...state,screen:s,...extra};window.scrollTo(0,0);render()}
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.hidden=false;clearTimeout(t._t);t._t=setTimeout(()=>t.hidden=true,1600)}
+function bar(title,left,right){return `<div class="topbar sticky pad"><div style="display:flex">${left||''}</div><h1>${title}</h1><div style="display:flex;min-width:44px;justify-content:flex-end">${right||''}</div></div>`}
+const back=(to='home')=>`<button class="iconbtn" aria-label="뒤로" data-go="${to}">${ico.back}</button>`;
+
+function home(){
+  const t=totals(all()),p=pct(t),left=goal.kcal-t.k,frac=Math.min(t.k/goal.kcal,1),R=72,L=2*Math.PI*R;
+  const mealCard=(k)=>{const m=meals[k],mt=totals(m.foods),sk=!!state.skip[k];return `<div class="meal" style="background:${m.card}">
+    <button class="mealhit" data-meal="${k}" aria-label="${m.name} 기록하기"></button>
+    <div class="mtop"><span class="micowrap">${icons[k]}</span><span class="plus" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span></div>
+    <h3>${m.name}</h3>
+    ${m.foods.length?`<span class="mk num">${mt.k} kcal</span><span class="mfood">${m.foods[0].n}${m.foods.length>1?` 외 ${m.foods.length-1}개`:''}</span>`:`<button class="skip ${sk?'on':''}" data-skip="${k}" aria-pressed="${sk}"><span class="ck" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M4 8.5l2.5 2.5L12 5.5"/></svg></span>공복했어요</button>`}
+  </div>`};
+  const b=(lab,v,g,col)=>`<div class="bar"><label>${lab}</label><div class="track"><div class="fill" style="width:${Math.min(v/g*100,100)}%;background:${col}"></div></div><span class="num">${Math.round(v)} <span>/ ${g}g</span></span></div>`;
+  return `<div class="screen">
+  <div class="sticky">
+    <div class="topbar pad"><div></div><div style="display:flex;gap:4px">
+      <button class="iconbtn" aria-label="달력과 통계" data-go="calendar">${ico.cal}</button>
+      <button class="iconbtn" aria-label="설정" data-go="settings">${ico.gear}</button></div></div>
+    <div class="datestrip pad">
+      <button class="dside" data-toast="10월 26일로 이동"><span class="num">10.26</span><span class="dow">월</span></button>
+      <div class="dcenter"><span class="num">10.27</span><span class="todaypill">오늘</span></div>
+      <button class="dside r" data-toast="10월 28일로 이동"><span class="num">10.28</span><span class="dow">화</span></button>
+    </div>
+  </div>
+
+  <section class="band sky" aria-label="오늘 요약"><div class="pad">
+    <div class="bandhead"><h2>나의 하루</h2><div class="seg-mini">
+      <button class="chipbtn" data-go="glance">한눈에</button><button class="chipbtn dark" data-go="detail">자세히</button></div></div>
+    <div class="summary">
+      <div class="ring"><svg viewBox="0 0 170 170" aria-hidden="true"><circle cx="85" cy="85" r="${R}" stroke="rgba(31,42,46,.08)" stroke-width="16" fill="none"/><circle cx="85" cy="85" r="${R}" stroke="var(--sky-deep)" stroke-width="16" fill="none" stroke-linecap="round" stroke-dasharray="${L*frac} ${L}"/></svg>
+        <div class="center"><span class="sub num">목표 ${goal.kcal.toLocaleString()}</span><span class="big num">${t.k}</span><span class="unit">kcal</span></div></div>
+      <div class="ratio">
+        <div><span class="dot" style="background:var(--carb)"></span>탄수화물<span class="num">${r1(t.c)}<small>g</small></span></div>
+        <div><span class="dot" style="background:var(--prot)"></span>단백질<span class="num">${r1(t.p)}<small>g</small></span></div>
+        <div><span class="dot" style="background:var(--fat)"></span>지방<span class="num">${r1(t.f)}<small>g</small></span></div>
+      </div>
+    </div>
+    <div class="bars">${b('탄수화물',t.c,goal.carb,'var(--carb)')}${b('단백질',t.p,goal.prot,'var(--prot)')}${b('지방',t.f,goal.fat,'var(--fat)')}</div>
+    <div class="minor"><span>당류 <b class="num">${t.sug}g</b></span><span>식이섬유 <b class="num">${r1(t.fib)}g</b></span><span>나트륨 <b class="num">1,640mg</b></span></div>
+    <div class="remain"><span class="num">${left.toLocaleString()} kcal</span> 더 먹을 수 있어요</div>
+  </div></section>
+
+  <section class="band lime" aria-label="식사"><div class="pad">
+    <div class="bandhead"><h2>식사</h2></div>
+    <div class="meals">${['breakfast','lunch','dinner','snack'].map(mealCard).join('')}</div>
+    <div class="linkrow" style="${state.photoKeep?'':'grid-template-columns:1fr'}"><button data-go="recommend">음식 추천 ${crown}</button>${state.photoKeep?'<button data-go="album">식단 앨범</button>':''}</div>
+  </div></section>
+
+  <section class="band peach" aria-label="나의 변화"><div class="pad">
+    <div class="bandhead"><h2>나의 변화</h2></div>
+    <div class="weight"><div class="q">오늘 내 체중은?</div>
+      <div class="kg num">58.4<span> kg</span></div>
+      <div class="delta">지난 기록보다 0.3kg 줄었어요</div>
+      <div class="goalw"><span>목표 <span class="num">54.0kg</span></span><span class="tag">목표까지 <span class="num">4.4kg</span></span></div>
+      <svg class="scale" viewBox="0 0 220 210" aria-hidden="true"><ellipse cx="110" cy="200" rx="88" ry="8" fill="rgba(201,105,44,.18)"/><rect x="14" y="22" width="192" height="178" rx="42" fill="#E9865A"/><rect x="14" y="14" width="192" height="170" rx="42" fill="#F29A6B"/><path d="M40 30h60" stroke="#F7B48D" stroke-width="8" stroke-linecap="round"/><path d="M58 82a52 52 0 0 1 104 0z" fill="#FFFFFF"/><path d="M58 82a52 52 0 0 1 104 0" fill="none" stroke="#FCE3D2" stroke-width="4"/><g stroke="#E9B796" stroke-width="2.5" stroke-linecap="round"><path d="M70 76l4 2M78 58l4 4M94 44l3 5M110 40v6M126 44l-3 5M142 58l-4 4M150 76l-4 2"/></g><path d="M110 46l7 24h-14z" fill="#E2552B"/><circle cx="110" cy="76" r="5" fill="#E2552B"/><rect x="44" y="112" width="52" height="52" rx="20" fill="#F5AE85"/><rect x="124" y="112" width="52" height="52" rx="20" fill="#F5AE85"/></svg>
+      <button class="btn peach" data-toast="체중 입력 창이 열려요">기록하기</button></div>
+  </div></section>
+  </div>`;
+}
+
+function glance(){
+  const t=totals(all()),p=pct(t);
+  const day=`<div class="gcard">${mascot}
+    <div class="kc"><span class="num">${t.k}</span>kcal 먹었어요</div>
+    <div class="badges"><span class="badge"><i style="color:var(--carb)">탄</i><span class="num">${p.c}%</span></span><span class="badge"><i style="color:var(--prot)">단</i><span class="num">${p.p}%</span></span><span class="badge"><i style="color:var(--fat)">지</i><span class="num">${p.f}%</span></span></div>
+    <div class="subline">당류 <b class="num">${t.sug}g</b> · 식이섬유 <b class="num">${r1(t.fib)}g</b></div>
+    <div class="gmeals">${Object.entries(meals).map(([k,m])=>`<div class="gmeal"><span class="ic">${icons[k]}</span><span><b>${m.name}</b><span class="num">${totals(m.foods).k}kcal</span></span></div>`).join('')}</div>
+  </div>`;
+  const gram=f=>{const m=f.s.match(/\((\d+)g\)/);return m?m[1]+'g':''};
+  const smile=`<svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 4c9 0 16 6.5 16 15s-7 15-16 15c-2 0-4-.3-5.8-1L6 36l2-7.5C5.5 26 4 22.7 4 19 4 10.5 11 4 20 4z" fill="currentColor" opacity=".35"/><circle cx="15" cy="17" r="1.8" fill="currentColor"/><circle cx="25" cy="17" r="1.8" fill="currentColor"/><path d="M15.5 22.5q4.5 3.5 9 0" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`;
+  const list=Object.entries(meals).map(([k,m])=>{const t=totals(m.foods);return `<div class="tmeal"><div class="thead"><div><h3>${m.name}</h3><span class="num tk">${t.k}kcal</span></div>${icons[k].replace('class="mico"','class="mico" style="width:112px;height:112px"')}</div>
+    <div class="tcard" style="background:${m.card}">${m.foods.length?`<div class="badges"><span class="badge"><i style="color:var(--carb)">탄</i><span class="num">${r1(t.c)}g</span></span><span class="badge"><i style="color:var(--prot)">단</i><span class="num">${r1(t.p)}g</span></span><span class="badge"><i style="color:var(--fat)">지</i><span class="num">${r1(t.f)}g</span></span></div><ul class="tfoods">${m.foods.map(f=>`<li><span>${f.n}</span><span class="num">${gram(f)}</span></li>`).join('')}</ul>`:`<div class="tempty">${smile}아직 기록이 없어요</div>`}</div></div>`}).join('');
+  return `<div class="screen">${bar('10.27 (화)',back())}
+  <div class="pad"><div class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="${state.glanceTab==='day'}" data-set="glanceTab:day">오늘 하루</button>
+    <button class="tab" role="tab" aria-selected="${state.glanceTab==='meal'}" data-set="glanceTab:meal">오늘 식단</button></div>
+  ${state.glanceTab==='day'?day:list}</div>
+  <div class="bottom"><div class="inner pad"><button class="btn ink" data-toast="이미지로 저장했어요">${state.glanceTab==='day'?'오늘 하루':'오늘 식단'} 공유하기</button></div></div></div>`;
+}
+
+function nutrientTable(t,est){
+  const e=est?'<span class="est">추정</span>':'';
+  return `<div class="ntable">
+   <div class="nrow total"><span>총 열량</span><span class="num">${t.k} kcal</span></div>
+   <div class="nrow"><span>탄수화물</span><span class="num">${r1(t.c)} g</span></div>
+   <div class="nrow sub"><span>당류</span><span class="num">${e}${r1(t.sug)} g</span></div>
+   <div class="nrow sub"><span>대체감미료</span><span>확인 안 됨</span></div>
+   <div class="nrow sub"><span>식이섬유</span><span class="num">${e}${r1(t.fib)} g</span></div>
+   <div class="nrow"><span>단백질</span><span class="num">${r1(t.p)} g</span></div>
+   <div class="nrow"><span>지방</span><span class="num">${r1(t.f)} g</span></div>
+   <div class="nrow sub"><span>포화지방</span><span class="num">${r1(t.f*.34)} g</span></div>
+   <div class="nrow sub"><span>트랜스지방</span><span class="num">0.1 g</span></div>
+   <div class="nrow sub"><span>다불포화지방</span><span class="num">${r1(t.f*.18)} g</span></div>
+   <div class="nrow sub"><span>단일불포화지방</span><span class="num">${r1(t.f*.42)} g</span></div>
+   <div class="nrow"><span>콜레스테롤</span><span class="num">${Math.round(t.p*2.6)} mg</span></div>
+   <div class="nrow"><span>나트륨</span><span class="num">${Math.round(t.k*1.84).toLocaleString()} mg</span></div>
+   <div class="nrow"><span>칼륨</span><span class="num">${Math.round(t.k*1.1).toLocaleString()} mg</span></div>
+  </div>`;
+}
+
+function detail(){
+  const fs=all(),t=totals(fs),p=pct(t);
+  const rank=(key,label,g,emoji)=>{const v=t[key],ratio=v/g,st=ratio<.5?['부족해요','']:ratio<=1.1?['적당해요','ok']:['많아요','hi'];
+    const sorted=[...fs].sort((a,b)=>b[key]-a[key]).filter(f=>f[key]>0);
+    const rows=[0,1,2].map(i=>sorted[i]?`<li><span class="n num">${i+1}</span><span>${sorted[i].n}</span><span class="v num">${r1(sorted[i][key])}g<small>1회</small></span></li>`:`<li><span class="n num">${i+1}</span><span style="color:var(--ink-3)">-</span></li>`).join('');
+    return `<section class="rank"><header><h3>${emoji}${label}</h3><span class="state ${st[1]}">${st[0]}</span></header>
+      <div class="track"><div class="fill" style="width:${Math.min(ratio*100,100)}%;background:${key==='sug'?'var(--peach)':'var(--sky-deep)'}"></div></div>
+      <div class="meta"><span><b class="num">${r1(v)}g</b> 먹었어요</span><span style="color:var(--ink-3)">${key==='sug'?'권장 ':'목표 '}<span class="num">${g}g</span></span></div>
+      <ol>${rows}</ol>${sorted.length>3?'<button class="more">더 보기 ▾</button>':''}</section>`};
+  const dot=c=>`<span class="dot" style="background:${c};display:inline-block;margin-right:6px"></span>`;
+  const DR=78,DL=2*Math.PI*DR;let off=0;
+  const seg=(v,col)=>{const len=Math.max(DL*v/100-5,0);const s=`<circle cx="105" cy="105" r="${DR}" fill="none" stroke="${col}" stroke-width="30" stroke-dasharray="${len} ${DL}" stroke-dashoffset="${-off}"/>`;off+=DL*v/100;return s};
+  const donut=`<div class="donut" role="img" aria-label="탄수화물 ${p.c}% 단백질 ${p.p}% 지방 ${p.f}%"><svg viewBox="0 0 210 210" aria-hidden="true"><circle cx="105" cy="105" r="${DR}" fill="none" stroke="rgba(255,255,255,.6)" stroke-width="30"/>${seg(p.c,'var(--carb)')}${seg(p.p,'var(--prot)')}${seg(p.f,'var(--fat)')}</svg><div class="dc"><span class="num">${t.k}</span><span>kcal</span></div></div>`;
+  return `<div class="screen">${bar('영양소 상세',back())}
+  <section class="band sky"><div class="pad">
+    <div style="text-align:center;font-weight:700" class="num">10.27 (화)</div>
+    ${donut}
+    <div class="mgrams"><div>${dot('var(--carb)')}탄수화물<div class="num">${t.c}g</div><small>${p.c}%</small></div><div>${dot('var(--prot)')}단백질<div class="num">${t.p}g</div><small>${p.p}%</small></div><div>${dot('var(--fat)')}지방<div class="num">${t.f}g</div><small>${p.f}%</small></div></div>
+  </div></section>
+  <div class="pad" style="padding-top:22px">
+    <div class="segment" role="tablist" style="max-width:320px;margin:0 auto 10px">
+      <button role="tab" aria-selected="${state.detailTab==='info'}" data-set="detailTab:info">영양정보</button>
+      <button role="tab" aria-selected="${state.detailTab==='food'}" data-set="detailTab:food">먹은 음식</button></div>
+    ${state.detailTab==='info'?nutrientTable(t,true):rank('c','탄수화물',goal.carb,'')+rank('p','단백질',goal.prot,'')+rank('f','지방',goal.fat,'')+rank('sug','당류',goal.sugar,'')}
+  </div></div>`;
+}
+
+function meal(){
+  const k=state.mealKey,m=meals[k],t=totals(m.foods),p=pct(t);
+  const foods=m.foods.length?m.foods.map(f=>`<div class="food"><div><div class="fn">${f.n}<span class="srcb">${f.src}</span></div><div class="fs">${f.s}</div></div><span class="num">${f.k}kcal</span><button class="iconbtn" aria-label="${f.n} 삭제" data-toast="삭제했어요" style="width:36px;height:36px">${ico.close}</button></div>`).join(''):`<p style="color:var(--ink-3);text-align:center;padding:30px 0">아직 기록이 없어요. 카메라로 먹기 전 사진을 찍어보세요.</p>`;
+  return `<div class="screen">
+  <div class="mealhero" style="background:${m.color}">
+    <div class="topbar pad"><button class="iconbtn" aria-label="닫기" data-go="home">${ico.close}</button><h1>${m.name} <span class="num" style="color:var(--ink-3)">${m.foods.length}</span></h1><div style="width:44px"></div></div>
+    <div class="art">${icons[k].replace('class="mico"','class="mico" style="width:110px;height:110px"')}</div>
+    <button class="cam" aria-label="사진 찍기" data-sheet="record">${ico.camera}</button>
+  </div>
+  <div class="sheetbody pad">
+    <div class="mtotal"><span>총 <span class="num">${t.k}kcal</span></span><div style="display:flex;gap:6px">
+      <button class="chipbtn" style="background:var(--sky-soft)" data-sheet="time">시간 입력</button><button class="chipbtn" style="background:var(--sky-deep);color:#fff" data-sheet="mealinfo">자세히</button></div></div>
+    ${m.time?`<div class="timebox">🕒 <span class="num">${m.time}</span>에 먹었어요</div>`.replace('🕒','시간'):''}
+    ${m.foods.length?`<div class="stack"><div style="flex:${p.c};background:var(--carb)" class="num">${p.c}%</div><div style="flex:${p.p};background:var(--prot)" class="num">${p.p}%</div><div style="flex:${p.f};background:var(--fat)" class="num">${p.f}%</div></div>
+    <div class="legend"><span><i class="dot" style="background:var(--carb)"></i>탄수화물 <b class="num">${t.c}g</b></span><span><i class="dot" style="background:var(--prot)"></i>단백질 <b class="num">${t.p}g</b></span><span><i class="dot" style="background:var(--fat)"></i>지방 <b class="num">${t.f}g</b></span></div>`:''}
+    <div class="foods">${foods}</div>
+  </div>
+  <div class="bottom"><div class="inner pad">${m.foods.length?'<button class="btn sky narrow" data-sheet="record">음식 추가</button><button class="btn ink" data-go="home" data-toast="저장했어요">수정 완료</button>':'<button class="btn ink" data-sheet="record">음식 추가</button>'}</div></div></div>`;
+}
+
+function recommend(){
+  const t=totals(all());
+  const recs=[['닭가슴살 샐러드','200g','단백질 32g 채워줘요',240,'var(--lime-soft)'],['두부구이 정식','1인분','단백질 21g · 탄수화물 48g',430,'var(--sky-soft)'],['연어 포케','1그릇','단백질 28g · 지방 14g',520,'var(--peach-soft)'],['삶은 달걀 2개','100g','간식으로 단백질 13g',150,'var(--butter-soft)']];
+  return `<div class="screen">${bar('음식 추천',back(),crown)}
+  <div class="pad"><div class="leftcard">
+    <b>오늘 남은 양</b>
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px"><span>칼로리 <b class="num">${goal.kcal-t.k}kcal</b></span><span>탄 <b class="num">${goal.carb-t.c}g</b></span><span>단 <b class="num">${goal.prot-t.p}g</b></span><span>지 <b class="num">${goal.fat-t.f}g</b></span></div>
+    <span style="font-size:14px;color:var(--lime-deep);font-weight:700">단백질이 가장 많이 남았어요</span></div>
+  <h2 style="font-size:17px;margin:24px 0 4px">저녁으로 이런 건 어때요</h2>
+  ${recs.map(r=>`<div class="rec"><span class="ic" style="background:${r[4]}">${icons.dinner.replace('class="mico"','class="mico" style="width:28px;height:28px"')}</span><span><b>${r[0]} <small>${r[1]}</small></b><small>${r[2]}</small></span><span class="num">${r[3]}kcal</span></div>`).join('')}
+  </div></div>`;
+}
+
+function monthGrid(click,nut='kcal'){
+  const fmt=(v,d)=>nut==='w'?(59.6-d*0.045).toFixed(1):nut==='c'?Math.round(v*240):nut==='p'?Math.round(v*100):nut==='f'?Math.round(v*55):Math.round(v*1900/10)*10;
+  // Oct 2026: 1st is Thursday; Monday-start offset 3
+  const vals={1:.82,2:.95,3:1.18,4:1.02,5:.6,6:.88,7:.97,8:.4,9:1.05,10:1.21,11:.93,12:.99,13:.72,14:.91,15:1.0,16:1.14,17:.86,18:.3,19:.96,20:1.03,21:.89,22:.94,23:1.12,24:.98,25:.77,26:.92,27:.47};
+  const lv=v=>v==null?'':v<.5?'h1':v<.9?'h2':v<=1.1?'h3':'h4';
+  let cells=['월','화','수','목','금','토','일'].map(d=>`<div class="wd">${d}</div>`).join('');
+  [28,29,30].forEach(d=>cells+=`<div class="cell out">${d}</div>`);
+  for(let d=1;d<=31;d++){const v=vals[d];cells+=`<button class="cell ${nut==='w'?(v?'hw':''):lv(v)} ${d===27?'today':''}" data-${click}="${d}" aria-label="10월 ${d}일${v?` 목표의 ${Math.round(v*100)}%`:''}"><span>${d}</span>${v?`<span class="v">${fmt(v,d)}</span>`:''}</button>`}
+  cells+=`<div class="cell out">1</div>`;
+  return `<div class="cal">${cells}</div>`;
+}
+
+function calendar(){
+  const week=[[ '월',1820],['화',1960],['수',1690],['목',2130],['금',1860],['토',2290],['일',1470]];
+  const W=320,H=170,pl=34,pr=40,pt=14,pb=26,max=2500,min=1000;
+  const x=i=>pl+i*(W-pl-pr)/6, y=v=>pt+(1-(v-min)/(max-min))*(H-pt-pb);
+  const avg=Math.round(week.reduce((a,b)=>a+b[1],0)/7);
+  const line=week.map((d,i)=>`${i?'L':'M'}${x(i)} ${y(d[1])}`).join(' ');
+  const weekSvg=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="주간 섭취 칼로리">
+    ${[1000,1500,2000,2500].map(v=>`<line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${pl-6}" y="${y(v)+4}" text-anchor="end" font-size="10" fill="var(--ink-3)">${v}</text>`).join('')}
+    <line x1="${pl}" x2="${W-pr}" y1="${y(1900)}" y2="${y(1900)}" stroke="var(--ink-3)" stroke-dasharray="4 4"/><text x="${W-pr+4}" y="${y(1900)+4}" font-size="10" fill="var(--ink-2)">목표</text>
+    <line x1="${pl}" x2="${W-pr}" y1="${y(avg)}" y2="${y(avg)}" stroke="var(--peach-deep)" stroke-dasharray="2 4"/><text x="${W-pr+4}" y="${y(avg)+14}" font-size="10" fill="var(--peach-deep)">평균</text>
+    <path d="${line}" fill="none" stroke="var(--lime-deep)" stroke-width="3" stroke-linejoin="round"/>
+    ${week.map((d,i)=>`<circle cx="${x(i)}" cy="${y(d[1])}" r="${i===5?5:3.5}" fill="${i===5?'var(--lime-deep)':'var(--surface)'}" stroke="var(--lime-deep)" stroke-width="2"/><text x="${x(i)}" y="${H-8}" text-anchor="middle" font-size="11" fill="var(--ink-2)">${d[0]}</text>`).join('')}
+  </svg>`;
+  const month=[];for(let d=1;d<=27;d++)month.push(Math.round(1900*(.5+((d*37)%60)/100)));
+  const mW=320,mH=150;const bw=(mW-34-8)/27;
+  const monthSvg=`<svg viewBox="0 0 ${mW} ${mH}" role="img" aria-label="10월 일별 섭취 칼로리">
+    ${[0,1000,2000,3000].map(v=>{const yy=10+(1-v/3000)*(mH-34);return `<line x1="34" x2="${mW-8}" y1="${yy}" y2="${yy}" stroke="var(--line)"/><text x="28" y="${yy+4}" text-anchor="end" font-size="10" fill="var(--ink-3)">${v}</text>`}).join('')}
+    ${month.map((v,i)=>{const h=v/3000*(mH-34);return `<rect x="${34+i*bw+1}" y="${10+(mH-34)-h}" width="${bw-2}" height="${h}" rx="2" fill="${v>2090?'var(--peach)':'var(--lime)'}"/>`}).join('')}
+    ${[1,8,15,22,27].map(d=>`<text x="${34+(d-1)*bw+bw/2}" y="${mH-6}" text-anchor="middle" font-size="10" fill="var(--ink-2)">${d}일</text>`).join('')}
+    <line x1="34" x2="${mW-8}" y1="${10+(1-1900/3000)*(mH-34)}" y2="${10+(1-1900/3000)*(mH-34)}" stroke="var(--ink-3)" stroke-dasharray="4 4"/>
+  </svg>`;
+  const panes={
+    week:`<div class="chartcard"><header><button class="chipbtn">◀ 지난주</button><h3 class="num">10.19 – 10.25</h3><button class="chipbtn" style="color:var(--ink-3)">다음 주 ▶</button></header>${weekSvg}
+      <div class="callout"><b>토요일</b> 섭취 <b class="num">2,290kcal</b> · 목표 대비 <b class="num">121%</b> · 주 평균 <span class="num">${avg.toLocaleString()}kcal</span> 대비 <b class="num">${Math.round(2290/avg*100)}%</b></div></div>`,
+    month:`<div class="chartcard"><header><h3>10월 일별 칼로리</h3>${crown}</header>${monthSvg}
+      <div class="callout">이번 달 하루 평균 <b class="num">1,812kcal</b>, 목표 범위(90~110%) 안에 든 날은 <b class="num">13일</b>이에요.</div></div>`,
+    ai:`<div class="chartcard report"><header><h3>AI 주간 리포트</h3>${crown}</header>
+      <div class="score"><div class="big num">78<span>/100</span></div><div><b>균형 잡힌 한 주였어요</b><br><span class="aitag">AI 분석</span> <span style="font-size:13px;color:var(--ink-2)">10.19 – 10.25</span></div></div>
+      <h4>잘한 점</h4><ul><li>7일 중 6일을 빠짐없이 기록했어요</li><li>평일 점심 탄단지 비율이 목표에 가까웠어요</li></ul>
+      <h4>아쉬운 점</h4><ul><li>주말 저녁 칼로리가 목표보다 20% 이상 많았어요</li><li>단백질이 하루 평균 22g 부족했어요</li></ul>
+      <h4>다음 주 제안</h4><ul><li>아침에 삶은 달걀이나 그릭요거트를 더해 보세요</li><li>주말 외식은 밥 양을 2/3로 줄여 보세요</li></ul></div>`
+  };
+  return `<div class="screen">${bar('기록 보기',back())}
+  <div class="pad">
+    <div class="calhead"><button class="iconbtn" aria-label="이전 달">${ico.back}</button><h2 class="num">2026년 10월</h2><button class="iconbtn" aria-label="다음 달" style="transform:scaleX(-1)">${ico.back}</button></div>
+    <div class="monthsum"><span>기록 <b class="num">27일</b></span><span>하루 평균 <b class="num">1,812kcal</b></span></div>
+    ${monthGrid('day',state.calNut)}
+    ${state.calNut==='w'?'<div class="legendrow">체중을 기록한 날에 kg으로 표시돼요</div>':`<div class="legendrow"><span><i style="background:var(--heat1)"></i>~50%</span><span><i style="background:var(--heat2)"></i>50~90%</span><span><i style="background:var(--heat3)"></i>90~110%</span><span><i style="background:var(--heat4)"></i>110%~</span></div>`}
+    <div class="nchips">${[['kcal','칼로리'],['c','탄'],['p','단'],['f','지'],['w','몸무게']].map(([k,l])=>`<button class="nchip" aria-pressed="${state.calNut===k}" data-set="calNut:${k}">${l}</button>`).join('')}</div>
+    <div class="segment" role="tablist" style="margin-top:26px">
+      <button role="tab" aria-selected="${state.statTab==='week'}" data-set="statTab:week">주간</button>
+      <button role="tab" aria-selected="${state.statTab==='month'}" data-set="statTab:month">월간 <svg width="12" height="12" viewBox="0 0 16 16" aria-label="프리미엄" style="fill:var(--crown)"><path d="M2 12 L1 4 L5 7 L8 2 L11 7 L15 4 L14 12 Z"/></svg></button>
+      <button role="tab" aria-selected="${state.statTab==='ai'}" data-set="statTab:ai">AI 리포트 <svg width="12" height="12" viewBox="0 0 16 16" aria-label="프리미엄" style="fill:var(--crown)"><path d="M2 12 L1 4 L5 7 L8 2 L11 7 L15 4 L14 12 Z"/></svg></button></div>
+    ${panes[state.statTab]}
+  </div></div>`;
+}
+
+function album(){
+  const d=state.albumDay;
+  const pairs=Object.entries(meals).filter(([k,m])=>m.foods.length).map(([k,m])=>`<div class="pair"><h3>${m.name}<span class="num" style="color:var(--ink-3);font-weight:500">${m.time}</span></h3>
+    <div class="two"><div class="shot">${foodPhoto(false)}<span>먹기 전</span></div><div class="shot">${foodPhoto(true)}<span>먹은 후</span></div></div></div>`).join('');
+  const menus=[['아침','var(--sky-soft)','07:50','토스트와 우유'],['점심','var(--lime-soft)','12:30','비빔밥'],['저녁','var(--peach-soft)','18:40','닭가슴살 샐러드'],['간식','var(--butter-soft)','15:20','바나나']];
+  const other=menus.filter((_,i)=>(d+i)%4!==0).map(([n,c,tm,f])=>`<div class="pair"><h3>${n}<span class="num" style="color:var(--ink-3);font-weight:500">${tm}</span></h3>
+    <div class="two"><div class="shot">${foodPhoto(false)}<span>먹기 전</span></div><div class="shot">${foodPhoto(true)}<span>먹은 후</span></div></div></div>`).join('');
+  return `<div class="screen">${bar('식단 앨범',back())}
+  <div class="pad">
+  <div class="calhead"><button class="iconbtn" aria-label="이전 달" data-toast="9월 앨범으로 이동">${ico.back}</button><h2 class="num">2026년 10월</h2><button class="iconbtn" aria-label="다음 달" style="transform:scaleX(-1)" data-toast="11월 앨범으로 이동">${ico.back}</button></div>
+  ${monthGrid('albumday')}
+  <h2 style="font-size:18px;margin:26px 0 0">10월 ${d}일</h2>
+  <div class="pairs">${d===27?pairs:d<27?other:`<p style="color:var(--ink-3)">이날은 아직 기록이 없어요.</p>`}</div></div></div>`;
+}
+
+function settings(){
+  const row=(l,r='›',cls='')=>`<button class="srow ${cls}" data-toast="${l} 화면 (시안)"><span>${l}</span>${typeof r==='string'?`<small>${r}</small>`:r}</button>`;
+  return `<div class="screen">${bar('설정',back())}
+  <div class="pad slist">
+    <div class="sgroup">계정</div>
+    ${row('로그인','구글 계정으로 로그인 ›')}
+    <div class="sgroup">내 목표</div>
+    <button class="srow" data-sheet="kcal"><span>목표 칼로리·탄단지</span><small>${goal.kcal.toLocaleString()}kcal ›</small></button><button class="srow" data-sheet="goaltype"><span>목표</span><small>${{lose:'체중 감량',keep:'체중 유지',gain:'체중 증량'}[state.prof.goal]} ›</small></button>${row('목표 몸무게','54.0kg ›')}${row('키·몸무게','163cm · 58.4kg ›')}
+    <div class="sgroup">학교</div>${row('학교 등록','등록 안 함 ›')}
+    <div class="sgroup">사진</div>
+    <button class="srow" data-toggle="photoKeep"><span>식사 사진 보관</span><span class="toggle ${state.photoKeep?'':'off'}" role="switch" aria-checked="${state.photoKeep}" aria-label="식사 사진 보관"></span></button>
+    ${row('사진 전체 삭제','','danger')}
+    <div class="sgroup">알림</div>
+    <div class="srow"><span>끼니 기록 알림</span><span class="toggle off" role="switch" aria-checked="false" aria-label="끼니 기록 알림"></span></div>
+    <div class="sgroup">기타</div>
+    ${row('프리미엄',crown)}<button class="srow" data-startcoach="1"><span>사용방법</span><small>›</small></button><button class="srow" data-go="intro"><span>처음 화면 다시 보기</span><small>›</small></button>${row('약관·개인정보')}${row('내 기록 전체 삭제','','danger')}${row('로그아웃','')}
+  </div></div>`;
+}
+
+function obSteps(){const s=['sex','age','height','weight','act','goal'];if(state.prof.age!==''&&+state.prof.age<18)s.push('school');return s}
+
+function intro(){
+  const slides=[
+    ['먹기 전·후 사진<br>두 장이면 끝','찍기만 하면 음식과 양을 알아서 찾아요',`<div class="art" style="background:var(--sky-soft)"><div style="display:grid;grid-template-columns:1fr auto 1fr;gap:6px;align-items:center;width:100%;padding:0 14px"><div class="shot">${foodPhoto(false)}<span>먹기 전</span></div><span style="font-size:22px;color:var(--ink-3)">→</span><div class="shot">${foodPhoto(true)}<span>먹은 후</span></div></div></div>`],
+    ['남긴 양까지 빼고<br>실제로 먹은 만큼만','반찬을 남겨도 먹은 만큼만 계산해요',`<div class="art" style="background:var(--lime-soft)"><div style="display:grid;justify-items:center;gap:12px"><span class="micowrap" style="width:150px;height:150px">${icons.snack.replace('class="mico"','class="mico" style="width:110px;height:110px"')}</span><span class="chipbtn" style="background:var(--surface);display:inline-flex;align-items:center">남긴 20%는 빼고 계산해요</span></div></div>`],
+    ['목표 대비<br>한눈에','하루 칼로리와 탄·단·지를 바로 확인해요',`<div class="art" style="background:var(--peach-soft)"><div style="display:grid;justify-items:center;gap:10px">${mascot}<span class="chipbtn" style="background:var(--surface);display:inline-flex;align-items:center"><span class="num">1,124 / 1,900kcal</span></span><span style="display:flex;align-items:center;gap:6px;color:var(--ink-2)">AI 주간 리포트 ${crown}</span></div></div>`]
+  ];
+  return `<div class="screen ob pad"><div class="slides" id="slides">${slides.map(([h,p,a])=>`<section class="slide">${a}<h2>${h}</h2><p>${p}</p></section>`).join('')}</div>
+  <div class="dots"><div>${slides.map((_,i)=>`<button aria-label="${i+1}번째 소개" data-dot="${i}" aria-current="${i===0}"></button>`).join('')}</div></div></div>
+  <div class="bottom"><div class="inner pad" style="flex-direction:column;gap:2px"><button class="btn ink" data-go="consent">시작하기</button><button class="link" data-login="existing">이미 계정이 있어요</button></div></div>`;
+}
+
+const AGREE=[['svc','서비스 이용 안내 (의학적 조언이 아니에요)',1],['priv','개인정보 수집·이용',1],['ai','사진 AI 분석',1],['age','만 14세 이상이에요',1],['keep','식사 사진 보관',0],['school','학교 등록',0]];
+function consent(){
+  const a=state.agree,all=AGREE.every(i=>a[i[0]]),ok=AGREE.filter(i=>i[2]).every(i=>a[i[0]]);
+  const cb=on=>`<span class="cbox ${on?'on':''}" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M4 8.5l2.5 2.5L12 5.5"/></svg></span>`;
+  return `<div class="screen">${bar('',back('intro'))}<div class="pad q"><h2>서비스 이용에<br>동의해 주세요</h2><p class="help">처음 한 번만 확인하면 돼요</p>
+  <div class="allagree"><div class="arow"><button class="lbl" data-agreeall="1" aria-pressed="${all}">${cb(all)}전체 동의</button></div></div>
+  ${AGREE.map(([k,l,r])=>`<div class="arow"><button class="lbl" data-agree="${k}" aria-pressed="${!!a[k]}">${cb(a[k])}<span class="${r?'tagreq':'tagopt'}">${r?'필수':'선택'}</span><span>${l}</span></button>${k==='age'?'':`<button class="view" data-terms="${k}">보기</button>`}</div>`).join('')}</div>
+  <div class="bottom"><div class="inner pad"><button class="btn ink" data-go="quiz" ${ok?'':'disabled'}>동의하고 계속</button></div></div></div>`;
+}
+
+function quiz(){
+  const steps=obSteps(),i=Math.min(state.step,steps.length-1),k=steps[i],P=state.prof,last=i===steps.length-1;
+  const opt=(f,v,l,s='')=>`<button class="opt" data-pick="${f}:${v}" aria-pressed="${P[f]===v}"><span>${l}${s?`<small>${s}</small>`:''}</span></button>`;
+  const num=(f,u,ph)=>`<div class="field"><input id="f-${f}" data-field="${f}" type="number" inputmode="decimal" value="${P[f]}" placeholder="${ph}" aria-label="${u}"><span>${u}</span></div>`;
+  const note='<div class="note">목표 계산에만 쓰고 언제든 수정·삭제할 수 있어요</div>';
+  const B={
+    sex:['성별을 알려주세요','하루에 필요한 칼로리를 계산할 때 써요',`<div class="opts two">${opt('sex','f','여성')}${opt('sex','m','남성')}</div>`],
+    age:['나이를 알려주세요','만 나이로 적어 주세요',num('age','세','24')],
+    height:['키를 알려주세요','',num('height','cm','165')+note],
+    weight:['몸무게를 알려주세요','',num('weight','kg','58.0')+note],
+    act:['평소 얼마나 움직이나요?','가장 가까운 것을 골라 주세요',`<div class="opts">${opt('act','1','거의 안 움직여요','주로 앉아서 지내요')}${opt('act','2','가볍게 움직여요','주 1~3회 가벼운 운동')}${opt('act','3','보통이에요','주 3~5회 운동')}${opt('act','4','활발해요','주 6~7회 운동')}${opt('act','5','매우 활발해요','운동선수 수준')}</div>`],
+    goal:['목표가 무엇인가요?','',`<div class="opts">${opt('goal','lose','체중 감량')}${opt('goal','keep','체중 유지')}${opt('goal','gain','체중 증량')}</div>`],
+    school:['학교를 등록할까요?','등록하면 급식 메뉴를 바로 불러올 수 있어요 (선택)',`<div class="field" style="border-color:var(--line)"><input id="f-school" data-field="school" type="text" value="${P.school}" placeholder="학교 이름 검색" aria-label="학교 이름" style="font-size:22px"></div>`]
+  }[k];
+  return `<div class="screen"><div class="pad"><div class="topbar">${i>0?`<button class="iconbtn" aria-label="이전" data-stepprev="1">${ico.back}</button>`:back('consent')}<div></div><div style="width:44px"></div></div>
+  <div class="progress" role="progressbar" aria-valuemin="1" aria-valuemax="${steps.length}" aria-valuenow="${i+1}"><div class="pfill" data-to="${(i+1)/steps.length*100}"></div><div class="pticks">${steps.slice(1).map((_,j)=>`<i style="left:${(j+1)/steps.length*100}%"></i>`).join('')}</div></div>
+  <div class="q"><h2>${B[0]}</h2><p class="help">${B[1]}</p>${B[2]}</div></div>
+  <div class="bottom"><div class="inner pad">${i>0?'<button class="btn ghost narrow" data-stepprev="1">이전</button>':''}${k==='school'?'<button class="btn ghost narrow" data-stepnext="1">건너뛰기</button>':''}<button class="btn ink" data-stepnext="1">${last?'결과 보기':'다음'}</button></div></div></div>`;
+}
+
+function result(){
+  const m=(c,l,v)=>`<div><span class="dot" style="background:${c};display:inline-block;margin-right:4px"></span>${l}<div class="num">${v}</div></div>`;
+  return `<div class="screen">${bar('',`<button class="iconbtn" aria-label="이전" data-go="quiz">${ico.back}</button>`)}<div class="pad"><div class="q"><h2>이렇게 먹는 걸<br>추천해요</h2><p class="help">입력한 정보로 계산했어요. 설정에서 언제든 바꿀 수 있어요</p></div>
+  <div class="rec-res"><div>${mascot}</div><div style="color:var(--ink-2)">하루 목표</div>${kcalEditor()}</div>
+  <p class="help" style="margin-top:14px;text-align:center;color:var(--ink-3)">로그인 전 입력값은 이 기기에만 임시로 보관돼요</p></div>
+  <div class="bottom"><div class="inner pad"><button class="btn gbtn" data-login="new">구글로 저장하고 시작하기</button></div></div></div>`;
+}
+
+const COACH=[['.meals','여기를 눌러 식사를 기록해요'],[null,'사진은 이렇게 찍어요'],['[data-go="calendar"]','달력과 그래프로 기록을 확인해요']];
+function drawCoach(scroll){
+  const box=document.getElementById('coach');
+  if(state.screen!=='home'||state.coach==null){box.hidden=true;box.innerHTML='';return}
+  const [sel,txt]=COACH[state.coach];
+  if(!sel){
+    const ck='<span class="tck" aria-hidden="true"><svg viewBox="0 0 16 16"><path d="M4 8.5l2.5 2.5L12 5.5"/></svg></span>';
+    const tips=['위에서 내려다보듯 수직으로 찍어요','먹기 전·후는 같은 각도와 거리에서 찍어요. 먹은 후엔 먹기 전 사진이 반투명하게 겹쳐 보여요','그릇이 모두 화면 안에 들어오게 해요','밝은 곳에서, 손이나 폰 그림자가 음식을 가리지 않게 해요'].map(t=>`<li>${ck}<span>${t}</span></li>`).join('');
+    box.innerHTML=`<div class="coach-block" style="background:rgba(31,42,46,.58)"></div><div class="coach-modal" role="dialog" aria-label="촬영 요령"><h3>${txt}</h3><div class="shots"><div class="shot">${foodPhoto(false)}<span>먹기 전</span></div><div class="shot">${foodPhoto(true)}<span>먹은 후</span></div></div><ul class="tips">${tips}</ul><div class="crow"><button class="link" data-coachskip="1">건너뛰기</button><span class="num" style="color:var(--ink-3)">${state.coach+1} / ${COACH.length}</span><button class="btn lime" style="min-height:44px" data-coachnext="1">다음</button></div></div>`;
+    box.hidden=false;return;
+  }
+  const el=app.querySelector(sel);if(!el)return;
+  if(scroll)el.scrollIntoView({block:'center'});
+  requestAnimationFrame(()=>{
+    const r=el.getBoundingClientRect(),p=8,below=r.bottom+190<innerHeight;
+    const top=below?r.bottom+p+12:Math.max(12,r.top-p-12-140);
+    const left=Math.min(Math.max(16,r.left),innerWidth-316);
+    box.innerHTML=`<div class="coach-block"></div><div class="coach-hole" style="left:${r.left-p}px;top:${r.top-p}px;width:${r.width+2*p}px;height:${r.height+2*p}px"></div><div class="coach-tip" role="dialog" aria-label="사용방법" style="top:${top}px;left:${Math.max(16,left)}px"><p>${txt}</p><div class="crow"><button class="link" data-coachskip="1">건너뛰기</button><span class="num" style="color:var(--ink-3)">${state.coach+1} / ${COACH.length}</span><button class="btn lime" style="min-height:44px" data-coachnext="1">${state.coach<COACH.length-1?'다음':'시작하기'}</button></div></div>`;
+    box.hidden=false;
+  });
+}
+addEventListener('scroll',()=>{if(state.coach!=null&&state.screen==='home')drawCoach(false)},{passive:true});
+addEventListener('resize',()=>{if(state.coach!=null&&state.screen==='home')drawCoach(false)});
+
+const TERMS={
+  svc:['서비스 이용 안내',[['어떤 서비스인가요',['식사 사진으로 먹은 양과 영양소를 기록하도록 돕는 서비스예요.','의학적 진단이나 치료, 영양 상담을 대신하지 않아요.']],['알아두세요',['사진으로 계산한 칼로리와 영양소는 추정치라 실제와 다를 수 있어요. 결과는 언제든 직접 고칠 수 있어요.','질환이 있거나 임신·수유 중이라면 목표를 정하기 전에 의사나 영양사와 상담해 주세요.','왕관이 붙은 기능은 프리미엄 기능이에요.']]]],
+  priv:['개인정보 수집·이용',[['수집하는 정보',['구글 계정의 이름과 이메일','성별, 나이, 키, 몸무게, 활동량, 목표','식사 기록(음식, 양, 먹은 시간)과 체중 기록']],['쓰는 곳',['하루 목표 칼로리와 탄·단·지 계산','기록 저장, 달력·그래프 통계, 여러 기기에서 같은 기록 보기']],['보관 기간',['탈퇴하거나 설정에서 「내 기록 전체 삭제」를 하면 바로 삭제해요.']],['동의하지 않으면',['동의하지 않을 수 있지만, 이 정보 없이는 기록과 목표 계산을 할 수 없어요.']]]],
+  ai:['사진 AI 분석',[['어떻게 분석하나요',['찍은 사진을 AI(Google Gemini)로 보내 음식 종류와 양을 찾아요.','영양 수치는 식약처 식품영양성분 데이터를 기준으로 계산해요.']],['사진은 어떻게 되나요',['분석에만 쓰고, 「식사 사진 보관」에 동의한 경우에만 앱에 남겨요.','얼굴이나 개인정보가 적힌 물건이 찍히지 않게 해 주세요.']],['결과가 틀리면',['음식 이름, 무게, 남긴 양을 직접 고칠 수 있어요. 확실하지 않은 값에는 「추정」 표시가 붙어요.']]]],
+  keep:['식사 사진 보관',[['무엇을 보관하나요',['먹기 전·후 사진을 보관해서 기록 상세와 식단 앨범에서 다시 볼 수 있어요.']],['언제든 바꿀 수 있어요',['설정에서 보관을 끄거나 사진을 한 번에 지울 수 있어요.','동의하지 않아도 기록은 그대로 쓸 수 있고, 식단 앨범만 보이지 않아요.']]]],
+  school:['학교 등록',[['왜 필요한가요',['등록한 학교의 공개 급식 메뉴를 불러와서, 급식을 먹은 날 한 번에 기록할 수 있어요.']],['저장하는 정보',['학교 이름만 저장하고, 학년·반·번호는 받지 않아요.','설정에서 언제든 해제할 수 있어요.']]]]
+};
+const sheets={
+  kcal:()=>`<header><h2>하루 목표 칼로리</h2><button class="iconbtn" aria-label="닫기" data-kcalsave="1">${ico.close}</button></header><div style="margin-top:10px">${kcalEditor()}</div><button class="btn ink" style="width:100%;margin-top:16px" data-kcalsave="1">저장</button>`,
+  terms:()=>{const [t,secs]=TERMS[state.termsKey],k=state.termsKey;return `<header><h2>${t}</h2><button class="iconbtn" aria-label="닫기" data-close>${ico.close}</button></header><div class="terms">${secs.map(([h,items])=>`<h4>${h}</h4><ul>${items.map(i=>`<li>${i}</li>`).join('')}</ul>`).join('')}</div><button class="btn ink" style="width:100%;margin-top:18px" data-agreeon="${k}">${state.agree[k]?'확인':'동의하기'}</button>`},
+  goaltype:()=>`<header><h2>목표</h2><button class="iconbtn" aria-label="닫기" data-close>${ico.close}</button></header><p style="color:var(--ink-2);margin:6px 0 0">바꾸면 하루 추천 칼로리와 탄·단·지도 다시 계산해요</p><div class="opts" style="margin-top:14px">${[['lose','체중 감량'],['keep','체중 유지'],['gain','체중 증량']].map(([v,l])=>`<button class="opt" data-goalset="${v}" aria-pressed="${state.prof.goal===v}">${l}</button>`).join('')}</div>`,
+  goalpick:()=>`<header><h2>이미 저장된 목표가 있어요</h2><button class="iconbtn" aria-label="닫기" data-close>${ico.close}</button></header><p style="color:var(--ink-2);margin:6px 0 0">이 계정에는 하루 1,800kcal 목표가 있어요. 어떻게 할까요?</p><div class="choice"><button data-startcoach="1">기존 목표 유지 (1,800kcal)</button><button data-startcoach="1">방금 입력한 값으로 바꾸기 (1,900kcal)</button></div><p style="font-size:13px;color:var(--ink-3);margin:12px 0 0">시안 안내: 목표가 이미 있는 계정으로 로그인했을 때만 보여요</p>`,
+  record:()=>`<header><h2>식사 기록</h2><button class="iconbtn" aria-label="닫기" data-close>${ico.close}</button></header>
+    <div class="school"><p>오늘 점심 급식인가요?</p><button class="chipbtn" style="background:var(--butter)" data-close data-toast="급식 메뉴를 불러왔어요">급식 불러오기</button></div>
+    <div class="choice"><button data-close data-toast="카메라가 열려요">${ico.camera}카메라로 찍기</button><button data-close data-toast="사진첩이 열려요">${ico.image}앨범에서 고르기</button><button data-close data-toast="음식 검색이 열려요">${ico.pen}직접 입력</button></div>`,
+  time:()=>`<header><h2>먹은 시간</h2><button class="iconbtn" aria-label="닫기" data-close>${ico.close}</button></header>
+    <label for="mtime" style="display:block;margin:12px 0 6px;color:var(--ink-2);font-size:14px">${meals[state.mealKey].name} 시간</label>
+    <input id="mtime" type="time" value="${meals[state.mealKey].time||'19:00'}" style="width:100%;min-height:52px;border-radius:14px;border:1px solid var(--line);padding:0 14px;font:600 20px var(--f-num)">
+    <button class="btn ink" style="width:100%;margin-top:16px" data-close data-toast="시간을 저장했어요">저장</button>`,
+  mealinfo:()=>`<header><h2>${meals[state.mealKey].name} 영양정보</h2><button class="iconbtn" aria-label="닫기" data-close>${ico.close}</button></header>${nutrientTable(totals(meals[state.mealKey].foods),true)}`
+};
+function refresh(){render();if(!document.getElementById('overlay').hidden&&state.sheet)openSheet(state.sheet)}
+function openSheet(k){state.sheet=k;const o=document.getElementById('overlay');document.getElementById('sheet').innerHTML=sheets[k]();o.hidden=false}
+function closeSheet(){document.getElementById('overlay').hidden=true}
+
+const screens={home,glance,detail,meal,recommend,calendar,album,settings,intro,consent,quiz,result};
+let lastScreen=null;
+function render(){
+  goal=calcGoal();
+  document.documentElement.classList.toggle('lock',state.screen==='intro');
+  app.innerHTML=screens[state.screen]();
+  const pf=app.querySelector('.pfill');
+  if(pf){pf.style.transition='none';pf.style.width=(state.progFrom||0)+'%';pf.offsetWidth;pf.style.transition='';pf.style.width=pf.dataset.to+'%';state.progFrom=+pf.dataset.to}
+  if(lastScreen!==state.screen){const sc=app.querySelector('.screen');if(sc)sc.classList.add('enter');lastScreen=state.screen}
+  const sl=document.getElementById('slides');
+  if(sl)sl.addEventListener('scroll',()=>{const i=Math.round(sl.scrollLeft/sl.clientWidth);document.querySelectorAll('.dots button').forEach((b,j)=>b.setAttribute('aria-current',j===i))},{passive:true});
+  drawCoach(true);
+}
+document.addEventListener('click',e=>{
+  const el=e.target.closest('button,[data-go]');if(!el)return;
+  if(el.id==='overlay')return;
+  if(el.dataset.meal){go('meal',{mealKey:el.dataset.meal});return}
+  if(el.dataset.day){go('home');toast(`10월 ${el.dataset.day}일로 이동`);return}
+  if(el.dataset.albumday){state.albumDay=+el.dataset.albumday;render();return}
+  if(el.dataset.kcal){state.kcalCustom=Math.max(800,goal.kcal+(+el.dataset.kcal));refresh();return}
+  if(el.dataset.kcalreset){state.kcalCustom=null;refresh();return}
+  if(el.dataset.kcalsave){closeSheet();render();toast('목표를 저장했어요');return}
+  if(el.dataset.terms){state.termsKey=el.dataset.terms;openSheet('terms');return}
+  if(el.dataset.agreeon){const k=el.dataset.agreeon;state.agree[k]=true;if(k==='keep')state.photoKeep=true;closeSheet();render();return}
+  if(el.dataset.goalset){state.prof.goal=el.dataset.goalset;closeSheet();render();toast('목표를 바꿨어요');return}
+  if(el.dataset.coachnext){state.coach=state.coach<COACH.length-1?state.coach+1:null;drawCoach(true);return}
+  if(el.dataset.coachskip){state.coach=null;drawCoach();return}
+  if(el.dataset.startcoach){closeSheet();go('home',{coach:0});return}
+  if(el.dataset.login){toast('구글 로그인 화면이 열려요 (시안)');if(el.dataset.login==='new')openSheet('goalpick');else go('home',{coach:0});return}
+  if(el.dataset.agreeall){const all=AGREE.every(i=>state.agree[i[0]]);AGREE.forEach(i=>state.agree[i[0]]=!all);state.photoKeep=!!state.agree.keep;render();return}
+  if(el.dataset.agree){const k=el.dataset.agree;state.agree[k]=!state.agree[k];if(k==='keep')state.photoKeep=!!state.agree.keep;render();return}
+  if(el.dataset.pick){const [f,v]=el.dataset.pick.split(':');state.prof[f]=v;render();return}
+  if(el.dataset.stepnext){if(state.step>=obSteps().length-1)go('result');else{state.step++;render()}return}
+  if(el.dataset.stepprev){state.step=Math.max(0,state.step-1);render();return}
+  if(el.dataset.dot!=null){const s=document.getElementById('slides');s.scrollTo({left:+el.dataset.dot*s.clientWidth,behavior:'smooth'});return}
+  if(el.dataset.skip){const k=el.dataset.skip;state.skip[k]=!state.skip[k];render();return}
+  if(el.dataset.toggle){const k=el.dataset.toggle;state[k]=!state[k];render();toast(state[k]?'사진 보관을 켰어요':'사진 보관을 꺼어요');return}
+  if(el.dataset.set){const [k,v]=el.dataset.set.split(':');state[k]=v;render();return}
+  if(el.dataset.sheet){openSheet(el.dataset.sheet);return}
+  if(el.hasAttribute('data-close'))closeSheet();
+  if(el.dataset.go)go(el.dataset.go);
+  if(el.dataset.toast)toast(el.dataset.toast);
+});
+document.getElementById('overlay').addEventListener('click',e=>{if(e.target.id==='overlay')closeSheet()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeSheet()});
+document.addEventListener('change',e=>{if(e.target.dataset&&e.target.dataset.kcalinput){const v=parseInt(e.target.value,10);if(v>=800&&v<=6000)state.kcalCustom=v;refresh()}});
+document.addEventListener('input',e=>{const f=e.target.dataset&&e.target.dataset.field;if(f)state.prof[f]=e.target.value});
+render();
+</script>
