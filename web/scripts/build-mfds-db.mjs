@@ -1,6 +1,6 @@
 // 식약처 전국통합식품영양성분정보(음식)표준데이터 원본 → 앱용 DB JSON (스펙 3.5절, 4.5.2~4.5.5)
 // 실행: node web/scripts/build-mfds-db.mjs [원본 JSON 경로]
-// 출력: web/public/data/mfds-foods-20261006.json, web/scripts/build-mfds-db.stats.json
+// 출력: web/public/data/mfds-foods-20261006.json, web/public/data/mfds-detail-20261006.json(D4-a 세부 영양소), web/scripts/build-mfds-db.stats.json
 import fs from 'node:fs'
 import path from 'node:path'
 import zlib from 'node:zlib'
@@ -14,6 +14,33 @@ const VERSION = '2026-10-06'
 const OUT = path.join(HERE, '../public/data/mfds-foods-20261006.json')
 const STATS_OUT = path.join(HERE, 'build-mfds-db.stats.json')
 const SRC_LABEL = '식품의약품안전처 전국통합식품영양성분정보(음식)표준데이터(15100070)'
+const DETAIL_OUT = path.join(HERE, '../public/data/mfds-detail-20261006.json')
+
+// D4-a 세부 영양소(당류·나트륨·포화지방·식이섬유만, 2026-10-27 사용자 결정): [앱 키, 원본 열, 100g당 상한].
+// 값은 원본 기준량(100g·100ml)당 그대로다. 100ml 행은 앱 DB처럼 1ml=1g으로 본다. 범위를 벗어나거나 읽을 수 없으면 빈 값(null).
+// 앱 DB 행 선택(pick)에는 쓰지 않는다(앱 DB 파일은 그대로).
+const DETAIL_COLS = [
+  ['sugar_g', '당류(g)', 100],
+  ['sodium_mg', '나트륨(mg)', 40000],
+  ['satfat_g', '포화지방산(g)', 100],
+  ['fiber_g', '식이섬유(g)', 100],
+]
+const detailBad = { unparsable: 0, out_of_range: 0 }
+function detailNum(v, max) {
+  if (v == null) return null
+  const s = String(v).trim().replace(/,/g, '')
+  if (s === '' || s === '-') return null
+  const n = Number(s)
+  if (!Number.isFinite(n)) {
+    detailBad.unparsable++
+    return null
+  }
+  if (n < 0 || n > max) {
+    detailBad.out_of_range++
+    return null
+  }
+  return n
+}
 
 // 4.5.3 (a)-2: 100ml 행만 있는 이름은 분류와 상관없이 밀도 1.0g/ml로 환산해 넣는다(ml: 1, 화면 출처 "DB 환산").
 // 아래 액체 분류는 통계에서 고형·액체를 나눠 세는 데만 쓴다(원본 식품대분류명 그대로)
@@ -169,6 +196,7 @@ for (const rec of records) {
     origin: originRank(rec['식품기원명']),
     date: rec['데이터기준일자'] ?? '',
     key,
+    dt: DETAIL_COLS.map(([, col, max]) => detailNum(rec[col], max)),
   })
 }
 
@@ -226,6 +254,13 @@ const text = JSON.stringify({ v: VERSION, src: SRC_LABEL, foods, groups, d })
 fs.mkdirSync(path.dirname(OUT), { recursive: true })
 fs.writeFileSync(OUT, text)
 
+// ── 세부 영양소 파일(D4-a): 앱 DB와 같은 행(reps)의 식품코드마다 [당, 나트륨, 포화, 섬유]. 네 값이 모두 빈 행은 넣지 않는다 ──
+const detailFoods = {}
+for (const r of reps) if (r.dt.some((x) => x != null)) detailFoods[r.c] = r.dt
+const detailText = JSON.stringify({ version: VERSION, source: SRC_LABEL, keys: DETAIL_COLS.map(([k]) => k), foods: detailFoods })
+fs.writeFileSync(DETAIL_OUT, detailText)
+const detailBuf = Buffer.from(detailText)
+
 const buf = Buffer.from(text)
 Object.assign(stats, {
   unparsable_values: unparsable,
@@ -244,6 +279,16 @@ Object.assign(stats, {
   file_bytes: buf.length,
   gzip_bytes: zlib.gzipSync(buf, { level: 9 }).length,
   brotli_bytes: zlib.brotliCompressSync(buf).length,
+  detail: {
+    file: path.relative(ROOT, DETAIL_OUT).replaceAll('\\', '/'),
+    foods: Object.keys(detailFoods).length,
+    with_value: Object.fromEntries(DETAIL_COLS.map(([k], i) => [k, reps.filter((r) => r.dt[i] != null).length])),
+    rows_unparsable: detailBad.unparsable,
+    rows_out_of_range: detailBad.out_of_range,
+    file_bytes: detailBuf.length,
+    gzip_bytes: zlib.gzipSync(detailBuf, { level: 9 }).length,
+    brotli_bytes: zlib.brotliCompressSync(detailBuf).length,
+  },
 })
 stats.excluded_total = Object.values(stats.dropped).reduce((a, b) => a + b, 0)
 fs.writeFileSync(STATS_OUT, JSON.stringify(stats, null, 2) + '\n')

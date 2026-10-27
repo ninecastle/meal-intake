@@ -3,12 +3,20 @@
 // MealItem.db_reference, NutritionResult ai_estimate 분기의 reference: 종류별 차이가 큰 음식이 DB 대표값·일반 이름에만
 // 맞았을 때 값은 AI 추정을 쓰고, 그 DB 값은 화면에 참고로만 보인다(2026-10-26 사용자 결정).
 // MealItem.grams_source·published_g·unit_count, BeforeItem.whole_count, NutritionResult db 분기의 published_g: 공개 중량(스펙 4.5.5).
+// D4-a 세부 영양소(당류·나트륨·포화지방·식이섬유만, 2026-10-27 사용자 결정): MealItem.detail_per_100g·detail_source·detail_consumed,
+// BeforeItem.detail_guess, totals.detail. 영양소마다 식약처 DB 값 → 없으면 호출 A의 100g당 추정("추정" 배지) → 없으면 키를 뺀다(화면 "–").
 
 export type Nutrients = { kcal: number; carbs_g: number; protein_g: number; fat_g: number }
 /** 화면: DB / 검색 기반 / AI 추정 / 직접 입력 */
 export type NutritionSource = 'db' | 'search' | 'ai_estimate' | 'user_input'
 export type FillSource = 'ai_estimate' | 'missing'
 export type DbMatch = 'name' | 'group' | 'partial'
+/** 세부 영양소 키. 단위: sugar_g·satfat_g·fiber_g는 g, sodium_mg는 mg */
+export type DetailKey = 'sugar_g' | 'sodium_mg' | 'satfat_g' | 'fiber_g'
+/** 100g당 값 또는 먹은 양. 값이 없는 키는 뺀다 */
+export type DetailNutrients = Partial<Record<DetailKey, number>>
+/** 화면: db → 출처 없음(DB), ai_estimate → "추정" 배지 */
+export type DetailSource = 'db' | 'ai_estimate'
 /** 값으로 쓰지 않고 화면에 참고로만 보이는 DB 행 */
 export type DbReference = {
   db_food_code: string
@@ -60,11 +68,22 @@ export interface MealItem {
   /** confidence < 0.6 또는 remaining_ratio === null */
   needs_review: boolean
   user_edited?: boolean
+  /** D4-a. 세부 영양소 100g당 값(값이 있는 키만, 하나도 없으면 필드를 뺀다) */
+  detail_per_100g?: DetailNutrients
+  /** D4-a. detail_per_100g와 같은 키마다 그 값의 출처 */
+  detail_source?: Partial<Record<DetailKey, DetailSource>>
+  /** D4-a. 먹은 양 기준 = detail_per_100g × consumed_grams ÷ 100(탄단지와 같은 공식). g은 소수 첫째 자리, sodium_mg는 정수로 저장 */
+  detail_consumed?: DetailNutrients
 }
 
 export interface MealIntakeAnalysis {
   items: MealItem[]
-  totals: { before_kcal: number; consumed: Nutrients }
+  totals: {
+    before_kcal: number
+    consumed: Nutrients
+    /** D4-a. 그 영양소 값이 있는 음식만 더한 합(value)과 그 음식 수(count). 값 있는 음식이 0개인 키는 뺀다(하나도 없으면 필드를 뺀다) */
+    detail?: Partial<Record<DetailKey, { value: number; count: number }>>
+  }
   warnings: string[]
   model?: string
   prompt_version?: string
@@ -82,6 +101,8 @@ export interface BeforeItem {
   /** a3: 한 개·한 마리·한 판·1인분이 통째로 보이는 개수(정수 1~10). 일부·조각·나눠 담김·정해진 크기 없음이면 null.
    *  a2 이전에 저장된 먹기 전 결과에는 없을 수 있어 선택 필드로 둔다(없으면 null과 같다) */
   whole_count?: number | null
+  /** D4-b에서 채움: 호출 A가 함께 준 세부 영양소 100g당 추정(범위 검사에 실패한 키는 뺀다). 없거나 null이면 추정 없음 */
+  detail_guess?: DetailNutrients | null
 }
 export interface BeforeAnalysis { items: BeforeItem[]; warnings: string[]; model: string; prompt_version: string }
 export interface AfterItem {

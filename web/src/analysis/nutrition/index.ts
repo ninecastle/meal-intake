@@ -22,6 +22,9 @@ export { createNutritionResolver, mockEstimate, MOCK_ESTIMATE } from './resolve.
 export type { EstimateCache, ResolveOptions, ResolverDeps } from './resolve.ts'
 export { HIGH_VARIANCE_EXCLUDE, HIGH_VARIANCE_KEYWORDS, isHighVarianceFood } from './highVariance.ts'
 export { findBestMatch, listFoodVariants, loadNutritionDb, searchFoodNames, searchFoods } from './db.ts'
+// D4-a 세부 영양소(당류·나트륨·포화지방·식이섬유) 100g당 값. 앱 DB와 따로 처음 쓸 때 받는다
+export { detailFor, loadDetailDb } from './detail.ts'
+export type { MfdsDetailDb } from './detail.ts'
 export { FOOD_ALIASES, FOOD_WORD_ALIASES, applyWordAliases } from './aliases.ts'
 export type { WordAlias } from './aliases.ts'
 export type { FoodHit, FoodSuggestion, MfdsFood } from './db.ts'

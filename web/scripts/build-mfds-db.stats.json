@@ -150,5 +150,20 @@
   "file_bytes": 1889359,
   "gzip_bytes": 316523,
   "brotli_bytes": 237715,
+  "detail": {
+    "file": "web/public/data/mfds-detail-20261006.json",
+    "foods": 11381,
+    "with_value": {
+      "sugar_g": 11284,
+      "sodium_mg": 11351,
+      "satfat_g": 11082,
+      "fiber_g": 2052
+    },
+    "rows_unparsable": 0,
+    "rows_out_of_range": 6,
+    "file_bytes": 475648,
+    "gzip_bytes": 101820,
+    "brotli_bytes": 83785
+  },
   "excluded_total": 2184
 }

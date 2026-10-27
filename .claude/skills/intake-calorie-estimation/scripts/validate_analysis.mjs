@@ -20,8 +20,13 @@ const TOP_KEYS = new Set(["items", "totals", "warnings", "model", "prompt_versio
 const REQUIRED = ["id", "name", "db_food_code", "eaters", "before_grams", "remaining_ratio", "consumed_grams",
   "per_100g", "nutrition_source", "consumed", "kcal_overridden", "confidence", "needs_review"];
 const ITEM_KEYS = new Set([...REQUIRED, "location", "db_name", "db_match", "db_ml_converted", "db_reference",
-  "per_100g_fill", "user_edited", "grams_source", "published_g", "unit_count", "ratio_assumed"]);
+  "per_100g_fill", "user_edited", "grams_source", "published_g", "unit_count", "ratio_assumed",
+  "detail_per_100g", "detail_source", "detail_consumed"]);
 const REF_KEYS = new Set(["db_food_code", "db_name", "db_match", "kcal_per_100g", "ml_converted"]);
+// D4-a 세부 영양소(당류·나트륨·포화지방·식이섬유): 100g당 상한(g은 100, 나트륨 mg은 40000), 출처는 db·ai_estimate
+const DETAIL_MAX = { sugar_g: 100, sodium_mg: 40000, satfat_g: 100, fiber_g: 100 };
+const DETAIL_KEYS = Object.keys(DETAIL_MAX);
+const DETAIL_SOURCES = ['db', 'ai_estimate'];
 
 export function checkAnalysis(r) {
   const errors = [];
@@ -53,6 +58,8 @@ export function checkAnalysis(r) {
 
   const sum = { kcal: 0, carbs_g: 0, protein_g: 0, fat_g: 0 };
   let sumBefore = 0;
+  const dsum = {};
+  const dcount = {};
   let anyOverride = false;
   const ids = new Set();
 
@@ -184,6 +191,39 @@ export function checkAnalysis(r) {
         if (!near(it.consumed[k], exp)) errors.push(`${tag}: consumed.${k} ${it.consumed[k]} ≠ 계산값 ${exp.toFixed(1)}`);
       }
     }
+    // D4-a 세부 영양소: detail_per_100g(허용 키·범위) ↔ detail_source(같은 키, db·ai_estimate) ↔ detail_consumed(같은 키, 계산값과 일치)
+    const hasDetail = ['detail_per_100g', 'detail_source', 'detail_consumed'].filter((k) => k in it);
+    if (hasDetail.length > 0 && hasDetail.length < 3)
+      errors.push(`${tag}: detail_per_100g·detail_source·detail_consumed는 함께 넣는다(있는 것: ${hasDetail.join(', ')})`);
+    if (hasDetail.length === 3) {
+      const dp = it.detail_per_100g;
+      const ds = it.detail_source;
+      const dc = it.detail_consumed;
+      if (!isObj(dp) || !isObj(ds) || !isObj(dc)) errors.push(`${tag}: detail_per_100g·detail_source·detail_consumed는 객체여야 한다`);
+      else {
+        if (Object.keys(dp).length === 0) errors.push(`${tag}: detail_per_100g가 비었다(값이 없으면 세 필드를 뺀다)`);
+        for (const k of Object.keys(dp)) {
+          if (!DETAIL_KEYS.includes(k)) {
+            errors.push(`${tag}: detail_per_100g.${k}는 허용되지 않는 키`);
+            continue;
+          }
+          if (!inRange(dp[k], 0, DETAIL_MAX[k])) errors.push(`${tag}: detail_per_100g.${k} 범위(0~${DETAIL_MAX[k]}) 벗어남`);
+          if (!DETAIL_SOURCES.includes(ds[k])) errors.push(`${tag}: detail_source.${k} 값 오류(db·ai_estimate)`);
+          if (!isNum(dc[k]) || dc[k] < 0) errors.push(`${tag}: detail_consumed.${k} 누락·음수`);
+          else if (isNum(dp[k]) && isNum(it.consumed_grams)) {
+            const exp = (dp[k] * it.consumed_grams) / 100;
+            if (!near(dc[k], exp)) errors.push(`${tag}: detail_consumed.${k} ${dc[k]} ≠ 계산값 ${exp.toFixed(1)}`);
+          }
+        }
+        for (const k of Object.keys(ds)) if (!(k in dp)) errors.push(`${tag}: detail_source.${k}는 detail_per_100g에 없는 키`);
+        for (const k of Object.keys(dc)) if (!(k in dp)) errors.push(`${tag}: detail_consumed.${k}는 detail_per_100g에 없는 키`);
+        for (const k of DETAIL_KEYS)
+          if (k in dp && isNum(dc[k])) {
+            dsum[k] = (dsum[k] ?? 0) + dc[k];
+            dcount[k] = (dcount[k] ?? 0) + 1;
+          }
+      }
+    }
     if (isNum(it.confidence) && it.confidence < LOW_CONF && it.needs_review !== true)
       errors.push(`${tag}: confidence<${LOW_CONF}인데 needs_review=false`);
     if (it.needs_review === true) warns.push(`${tag}: 확인 필요 항목`);
@@ -201,6 +241,25 @@ export function checkAnalysis(r) {
         if (!near(r.totals.consumed[k], sum[k])) errors.push(`totals.consumed.${k} ${r.totals.consumed[k]} ≠ 항목 합 ${sum[k].toFixed(1)}`);
     if (!anyOverride && isNum(r.totals.consumed?.kcal) && r.totals.consumed.kcal > r.totals.before_kcal + 1)
       errors.push("섭취 kcal이 제공 kcal보다 크다");
+    // D4-a totals.detail: 영양소마다 값이 있는 음식만 더한 합(value)과 그 음식 수(count). 값 있는 음식이 0개인 키는 뺀다
+    const td = r.totals.detail;
+    if ('detail' in r.totals && !isObj(td)) errors.push('totals.detail은 객체여야 한다');
+    if (isObj(td)) for (const k of Object.keys(td)) if (!DETAIL_KEYS.includes(k)) errors.push(`totals.detail.${k}는 허용되지 않는 키`);
+    for (const k of DETAIL_KEYS) {
+      const t = isObj(td) ? td[k] : undefined;
+      const n = dcount[k] ?? 0;
+      if (t === undefined) {
+        if (n > 0) errors.push(`totals.detail.${k} 누락(값 있는 음식 ${n}개)`);
+        continue;
+      }
+      if (!isObj(t) || !isNum(t.value) || t.value < 0 || !Number.isInteger(t.count)) {
+        errors.push(`totals.detail.${k}는 { value: 0 이상 수, count: 정수 } 형식이어야 한다`);
+        continue;
+      }
+      if (n === 0) errors.push(`totals.detail.${k}: 값 있는 음식이 없으면 키를 뺀다`);
+      else if (t.count !== n) errors.push(`totals.detail.${k}.count ${t.count} ≠ 값 있는 음식 수 ${n}`);
+      if (!near(t.value, dsum[k] ?? 0)) errors.push(`totals.detail.${k}.value ${t.value} ≠ 항목 합 ${(dsum[k] ?? 0).toFixed(1)}`);
+    }
   }
   if ("model" in r && typeof r.model !== "string") errors.push("model은 문자열이어야 한다");
   if ("prompt_version" in r && typeof r.prompt_version !== "string") errors.push("prompt_version은 문자열이어야 한다");
