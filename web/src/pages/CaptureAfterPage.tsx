@@ -51,7 +51,7 @@ export default function CaptureAfterPage({ uid }: { uid: string }) {
     title: '먹은 후 사진',
     hint: '같은 위치·각도로 찍어 주세요',
     onPick: (f) => void onPick(f),
-    overlaySrc: photoUrl, // 조각 2에서 겹쳐 보기로 그린다
+    overlaySrc: photoUrl, // 카메라 화면에 반투명하게 겹친다(조각 2). 주소는 이 화면을 떠날 때 아래 effect가 푼다.
   })
 
   // state가 없으면 문서를 불러온다. 없거나 상태가 다르면 홈으로.

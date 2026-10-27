@@ -39,7 +39,7 @@ export function useCaptureSource(opts: {
   onPick: (file: File, meta: PickMeta) => void
   /** 처음 열 때 바로 카메라 화면을 띄운다(camera 방식일 때만) */
   autoOpen?: boolean
-  /** 조각 2 자리(먹은 후 겹쳐 보기). 지금은 카메라 화면에 넘기기만 한다. */
+  /** 먹은 후 겹쳐 보기용 먹기 전 사진 주소(조각 2). 카메라 화면(PC 웹캠 포함)에만 그리고, 파일 고르기·대체 방식에는 없다. */
   overlaySrc?: string | null
 }): CaptureSource {
   const { title, hint, onPick, overlaySrc } = opts
