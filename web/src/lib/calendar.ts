@@ -142,30 +142,3 @@ export function goalForDate(goals: readonly DatedGoal[], dateKey: string): GoalT
   }
   return best?.targets ?? null
 }
-
-// ── 옛 달력(초록·주황·파랑·회색, 일요일 시작). 히트맵 화면으로 바꾸면 지운다. ──
-/** @deprecated 히트맵(heatLevelFor)으로 바뀜 */
-export type CalendarTone = 'green' | 'orange' | 'blue' | 'gray' | null
-/** @deprecated */
-export const TONE_LOW = RANGE_LOW
-/** @deprecated */
-export const TONE_HIGH = RANGE_HIGH
-/** @deprecated 히트맵(heatLevelFor)으로 바뀜 */
-export function calendarTone(kcal: number | null, targetKcal: number | null): CalendarTone {
-  if (targetKcal === null || !(targetKcal > 0)) return null
-  if (kcal === null) return 'gray'
-  const r = kcal / targetKcal
-  if (r > TONE_HIGH) return 'orange'
-  if (r < TONE_LOW) return 'blue'
-  return 'green'
-}
-/** @deprecated monthGrid(월요일 시작, 앞뒤 달 날짜 채움)로 바뀜 */
-export function monthCells(month: string): (string | null)[] {
-  const [y, m] = month.split('-').map(Number)
-  const lead = new Date(Date.UTC(y, m - 1, 1)).getUTCDay()
-  const n = daysInMonth(month)
-  const cells: (string | null)[] = Array.from({ length: lead }, () => null)
-  for (let d = 1; d <= n; d++) cells.push(`${month}-${pad(d)}`)
-  while (cells.length % 7 !== 0) cells.push(null)
-  return cells
-}
