@@ -1,4 +1,4 @@
-// firestore.rules v5 테스트(@firebase/rules-unit-testing + node:test).
+// firestore.rules v6 테스트(@firebase/rules-unit-testing + node:test).
 // 실행: firestore-tests 폴더에서 `npm test` (Firestore 에뮬레이터를 띄워 실행, JDK 21+ 필요, firebase-tools 15 기준).
 // 이미 에뮬레이터가 떠 있으면 `npm run test:running`.
 // 실제 프로젝트는 건드리지 않는다(demo- 프로젝트 ID). AI 호출 없음.
@@ -405,6 +405,101 @@ describe('목표 설정(users/{uid}.goal, goals/{dateKey}, 스펙 4.7절)', () =
     await seed(goalPath(DAY), datedDoc())
     await assertFails(deleteDoc(doc(alice(), USER)))
     await assertFails(deleteDoc(doc(alice(), goalPath(DAY))))
+  })
+
+  describe('설정 prefs(users/{uid}.prefs, 규칙 v6)', () => {
+    /** 클라이언트 쓰기(리더 계약): setDoc(userRef, { prefs }, { merge: true }) */
+    const setPrefs = (fs, prefs, top = {}) => setDoc(doc(fs, USER), { prefs, ...top }, { merge: true })
+    const readUser = async () => (await getDoc(doc(alice(), USER))).data()
+
+    test('본인: 목표 없이 prefs만 생성 → 읽기, true/false 바꾸기, 삭제는 거부', async () => {
+      await assertSucceeds(setPrefs(alice(), { shareEaters: true }))
+      assert.deepEqual(await readUser(), { prefs: { shareEaters: true } })
+      await assertSucceeds(setPrefs(alice(), { shareEaters: false }))
+      assert.deepEqual(await readUser(), { prefs: { shareEaters: false } })
+      await assertSucceeds(setPrefs(alice(), { shareEaters: true }))
+      assert.deepEqual(await readUser(), { prefs: { shareEaters: true } })
+      await assertFails(deleteDoc(doc(alice(), USER)))
+    })
+
+    test('본인: 목표 있는 문서에 merge로 prefs 추가, goal은 그대로', async () => {
+      await assertSucceeds(saveBatch(alice()))
+      const before = (await readUser()).goal
+      await assertSucceeds(setPrefs(alice(), { shareEaters: true }))
+      const data = await readUser()
+      assert.deepEqual(Object.keys(data).sort(), ['goal', 'prefs'])
+      assert.deepEqual(data.prefs, { shareEaters: true })
+      assert.deepEqual(data.goal.targets, before.targets)
+      assert.ok(data.goal.updatedAt.isEqual(before.updatedAt))
+      await assertSucceeds(setPrefs(alice(), { shareEaters: false }))
+      assert.deepEqual((await readUser()).prefs, { shareEaters: false })
+    })
+
+    test('본인: prefs 있는 문서에 목표 저장(mergeFields goal 배치)·다시 저장, prefs는 그대로', async () => {
+      await assertSucceeds(setPrefs(alice(), { shareEaters: true }))
+      await assertSucceeds(saveBatch(alice()))
+      const data = await readUser()
+      assert.deepEqual(Object.keys(data).sort(), ['goal', 'prefs'])
+      assert.deepEqual(data.prefs, { shareEaters: true })
+      await assertSucceeds(saveBatch(alice(), { user: userDoc({ override: { carbs_g: 250 } }) }))
+      const again = await readUser()
+      assert.deepEqual(again.goal.override, { carbs_g: 250 })
+      assert.deepEqual(again.prefs, { shareEaters: true })
+    })
+
+    test('설정만 쓸 때 기존 goal은 다시 검사하지 않지만, goal을 건드리면 검사한다', async () => {
+      await assertSucceeds(saveBatch(alice()))
+      // goal 일부만 병합으로 바꾸면 updatedAt이 지난 시각 그대로라 거부
+      await assertFails(setDoc(doc(alice(), USER), { goal: { override: { carbs_g: 1 } } }, { merge: true }))
+      // prefs와 함께 틀린 goal을 쓰면 거부
+      await assertFails(setPrefs(alice(), { shareEaters: true }, { goal: userDoc({ input: { age: 13 } }).goal }))
+      assert.equal((await readUser()).prefs, undefined)
+    })
+
+    test('남의 uid·미로그인: prefs 생성·수정·읽기 거부', async () => {
+      for (const fs of [db('bob'), db(null)]) await assertFails(setPrefs(fs, { shareEaters: true }))
+      await seed(USER, { prefs: { shareEaters: false } })
+      for (const fs of [db('bob'), db(null)]) {
+        await assertFails(setPrefs(fs, { shareEaters: true }))
+        await assertFails(getDoc(doc(fs, USER)))
+      }
+      assert.deepEqual(await readUser(), { prefs: { shareEaters: false } })
+    })
+
+    test('prefs에 모르는 키 거부(생성·병합 수정)', async () => {
+      for (const bad of [{ shareEaters: true, theme: 'dark' }, { share_eaters: true }, { photo: 'data:image/jpeg;base64,AAAA' }]) {
+        await assertFails(setPrefs(alice(), bad))
+      }
+      await seed(USER, { prefs: { shareEaters: true } })
+      await assertFails(setPrefs(alice(), { theme: 'dark' }))
+      assert.deepEqual((await readUser()).prefs, { shareEaters: true })
+    })
+
+    test('shareEaters가 bool이 아님 거부: 문자열·숫자·null·map·목록', async () => {
+      for (const v of ['true', 'false', '', 1, 0, null, { on: true }, [true]]) {
+        await assertFails(setPrefs(alice(), { shareEaters: v }))
+      }
+      await seed(USER, { prefs: { shareEaters: false } })
+      await assertFails(setPrefs(alice(), { shareEaters: 'true' }))
+      await assertFails(setPrefs(alice(), { shareEaters: 1 }))
+    })
+
+    test('prefs가 map이 아님 거부', async () => {
+      for (const bad of [true, false, 'on', 1, null, ['shareEaters']]) {
+        await assertFails(setPrefs(alice(), bad))
+      }
+      await seed(USER, { prefs: { shareEaters: true } })
+      await assertFails(setPrefs(alice(), false))
+    })
+
+    test('모르는 최상위 키 거부(prefs와 함께·병합으로 추가·목표와 함께)', async () => {
+      await assertFails(setPrefs(alice(), { shareEaters: true }, { theme: 'dark' }))
+      await assertFails(setPrefs(alice(), { shareEaters: true }, { thumbnail: 'data:image/jpeg;base64,AAAA' }))
+      await seed(USER, { prefs: { shareEaters: true } })
+      await assertFails(setDoc(doc(alice(), USER), { timezone: 'Asia/Seoul' }, { merge: true }))
+      await assertFails(setDoc(doc(alice(), USER), userDoc({ top: { prefs: { shareEaters: true }, timezone: 'Asia/Seoul' } })))
+      assert.deepEqual(await readUser(), { prefs: { shareEaters: true } })
+    })
   })
 })
 
