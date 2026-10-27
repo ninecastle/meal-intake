@@ -2,8 +2,8 @@
 // - 카드 내용은 props day(그날 done 기록 요약)에서만 온다(가짜 숫자 없음). 기록 없는 끼니는 "공복했어요" 토글(data/fasting.ts).
 // - (c) 이어 할 기록은 그 날짜·그 끼니 카드에만 보인다(.mfood 자리 글, 2026-10-27 사용자 결정). 다른 날짜의 것은 그 날짜로 가야 보이고,
 //   기록 취소는 홈에 없다(먹은 후 촬영 화면의 [기록 취소]).
-// - 카드 누르기: 이어 할 기록이 있으면 그 단계(awaiting_after → /meal/:id/after, needs_review → /meal/:id/review, D3에서 시트로 바뀐다),
-//   없으면(D3 끼니 화면 전까지 임시) 저장된 기록이 있으면 가장 늦은 기록 상세, 없으면 그 날짜·끼니로 먹기 전 촬영.
+// - 카드 누르기(D3): 그 날짜·끼니의 끼니 화면(/day/:dateKey/:mealType, push + state.fromHome). 먹은 후 사진을 기다리는 기록이 있으면
+//   끼니 화면에서 "남은 음식을 알려 주세요" 시트를 바로 연다(state.openAfter). 결과 확인을 기다리는 기록이면 결과 화면(/meal/:id/review).
 // - .linkrow [음식 추천 왕관]은 프리미엄 표시만(결제 없음, D12 전까지 onSoon "준비 중이에요"). 식단 앨범은 사진 보관(D9) 전이라
 //   시안 photoKeep=false 모양(grid-template-columns:1fr, 버튼 하나)으로 둔다.
 // - (f) 계속 보이는 알림(이어 할 기록 불러오기 오류, 공복 표시 저장 실패)은 띠 맨 위 .callout.
@@ -51,14 +51,11 @@ export default function MealBand({ uid, dateKey, day, pending, listError, onSoon
 
   function openMeal(meal: MealType) {
     const next = pendingOf(meal)[0]
-    if (next) {
-      navigate(next.status === 'awaiting_after' ? `/meal/${next.id}/after` : `/meal/${next.id}/review`)
+    if (next?.status === 'needs_review') {
+      navigate(`/meal/${next.id}/review`)
       return
     }
-    const saved = d ? d.meals.filter((m) => m.mealType === meal) : []
-    // meals는 createdAt 오름차순(서버 시각이 아직 없는 방금 저장한 기록은 맨 뒤)이라 마지막이 가장 늦은 기록이다.
-    const last = saved[saved.length - 1]
-    navigate(last ? `/meal/${last.id}` : `/capture/before?date=${dateKey}&meal=${meal}`)
+    navigate(`/day/${dateKey}/${meal}`, { state: { fromHome: true, ...(next ? { openAfter: next.id } : {}) } })
   }
 
   function toggleFasted(meal: MealType) {

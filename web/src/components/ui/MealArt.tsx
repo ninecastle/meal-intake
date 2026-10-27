@@ -1,6 +1,7 @@
 // web/scripts/gen-ui-art.mjs로 디자인 시안(_workspace/design/diet-app-prototype.html)에서 만든 파일이다. 손으로 고치지 말고 스크립트를 다시 돌린다.
 // 시안 `icons`의 끼니 그림 4개(아침 해, 점심 해와 언덕, 저녁 달, 간식 케이크). 장식이라 읽지 않는다.
-import type { ReactNode } from 'react'
+// style: 시안 끼니 화면 큰 그림(class="mico" style="width:110px;height:110px")처럼 시안 CSS .mico 크기를 덮을 때.
+import type { CSSProperties, ReactNode } from 'react'
 import type { MealType } from '../../data/meals'
 
 const ART: Record<MealType, ReactNode> = {
@@ -26,12 +27,12 @@ const ART: Record<MealType, ReactNode> = {
   ),
 }
 
-type Props = { meal: MealType; size?: number; framed?: boolean; className?: string }
+type Props = { meal: MealType; size?: number; framed?: boolean; className?: string; style?: CSSProperties }
 
 /** framed: 시안 .micowrap(흰 원 안에 그림, 그림 42 : 원 58 비율). size는 그림 크기(px). */
-export function MealArt({ meal, framed = false, size = framed ? 42 : 40, className }: Props) {
+export function MealArt({ meal, framed = false, size = framed ? 42 : 40, className, style }: Props) {
   const art = (
-    <svg viewBox="0 0 64 64" width={size} height={size} aria-hidden="true" focusable="false" className={framed ? undefined : className}>
+    <svg viewBox="0 0 64 64" width={size} height={size} aria-hidden="true" focusable="false" className={framed ? undefined : className} style={framed ? undefined : style}>
       {ART[meal]}
     </svg>
   )

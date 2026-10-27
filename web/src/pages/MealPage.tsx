@@ -1,0 +1,507 @@
+// 끼니 화면(디자인 조각 D3, /day/:dateKey/:mealType). 시안 meal() 마크업·클래스·인라인 style·문구 그대로, 숫자만 실제 데이터.
+// div.screen > .mealhero(.topbar 닫기·제목 "점심 N", .art 큰 끼니 그림, .cam → 식사 기록 시트) → .sheetbody.pad(.mtotal 총 kcal·[시간 입력]·[자세히],
+// .timebox, .stack·.legend 탄단지, .foods) → .bottom .inner([음식 추가]·[수정 완료]).
+// 데이터(AI 호출 없음): subscribeMealsFor(그 날짜·끼니 모든 상태 기록), subscribeMealTimes(하루 문서 mealTimes). 합계는 done 기록만(클라이언트).
+// 사용자 결정(2026-10-27, CLAUDE.md 디자인 기준 "끼니 화면"):
+// - 모든 기록의 음식을 한 목록으로. done 음식 줄: 먹은 양 kcal·출처 배지·설명 줄(먹기 전 무게·남긴 비율·인원), 누르면 그 기록 수정 화면,
+//   X는 확인 뒤 그 음식만 빼고 바로 저장(마지막 음식이면 기록 삭제).
+// - 먹은 후 사진 기다림(awaiting_after) 음식: 설명 줄 "먹은 후 사진 기다림"·kcal "–"·X 없음, 누르면 "남은 음식을 알려 주세요" 시트.
+//   결과 확인 기다림(needs_review)도 X 없이 "결과 확인 기다림"·"–", 누르면 결과 화면.
+// - 촬영·분석은 이 화면이 맡는다(useBeforeFlow·useAfterFlow, 카메라는 useCaptureSource 하나). 먹기 전 분석이 끝나면 이 화면에 머문다.
+// - [수정 완료]·닫기는 홈(그 날짜)으로. [수정 완료]는 "저장했어요" 토스트(바뀐 내용은 이미 바로 저장됨).
+// 들어오는 state: { fromHome?: true(홈에서 push → 나갈 때 뒤로), openAfter?: 기록 id(그 시트를 바로 연다), openRecord?: true(식사 기록 시트) }.
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router'
+import { buildAnalysis } from '../analysis/compute'
+import { useCaptureSource } from '../components/capture/useCaptureSource'
+import {
+  AfterNotices,
+  AfterSheet,
+  MealInfoSheet,
+  RatioSheet,
+  RecordSheet,
+  TimeSheet,
+  type MealTotals,
+} from '../components/meal/MealSheets'
+import { afterTarget, useAfterFlow, type ReviewEntry } from '../components/meal/useAfterFlow'
+import { useBeforeFlow } from '../components/meal/useBeforeFlow'
+import { formatGrams, homeHref, isDateKey, MEAL_TYPE_LABEL, MEAL_TYPES, sourceLabel } from '../components/mealText'
+import { Icon, IconButton, MealArt, Toast } from '../components/ui'
+import { deleteMeal, saveMeal, subscribeMealsFor, type MealType, type MealWithId } from '../data/meals'
+import { setMealTime, subscribeMealTimes, toHm, type MealTimes } from '../data/mealTimes'
+import { clearFlash, peekFlash, setFlash } from '../lib/flash'
+import { toDateKey } from '../lib/time'
+import type { MealItem } from '../types/analysis'
+
+/** 시안 meals[k].color(끼니 화면 위쪽 바탕) */
+const HERO_BG: Record<MealType, string> = {
+  breakfast: 'var(--sky-soft)',
+  lunch: 'var(--lime-soft)',
+  dinner: 'var(--peach-soft)',
+  snack: 'var(--butter-soft)',
+}
+
+type Sheet = null | 'record' | 'time' | 'mealinfo' | 'after' | 'ratio'
+
+type Row = {
+  key: string
+  name: string
+  src: string | null
+  desc: string
+  kcal: number | null
+  onOpen: () => void
+  onDelete?: () => void
+}
+
+type EntryState = { fromHome?: unknown; openAfter?: unknown; openRecord?: unknown }
+
+const r1 = (n: number) => Math.round(n * 10) / 10
+
+/** 시안 .fs 설명 줄의 실제 값: 먹기 전 무게 · 남긴 비율(있을 때) · 같이 먹은 인원(2명 이상일 때) · 수정됨 */
+function describeItem(it: MealItem, edited: boolean): string {
+  const parts = [`${formatGrams(it.before_grams)}g`]
+  const left = it.remaining_ratio ?? 0
+  if (left > 0) parts.push(`${Math.round(left * 100)}% 남김`)
+  if (it.eaters > 1) parts.push(`${it.eaters}명이 나눠 먹음`)
+  if (edited) parts.push('수정됨')
+  return parts.join(' · ')
+}
+
+/** 시안 pct(): 탄·단·지 에너지 비율(정수 %) */
+function pct(t: MealTotals) {
+  const kc = t.carbs_g * 4 + t.protein_g * 4 + t.fat_g * 9 || 1
+  return {
+    c: Math.round(((t.carbs_g * 4) / kc) * 100),
+    p: Math.round(((t.protein_g * 4) / kc) * 100),
+    f: Math.round(((t.fat_g * 9) / kc) * 100),
+  }
+}
+
+export default function MealPage({ uid }: { uid: string }) {
+  const { dateKey = '', mealType = '' } = useParams()
+  // 들어온 때의 오늘(렌더마다 시계를 읽지 않는다)
+  const [today] = useState(() => toDateKey(new Date()))
+  const meal = (MEAL_TYPES as readonly string[]).includes(mealType) ? (mealType as MealType) : null
+  if (!isDateKey(dateKey) || dateKey > today || !meal) return <Navigate to="/" replace />
+  return <MealScreen key={`${dateKey}/${meal}`} uid={uid} dateKey={dateKey} meal={meal} today={today} />
+}
+
+function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: string; meal: MealType; today: string }) {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const entry = useRef(location.state as EntryState | null)
+  const fromHome = entry.current?.fromHome === true
+  const [meals, setMeals] = useState<MealWithId[] | null>(null)
+  const [loadError, setLoadError] = useState(false)
+  const [times, setTimes] = useState<MealTimes>({})
+  const [sheet, setSheet] = useState<Sheet>(() => (entry.current?.openRecord === true ? 'record' : null))
+  const [afterId, setAfterId] = useState<string | null>(() =>
+    typeof entry.current?.openAfter === 'string' ? entry.current.openAfter : null,
+  )
+  // 어느 흐름이 카메라·앨범 사진을 받을지(카메라 화면은 방문 기록 한 칸이라 useCaptureSource는 하나만 둔다)
+  const [target, setTarget] = useState<'before' | 'after'>('before')
+  const [toast, setToast] = useState<{ text: string; at: number } | null>(() =>
+    peekFlash('meal:saved') ? { text: '저장했어요', at: Date.now() } : null,
+  )
+  const [actionError, setActionError] = useState<string | null>(null)
+
+  useEffect(() => clearFlash('meal:saved'), [])
+  useEffect(() => {
+    if (!toast) return
+    const t = window.setTimeout(() => setToast(null), 1600) // 시안 toast() 1.6초
+    return () => window.clearTimeout(t)
+  }, [toast])
+  const showToast = (text: string) => setToast({ text, at: Date.now() })
+
+  useEffect(
+    () =>
+      subscribeMealsFor(
+        uid,
+        dateKey,
+        meal,
+        (list) => {
+          setMeals(list)
+          setLoadError(false)
+        },
+        () => setLoadError(true),
+      ),
+    [uid, dateKey, meal],
+  )
+  useEffect(() => subscribeMealTimes(uid, dateKey, setTimes), [uid, dateKey])
+
+  // 들어올 때 받은 시트 열기 요청은 한 번만 쓴다(새로고침 때 다시 열리지 않게 state를 비운다)
+  useEffect(() => {
+    const s = entry.current
+    if (s?.openAfter !== undefined || s?.openRecord !== undefined) {
+      navigate(location.pathname, { replace: true, state: fromHome ? { fromHome: true } : null })
+    }
+    // 처음 한 번만
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const afterMeal = afterId && meals ? (meals.find((m) => m.id === afterId) ?? null) : null
+  const target_ = afterMeal ? afterTarget(afterMeal) : null
+  // openAfter로 들어왔는데 그 기록이 이미 다음 단계면(다른 기기 등) 시트를 열지 않는다
+  useEffect(() => {
+    if (!meals || !afterId) return
+    if (!meals.some((m) => m.id === afterId && m.status === 'awaiting_after')) {
+      setAfterId(null)
+      setSheet((s) => (s === 'after' || s === 'ratio' ? null : s))
+    } else if (entry.current?.openAfter === afterId) {
+      entry.current = { fromHome: entry.current.fromHome }
+      setTarget('after')
+      setSheet('after')
+    }
+  }, [meals, afterId])
+
+  function leave(saved: boolean) {
+    if (saved) setFlash('meal:saved')
+    if (fromHome) navigate(-1)
+    else navigate(homeHref(dateKey, today), { replace: true })
+  }
+
+  function goReview(mealId: string, e: ReviewEntry) {
+    navigate(`/meal/${mealId}/review`, { replace: true, state: e })
+  }
+  const goManual = () => navigate(`/meal/new/review?date=${dateKey}&meal=${meal}`, { replace: true })
+
+  const before = useBeforeFlow({
+    uid,
+    dateKey,
+    mealType: meal,
+    onDone: () => setSheet(null),
+    onManual: goManual,
+  })
+  const after = useAfterFlow({
+    uid,
+    target: target_,
+    onReview: goReview,
+    onManual: () => {
+      setTarget('after')
+      setSheet('ratio')
+    },
+    onCanceled: () => {
+      setSheet(null)
+      setAfterId(null)
+      showToast('기록을 취소했어요')
+    },
+  })
+  const cap = useCaptureSource(
+    target === 'after'
+      ? {
+          title: '먹은 후 사진',
+          hint: '같은 위치·각도로 찍어 주세요',
+          onPick: (f) => after.onPick(f),
+          overlaySrc: after.photoUrl, // 카메라 화면에 먹기 전 사진을 반투명하게 겹친다
+        }
+      : { title: '먹기 전 사진', hint: '수저를 함께, 위에서 찍어 주세요', onPick: (f, m) => before.onPick(f, m.source) },
+  )
+
+  // 분석 오류·같은 사진이면 그 흐름의 시트를 다시 열어 안내와 [다시 시도]를 보인다
+  const beforeError = before.error
+  useEffect(() => {
+    if (beforeError) setSheet('record')
+  }, [beforeError])
+  const afterNotice = after.error ?? (after.samePending ? 'same' : null)
+  useEffect(() => {
+    if (afterNotice) setSheet('after')
+  }, [afterNotice])
+
+  function openRecord() {
+    before.clearError()
+    setTarget('before')
+    setSheet('record')
+  }
+
+  function openAfter(id: string) {
+    after.clearNotices()
+    setAfterId(id)
+    setTarget('after')
+    setSheet('after')
+  }
+
+  async function removeItem(m: MealWithId, item: MealItem) {
+    if (!m.analysis || !window.confirm(`${item.name || '이 음식'}을(를) 지울까요?`)) return
+    setActionError(null)
+    const rest = m.analysis.items.filter((it) => it.id !== item.id)
+    // 기다리지 않는다(오프라인이면 끝나지 않는다). 구독은 로컬 캐시로 바로 바뀐다.
+    const job =
+      rest.length === 0
+        ? deleteMeal(uid, m.id)
+        : saveMeal(uid, m.id, {
+            dateKey: m.dateKey,
+            mealType: m.mealType,
+            analysis: buildAnalysis(rest, m.analysis.warnings ?? [], {
+              model: m.analysis.model,
+              prompt_version: m.analysis.prompt_version,
+            }),
+          })
+    showToast('삭제했어요')
+    job.catch((e: unknown) => {
+      console.warn('[meal] 음식 삭제 실패', e)
+      setActionError('지우지 못했어요. 잠시 뒤 다시 해 주세요.')
+    })
+  }
+
+  const done = useMemo(() => (meals ?? []).filter((m) => m.status === 'done' && m.analysis), [meals])
+  const totals: MealTotals = useMemo(() => {
+    const t = { kcal: 0, carbs_g: 0, protein_g: 0, fat_g: 0 }
+    for (const m of done) {
+      const c = m.analysis?.totals?.consumed
+      if (!c) continue
+      t.kcal += c.kcal
+      t.carbs_g += c.carbs_g
+      t.protein_g += c.protein_g
+      t.fat_g += c.fat_g
+    }
+    return { kcal: t.kcal, carbs_g: r1(t.carbs_g), protein_g: r1(t.protein_g), fat_g: r1(t.fat_g) }
+  }, [done])
+
+  const rows: Row[] = []
+  for (const m of meals ?? []) {
+    if (m.status === 'done' && m.analysis) {
+      for (const it of m.analysis.items) {
+        rows.push({
+          key: `${m.id}/${it.id}`,
+          name: it.name,
+          src: sourceLabel(it),
+          desc: describeItem(it, !!m.editedAt),
+          kcal: Math.round(it.consumed.kcal),
+          onOpen: () => navigate(`/meal/${m.id}/edit`, { state: { fromMeal: true } }),
+          onDelete: () => void removeItem(m, it),
+        })
+      }
+    } else if (m.status === 'awaiting_after' && m.beforeAnalysis) {
+      for (const it of m.beforeAnalysis.items) {
+        rows.push({ key: `${m.id}/${it.id}`, name: it.name, src: null, desc: '먹은 후 사진 기다림', kcal: null, onOpen: () => openAfter(m.id) })
+      }
+    } else if (m.status === 'needs_review' && m.analysis) {
+      for (const it of m.analysis.items) {
+        rows.push({
+          key: `${m.id}/${it.id}`,
+          name: it.name,
+          src: sourceLabel(it),
+          desc: '결과 확인 기다림',
+          kcal: null,
+          onOpen: () => navigate(`/meal/${m.id}/review`, { replace: true }),
+        })
+      }
+    }
+  }
+
+  const label = MEAL_TYPE_LABEL[meal]
+  const time = times[meal]
+  const p = pct(totals)
+  const afterFoods = target_ ? target_.beforeAnalysis.items : []
+  const afterSubtitle = `${label} · ${afterFoods[0]?.name ?? ''}${afterFoods.length > 1 ? ` 외 ${afterFoods.length - 1}개` : ''}`
+  const closeSheet = () => setSheet(null)
+
+  return (
+    <>
+      <main className="screen enter">
+        <div className="mealhero" style={{ background: HERO_BG[meal] }}>
+          <div className="topbar pad">
+            <IconButton icon="close" label="닫기" onClick={() => leave(false)} />
+            <h1>
+              {`${label} `}
+              <span className="num" style={{ color: 'var(--ink-3)' }}>
+                {rows.length}
+              </span>
+            </h1>
+            <div style={{ width: 44 }}></div>
+          </div>
+          <div className="art">
+            <MealArt meal={meal} className="mico" size={110} style={{ width: 110, height: 110 }} />
+          </div>
+          <button type="button" className="cam" aria-label="사진 찍기" onClick={openRecord}>
+            <Icon name="camera" bare />
+          </button>
+        </div>
+        <div className="sheetbody pad">
+          {(loadError || actionError) && (
+            <p className="callout" role="status" style={{ margin: '0 0 14px', background: 'var(--ground)' }}>
+              {actionError ?? '기록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.'}
+            </p>
+          )}
+          <div className="mtotal">
+            <span>
+              {'총 '}
+              <span className="num">{`${Math.round(totals.kcal)}kcal`}</span>
+            </span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button type="button" className="chipbtn" style={{ background: 'var(--sky-soft)' }} onClick={() => setSheet('time')}>
+                시간 입력
+              </button>
+              <button
+                type="button"
+                className="chipbtn"
+                style={{ background: 'var(--sky-deep)', color: '#fff' }}
+                onClick={() => setSheet('mealinfo')}
+              >
+                자세히
+              </button>
+            </div>
+          </div>
+          {time && (
+            <div className="timebox">
+              {'시간 '}
+              <span className="num">{time}</span>에 먹었어요
+            </div>
+          )}
+          {done.length > 0 && (
+            <>
+              <div className="stack">
+                <div style={{ flex: p.c, background: 'var(--carb)' }} className="num">{`${p.c}%`}</div>
+                <div style={{ flex: p.p, background: 'var(--prot)' }} className="num">{`${p.p}%`}</div>
+                <div style={{ flex: p.f, background: 'var(--fat)' }} className="num">{`${p.f}%`}</div>
+              </div>
+              <div className="legend">
+                <span>
+                  <i className="dot" style={{ background: 'var(--carb)' }}></i>
+                  {'탄수화물 '}
+                  <b className="num">{`${totals.carbs_g}g`}</b>
+                </span>
+                <span>
+                  <i className="dot" style={{ background: 'var(--prot)' }}></i>
+                  {'단백질 '}
+                  <b className="num">{`${totals.protein_g}g`}</b>
+                </span>
+                <span>
+                  <i className="dot" style={{ background: 'var(--fat)' }}></i>
+                  {'지방 '}
+                  <b className="num">{`${totals.fat_g}g`}</b>
+                </span>
+              </div>
+            </>
+          )}
+          <div className="foods">
+            {meals === null && !loadError ? null : rows.length > 0 ? (
+              rows.map((r) => (
+                <div
+                  key={r.key}
+                  className="food"
+                  role="button"
+                  tabIndex={0}
+                  style={{ cursor: 'pointer' }}
+                  onClick={r.onOpen}
+                  onKeyDown={(e) => {
+                    if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
+                      e.preventDefault()
+                      r.onOpen()
+                    }
+                  }}
+                >
+                  <div>
+                    <div className="fn">
+                      {r.name}
+                      {r.src && <span className="srcb">{r.src}</span>}
+                    </div>
+                    <div className="fs">{r.desc}</div>
+                  </div>
+                  <span className="num">{r.kcal == null ? '–' : `${r.kcal}kcal`}</span>
+                  {r.onDelete && (
+                    <IconButton
+                      icon="close"
+                      label={`${r.name} 삭제`}
+                      style={{ width: 36, height: 36 }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        r.onDelete?.()
+                      }}
+                    />
+                  )}
+                </div>
+              ))
+            ) : (
+              <p style={{ color: 'var(--ink-3)', textAlign: 'center', padding: '30px 0' }}>
+                아직 기록이 없어요. 카메라로 먹기 전 사진을 찍어보세요.
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="bottom">
+          <div className="inner pad">
+            {rows.length > 0 ? (
+              <>
+                <button type="button" className="btn sky narrow" onClick={openRecord}>
+                  음식 추가
+                </button>
+                <button type="button" className="btn ink" onClick={() => leave(true)}>
+                  수정 완료
+                </button>
+              </>
+            ) : (
+              <button type="button" className="btn ink" onClick={openRecord}>
+                음식 추가
+              </button>
+            )}
+          </div>
+        </div>
+        <Toast message={toast?.text ?? null} />
+      </main>
+
+      <RecordSheet
+        open={sheet === 'record'}
+        onClose={closeSheet}
+        cap={cap}
+        gate={before.gate}
+        error={before.error}
+        onRetry={before.canRetry ? before.retry : undefined}
+        onManual={goManual}
+      />
+      <TimeSheet
+        open={sheet === 'time'}
+        onClose={closeSheet}
+        meal={meal}
+        value={time ?? toHm(new Date())}
+        onSave={(hm) => {
+          setSheet(null)
+          showToast('시간을 저장했어요')
+          setMealTime(uid, dateKey, meal, hm).catch((e: unknown) => {
+            console.warn('[meal] 먹은 시간 저장 실패', e)
+            setActionError('먹은 시간을 저장하지 못했어요. 잠시 뒤 다시 해 주세요.')
+          })
+        }}
+      />
+      <MealInfoSheet open={sheet === 'mealinfo'} onClose={closeSheet} meal={meal} totals={totals} />
+      <AfterSheet
+        open={sheet === 'after' && target_ != null}
+        onClose={closeSheet}
+        subtitle={afterSubtitle}
+        cap={cap}
+        notices={
+          <AfterNotices
+            cap={cap}
+            error={after.error}
+            onRetry={after.canRetry ? after.retry : undefined}
+            samePending={after.samePending}
+            onAnalyzeSame={() => {
+              setSheet(null)
+              after.analyzeSame()
+            }}
+            hasBeforePhoto={after.hasBeforePhoto}
+          />
+        }
+        onAllEaten={() => {
+          setSheet(null)
+          after.chooseRatios({})
+        }}
+        onRatio={() => setSheet('ratio')}
+        onCancelMeal={after.cancelMeal}
+      />
+      <RatioSheet
+        open={sheet === 'ratio' && target_ != null}
+        onClose={closeSheet}
+        foods={afterFoods.map((it) => ({ id: it.id, name: it.name, beforeGrams: it.before_grams }))}
+        onSubmit={(ratios) => {
+          setSheet(null)
+          after.chooseRatios(ratios)
+        }}
+      />
+
+      {cap.elements}
+      {before.elements}
+      {after.elements}
+    </>
+  )
+}

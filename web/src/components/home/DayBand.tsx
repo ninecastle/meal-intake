@@ -186,7 +186,7 @@ export default function DayBand({ summary, dayError, isToday, goal, online, onSo
           )}
         </>
       ) : (
-        !dayError && <p style={{ padding: '64px 0', textAlign: 'center', color: 'var(--ink-2)' }}>불러오는 중…</p>
+        !dayError && <p style={{ margin: 0, padding: '64px 0', textAlign: 'center', color: 'var(--ink-2)' }}>불러오는 중…</p>
       )}
     </Band>
   )

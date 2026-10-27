@@ -361,18 +361,23 @@ function validRange(startKey: string, endKey: string): boolean {
   return (ms(endKey) - ms(startKey)) / 86_400_000 + 1 <= MAX_RANGE_DAYS
 }
 
-/** 기록 상세(S7): 문서 하나를 구독한다. 없거나 지워지면 null(화면은 S1로 이동). */
-export function subscribeMeal(
+/**
+ * 끼니 화면(디자인 조각 D3): 그 날짜·끼니의 모든 상태 기록(awaiting_after·needs_review·done)을 createdAt 오름차순으로 구독한다
+ * (서버 시각이 아직 없는 방금 만든 기록은 맨 뒤). 등호 조건 두 개라 단일 필드 인덱스로 동작한다(orderBy 없음).
+ */
+export function subscribeMealsFor(
   uid: string,
-  mealId: string,
-  cb: (m: MealWithId | null) => void,
+  dateKey: string,
+  mealType: MealType,
+  cb: (meals: MealWithId[]) => void,
   onError?: (code: MealStoreErrorCode) => void,
 ): () => void {
+  const q = query(mealsCol(uid), where('dateKey', '==', dateKey), where('mealType', '==', mealType))
   return onSnapshot(
-    mealRef(uid, mealId),
-    (s) => cb(s.exists() ? toMeal(s) : null),
+    q,
+    (snap) => cb(newestFirst(snap.docs.map(toMeal)).reverse()),
     (e) => {
-      console.warn('[meals] subscribeMeal 오류', e)
+      console.warn('[meals] subscribeMealsFor 오류', e)
       onError?.('MEAL_STORE_UNAVAILABLE')
     },
   )

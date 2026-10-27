@@ -2,9 +2,11 @@
 // 화면 사이 계약: 들어올 때 state { analysis, dateKey, mealType }(없으면 getMeal), 저장 뒤 '/'에 state { saved: { dateKey, consumedKcal } }.
 // 계산·합계·출처 문구는 ReviewEditor가 보여 준다(여기서 다시 만들지 않는다). AI 호출은 이 화면에서 하지 않는다.
 // 수정 모드(mode="edit", S8 /meal/:mealId/edit, 3단계 조각 1-2): 저장한(done) 기록을 getMeal로 1회 읽어 같은 편집기로 연다.
-// 끼니와 날짜(오늘과 지난 날짜만)도 바꿀 수 있다. 사진 재분석 없음. 저장 뒤·‹·브라우저 뒤로 가기는 상세(/meal/:mealId)로.
-// 상세에서 state { fromDetail: true }로 들어왔으면 방문 기록 한 칸 뒤(그 상세)로 돌아가 상세가 두 번 쌓이지 않게 하고,
-// 주소로 바로 열었으면 상세로 replace한다. 저장했으면 상세가 "수정했어요"를 보인다(flash 또는 state { edited: true }).
+// 끼니와 날짜(오늘과 지난 날짜만)도 바꿀 수 있다. 사진 재분석 없음. 저장 뒤·‹·브라우저 뒤로 가기는 끼니 화면(D3, 기록 상세 화면은 없앰)으로.
+// 끼니 화면에서 state { fromMeal: true }로 들어왔으면 방문 기록 한 칸 뒤(그 끼니 화면)로 돌아가 두 번 쌓이지 않게 하고,
+// 주소로 바로 열었으면 그 기록의 끼니 화면으로 replace한다. 저장했으면 끼니 화면이 "저장했어요" 토스트를 보인다(flash meal:saved).
+// [기록 취소](D3, 사용자 확인 모양 4): 결과 확인(사진 분석 기록)에서만 내용 맨 끝 주황 글자 줄. 확인 뒤 기록·먹기 전 사진을 지우고 홈으로.
+// 먹은 시간(D3): 결과 확인·직접 입력을 저장할 때 그 끼니 시각이 비어 있으면 저장 시각으로 채운다(사진 기록은 먹기 전 단계에서 이미 채움).
 // 남긴 비율을 모르는(null) 음식이 하나라도 있으면 저장을 막는다(2026-10-27). S3이 state { retake: true }를 넘기면
 // (먹은 후 사진이 달라 보임, 문서는 awaiting_after 그대로) [먹은 후 사진 다시 찍기]를 보인다. state는 새로고침해도 남는다.
 import { Button, IconButton, TopBar } from '../components/ui'
@@ -22,7 +24,8 @@ import { buildAnalysis } from '../analysis/compute'
 import { koreanWarnings } from '../analysis/koreanText'
 import { validateAnalysis } from '../analysis/validate'
 import ReviewEditor from '../components/review/ReviewEditor'
-import { getMeal, MealStoreError, newMealId, saveMeal, type MealStoreErrorCode, type MealType } from '../data/meals'
+import { deleteMeal, getMeal, MealStoreError, newMealId, saveMeal, type MealStoreErrorCode, type MealType } from '../data/meals'
+import { fillMealTime } from '../data/mealTimes'
 import { useAuthUser } from '../lib/auth'
 import { APP_TIMEZONE, guessMealType, toDateKey } from '../lib/time'
 import { setFlash } from '../lib/flash'
@@ -176,7 +179,7 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
       (m) => {
         if (!live) return
         if (isEdit) {
-          // 수정은 저장한(done) 기록만. 아니면 상세가 이어 할 화면(먹은 후 촬영·결과 확인)을 안내한다.
+          // 수정은 저장한(done) 기록만. 아니면 /meal/:id(끼니 화면으로 보내는 경로)가 이어 할 단계를 연다.
           if (m?.status === 'done' && m.analysis) {
             ready({ mealId: routeId, dateKey: m.dateKey, mealType: m.mealType, analysis: m.analysis, isNew: false })
           } else {
@@ -223,16 +226,16 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
 
   const onAnalysis = useCallback((a: MealIntakeAnalysis) => setDraft((d) => (d ? { ...d, analysis: a } : d)), [])
 
-  /** 화면을 떠난다. 결과 확인·직접 입력은 홈(저장했으면 state.saved), 수정 모드는 기록 상세(저장했으면 "수정했어요"). */
+  /** 화면을 떠난다. 결과 확인·직접 입력은 홈(저장했으면 state.saved), 수정 모드는 끼니 화면(저장했으면 "저장했어요" 토스트). */
   function leave(saved?: Saved) {
     allowLeave.current = true
     if (isEdit && routeId) {
-      if ((entryState.current as { fromDetail?: unknown } | null)?.fromDetail === true) {
-        if (saved) setFlash(`edited:${routeId}`)
-        navigate(-1)
-      } else {
-        navigate(`/meal/${routeId}`, { replace: true, state: saved ? { edited: true } : undefined })
-      }
+      if (saved) setFlash('meal:saved')
+      if ((entryState.current as { fromMeal?: unknown } | null)?.fromMeal === true) navigate(-1)
+      else if (phase.kind === 'ready') {
+        const { dateKey, mealType } = phase.initial
+        navigate(`/day/${dateKey}/${mealType}`, { replace: true })
+      } else navigate(`/meal/${routeId}`, { replace: true })
     } else navigate('/', { replace: true, state: saved ? { saved } : undefined })
   }
 
@@ -248,6 +251,17 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
     !!uid && phase.kind === 'ready' && !!check?.ok && itemCount > 0 && unpicked === 0 && dateOk && !saving && !editorBusy
   // 결과 확인에서 S3이 다시 찍기를 허락한 경우만(수정 모드·직접 입력·다시 불러온 needs_review는 아님)
   const canRetake = !isEdit && entryRetake && routeId !== null && phase.kind === 'ready' && !phase.initial.isNew && unpicked > 0
+
+  // 결과 확인(사진 분석 기록)에서만. 직접 입력(새 기록)은 저장 전이라 나가면 그만이고, 수정 모드는 끼니 화면 X로 지운다.
+  const canCancel = !isEdit && routeId !== null && phase.kind === 'ready' && !phase.initial.isNew
+
+  function onCancelMeal() {
+    if (!uid || !routeId || saving || !window.confirm('이 기록을 취소할까요? 먹기 전 분석 결과도 지워져요.')) return
+    // 서버 확인을 기다리지 않는다(오프라인이면 끝나지 않는다).
+    deleteMeal(uid, routeId).catch((e: unknown) => console.warn('[review] 기록 취소 실패', e))
+    beforePhotoStore.remove(routeId).catch(() => {})
+    leave()
+  }
 
   function onRetake() {
     if (!routeId || saving) return
@@ -272,8 +286,12 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
       navigator.onLine === false ? OFFLINE_HINT_MS : SLOW_MS,
     )
     try {
+      const savedAt = new Date()
       await saveMeal(uid, mealId, { dateKey, mealType, analysis: a })
-      if (!isEdit) await beforePhotoStore.remove(mealId) // 먹은 후 분석이 실패했던 식사면 남아 있을 수 있다
+      if (!isEdit) {
+        void fillMealTime(uid, dateKey, mealType, savedAt)
+        await beforePhotoStore.remove(mealId) // 먹은 후 분석이 실패했던 식사면 남아 있을 수 있다
+      }
       if (alive.current) leave({ dateKey, consumedKcal })
     } catch (e) {
       console.warn('[review] 저장 실패', e)
@@ -401,6 +419,15 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
             <fieldset disabled={saving} className="min-w-0">
               <ReviewEditor analysis={draft.analysis} onChange={onAnalysis} onBusyChange={setEditorBusy} mode={mode} />
             </fieldset>
+
+            {canCancel && (
+              <div style={{ marginTop: 24 }}>
+                <button type="button" className="srow danger" style={{ borderTop: '1px solid var(--line)' }} onClick={onCancelMeal} disabled={saving}>
+                  <span>기록 취소</span>
+                  <small>›</small>
+                </button>
+              </div>
+            )}
           </main>
 
           <footer className="shrink-0 space-y-2 border-t border-line bg-surface px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
@@ -421,7 +448,7 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
             {!saving && editorBusy && <p className="text-sm text-ink-2">음식 정보를 다시 계산하는 중이에요. 끝나면 저장할 수 있어요.</p>}
             {!saving && itemCount === 0 && (
               <p className="text-sm text-ink-2">
-                {isEdit ? '음식을 모두 지웠다면 상세에서 기록을 삭제해 주세요.' : '음식을 하나 이상 넣어 주세요.'}
+                {isEdit ? '음식을 모두 지우려면 끼니 화면에서 X를 눌러 주세요.' : '음식을 하나 이상 넣어 주세요.'}
               </p>
             )}
             {!saving && unpicked > 0 && (

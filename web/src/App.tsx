@@ -11,10 +11,11 @@ import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
 
 // 촬영·결과 화면은 분석 모듈(Firebase AI)을 끌어오므로 첫 화면 번들에서 뺀다.
-const CaptureBeforePage = lazy(() => import('./pages/CaptureBeforePage'))
-const CaptureAfterPage = lazy(() => import('./pages/CaptureAfterPage'))
+// 끼니 화면(D3)이 먹기 전·후 촬영과 분석을 맡는다(예전 촬영 화면 S2·S3과 기록 상세 S7은 없애고 주소만 끼니 화면으로 보낸다).
+const MealPage = lazy(() => import('./pages/MealPage'))
 const ReviewPage = lazy(() => import('./pages/ReviewPage'))
-const MealDetailPage = lazy(() => import('./pages/MealDetailPage'))
+const MealIdRedirect = lazy(() => import('./pages/MealRedirects').then((m) => ({ default: m.MealIdRedirect })))
+const CaptureBeforeRedirect = lazy(() => import('./pages/MealRedirects').then((m) => ({ default: m.CaptureBeforeRedirect })))
 const GoalPage = lazy(() => import('./pages/GoalPage'))
 const CalendarPage = lazy(() => import('./pages/CalendarPage'))
 // 개발 빌드에서만 등록한다. 배포 빌드에서는 import.meta.env.DEV가 false로 바뀌어 이 import가 번들에서 빠진다.
@@ -66,21 +67,23 @@ function LoginRoute() {
 }
 
 const HomeRoute = () => <HomePage user={useUser()} />
-const CaptureBeforeRoute = () => <CaptureBeforePage uid={useUser().uid} />
-const CaptureAfterRoute = () => <CaptureAfterPage uid={useUser().uid} />
-const MealDetailRoute = () => <MealDetailPage uid={useUser().uid} />
+const MealRoute = () => <MealPage uid={useUser().uid} />
+const MealIdRoute = () => <MealIdRedirect uid={useUser().uid} />
+const MealAfterRoute = () => <MealIdRedirect uid={useUser().uid} after />
 const GoalRoute = () => <GoalPage uid={useUser().uid} />
 const CalendarRoute = () => <CalendarPage uid={useUser().uid} />
 
 const userRoutes: RouteObject[] = [
   { path: '/', element: <HomeRoute /> },
-  { path: '/capture/before', element: <CaptureBeforeRoute /> },
-  { path: '/meal/:mealId/after', element: <CaptureAfterRoute /> },
+  // 끼니 화면(디자인 조각 D3). 홈 끼니 카드에서 push(state.fromHome)로 들어온다
+  { path: '/day/:dateKey/:mealType', element: <MealRoute /> },
+  { path: '/capture/before', element: <CaptureBeforeRedirect /> },
+  { path: '/meal/:mealId/after', element: <MealAfterRoute /> },
   { path: '/meal/new/review', element: <ReviewPage /> },
   { path: '/meal/:mealId/review', element: <ReviewPage /> },
   // S8 기록 수정(3단계 조각 1-2): 결과 확인 화면(편집기·저장·나가기 확인)을 수정 모드로 다시 쓴다
   { path: '/meal/:mealId/edit', element: <ReviewPage mode="edit" /> },
-  { path: '/meal/:mealId', element: <MealDetailRoute /> },
+  { path: '/meal/:mealId', element: <MealIdRoute /> },
   // S6 목표 설정(3단계 조각 2). 홈에서는 push(state.fromHome)로 들어온다
   { path: '/goal', element: <GoalRoute /> },
   // S10 달력(3단계 조각 3-1). 홈에서는 push(state.fromHome)로 들어온다. ?month=YYYY-MM

@@ -58,6 +58,8 @@ export default function HomePage({ user }: { user: User }) {
   // 보고 있는 날짜의 비교 목표(users/{uid}/goals). forDate가 지금 날짜와 다르면 첫 값 전으로 본다.
   const [dated, setDated] = useState<{ forDate: string; goal: DatedGoal | null } | null>(null)
   const [datedErrorKey, setDatedErrorKey] = useState<string | null>(null)
+  // 끼니 화면 [수정 완료](D3)로 돌아왔으면 "저장했어요" 1.6초(lib/flash, 키는 MealPage와 같다)
+  const [mealNotice, setMealNotice] = useState(() => peekFlash('meal:saved'))
   // 목표 설정(S6)에서 저장하고 돌아왔으면 1.6초 토스트(lib/flash, 키는 GoalPage와 같다)
   const [goalNotice, setGoalNotice] = useState<'saved' | 'pending' | null>(() =>
     peekFlash('goal:saved') ? 'saved' : peekFlash('goal:pending') ? 'pending' : null,
@@ -91,7 +93,13 @@ export default function HomePage({ user }: { user: User }) {
   useEffect(() => {
     clearFlash('goal:saved')
     clearFlash('goal:pending')
+    clearFlash('meal:saved')
   }, [])
+  useEffect(() => {
+    if (!mealNotice) return
+    const t = window.setTimeout(() => setMealNotice(false), 1600)
+    return () => window.clearTimeout(t)
+  }, [mealNotice])
   useEffect(() => {
     if (!goalNotice) return
     const t = window.setTimeout(() => setGoalNotice(null), 1600)
@@ -196,7 +204,9 @@ export default function HomePage({ user }: { user: User }) {
     ? '준비 중이에요'
     : saved
       ? `저장했어요 · ${formatKcal(saved.consumedKcal)}kcal${saved.dateKey !== today ? ` (${shortDate(saved.dateKey)})` : ''}`
-      : goalNotice === 'saved'
+      : mealNotice
+        ? '저장했어요'
+        : goalNotice === 'saved'
         ? '목표를 저장했어요'
         : goalNotice === 'pending'
           ? '목표를 저장했어요. 연결되면 올라가요.'

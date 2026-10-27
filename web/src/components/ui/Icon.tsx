@@ -16,9 +16,16 @@ const PATHS: Record<IconName, ReactNode> = {
   plus: <><path d="M12 5v14M5 12h14"/></>,
 }
 
-type Props = { name: IconName; size?: number; strokeWidth?: number; className?: string }
+type Props = { name: IconName; size?: number; strokeWidth?: number; className?: string; bare?: boolean }
 
-export function Icon({ name, size = 24, strokeWidth = 2, className }: Props) {
+/** bare: 시안 마크업처럼 viewBox만 둔 svg(크기·선은 시안 CSS .choice svg·.cam svg 등이 정한다. 시안 그 자리에는 둥근 끝이 없다) */
+export function Icon({ name, size = 24, strokeWidth = 2, className, bare = false }: Props) {
+  if (bare)
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" className={className}>
+        {PATHS[name]}
+      </svg>
+    )
   return (
     <svg
       viewBox="0 0 24 24"

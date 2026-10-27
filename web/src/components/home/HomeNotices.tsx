@@ -7,7 +7,7 @@ export function BandNotices({ items }: { items: (string | false | null | undefin
   return (
     <div role="status" style={{ display: 'grid', gap: 8, marginBottom: 14 }}>
       {list.map((t) => (
-        <p key={t} className="callout" style={{ marginTop: 0 }}>
+        <p key={t} className="callout" style={{ margin: 0 }}>
           {t}
         </p>
       ))}

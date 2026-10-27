@@ -1,4 +1,4 @@
-// S2·S3 공용: 사진을 얻는 방법만 맡는다(스펙 4.8, M19 조각 1). 얻은 사진은 화면의 기존 onPick(file) 경로로 넘긴다.
+// 끼니 화면(D3, 예전 S2·S3)의 사진을 얻는 방법만 맡는다(스펙 4.8, M19 조각 1). 얻은 사진은 화면의 기존 onPick(file) 경로로 넘긴다.
 // 방식: camera(앱 안 카메라 화면) / pc(사진 파일 고르기 + 웹캠이 있으면 카메라로 찍기) / fallback(버튼 방식 자동 대체).
 // 카메라 화면은 방문 기록 한 칸이다(조각 3): 열 때 같은 주소를 location.state[CAMERA_STATE_KEY]=true로 push하고,
 // 닫을 때(X·셔터·카메라 안 사진첩·실패) navigate(-1)로 그 칸을 뺀다. 기기·브라우저 뒤로 가기도 같은 칸을 빼므로 카메라만 닫힌다.
@@ -199,9 +199,3 @@ export function useCaptureSource(opts: {
   }
 }
 
-/** 화면 위쪽 안내 한 줄(방식별) */
-export function captureSourceHint(cap: CaptureSource): string {
-  if (cap.mode === 'camera') return '카메라 화면 왼쪽 아래에서 앨범 사진도 고를 수 있어요.'
-  if (cap.mode === 'pc') return cap.hasWebcam ? '사진 파일을 고르거나 카메라로 찍어 주세요.' : '음식 사진 파일을 골라 주세요.'
-  return '카메라로 찍거나 앨범에서 골라 주세요.'
-}

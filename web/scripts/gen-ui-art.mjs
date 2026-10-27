@@ -45,9 +45,16 @@ const PATHS: Record<IconName, ReactNode> = {
 ${names.map((n) => `  ${n}: <>${ico[n]}</>,`).join('\n')}
 }
 
-type Props = { name: IconName; size?: number; strokeWidth?: number; className?: string }
+type Props = { name: IconName; size?: number; strokeWidth?: number; className?: string; bare?: boolean }
 
-export function Icon({ name, size = 24, strokeWidth = 2, className }: Props) {
+/** bare: 시안 마크업처럼 viewBox만 둔 svg(크기·선은 시안 CSS .choice svg·.cam svg 등이 정한다. 시안 그 자리에는 둥근 끝이 없다) */
+export function Icon({ name, size = 24, strokeWidth = 2, className, bare = false }: Props) {
+  if (bare)
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" className={className}>
+        {PATHS[name]}
+      </svg>
+    )
   return (
     <svg
       viewBox="0 0 24 24"
@@ -69,19 +76,20 @@ export function Icon({ name, size = 24, strokeWidth = 2, className }: Props) {
 `
 
 const mealTsx = `${HEAD}// 시안 \`icons\`의 끼니 그림 4개(아침 해, 점심 해와 언덕, 저녁 달, 간식 케이크). 장식이라 읽지 않는다.
-import type { ReactNode } from 'react'
+// style: 시안 끼니 화면 큰 그림(class="mico" style="width:110px;height:110px")처럼 시안 CSS .mico 크기를 덮을 때.
+import type { CSSProperties, ReactNode } from 'react'
 import type { MealType } from '../../data/meals'
 
 const ART: Record<MealType, ReactNode> = {
 ${mealKeys.map((k) => `  ${k}: (\n    <>\n      ${meals[k]}\n    </>\n  ),`).join('\n')}
 }
 
-type Props = { meal: MealType; size?: number; framed?: boolean; className?: string }
+type Props = { meal: MealType; size?: number; framed?: boolean; className?: string; style?: CSSProperties }
 
 /** framed: 시안 .micowrap(흰 원 안에 그림, 그림 42 : 원 58 비율). size는 그림 크기(px). */
-export function MealArt({ meal, framed = false, size = framed ? 42 : 40, className }: Props) {
+export function MealArt({ meal, framed = false, size = framed ? 42 : 40, className, style }: Props) {
   const art = (
-    <svg viewBox="0 0 64 64" width={size} height={size} aria-hidden="true" focusable="false" className={framed ? undefined : className}>
+    <svg viewBox="0 0 64 64" width={size} height={size} aria-hidden="true" focusable="false" className={framed ? undefined : className} style={framed ? undefined : style}>
       {ART[meal]}
     </svg>
   )
