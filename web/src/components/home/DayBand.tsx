@@ -7,8 +7,8 @@
 // [한눈에]·[자세히]는 D5 화면이 생길 때까지 부르는 화면이 "준비 중이에요" 토스트를 띄운다(onSoon).
 import { useLayoutEffect, useRef, useState } from 'react'
 import { compareToGoal, type GoalTargets } from '../../analysis/goal'
-import type { DaySummary } from '../../data/summary'
-import { formatKcal } from '../mealText'
+import type { DaySummary, DetailSummary } from '../../data/summary'
+import { formatDetail, formatKcal } from '../mealText'
 import { Band, ChipButton } from '../ui'
 import { GoalOverRemain, NoGoalRemain } from './GoalStates'
 import { BandNotices } from './HomeNotices'
@@ -167,15 +167,25 @@ function useStackedRatio(dep: string) {
   return { ref, stacked }
 }
 
-/** 시안 .minor(당류·식이섬유·나트륨). 값은 D4(식약처 실제 값)에서 들어온다. 그전에는 "–"(가짜 숫자 금지) */
-function Minor() {
+const MINOR = [
+  ['당류', 'sugar_g'],
+  ['식이섬유', 'fiber_g'],
+  ['나트륨', 'sodium_mg'],
+] as const
+
+/** 시안 .minor(당류·식이섬유·나트륨, D4): 그날 값이 있는 음식만 더한 합. 값 있는 음식이 없으면 "–"(가짜 숫자 금지).
+ *  "음식 ○개 중 ○개 기준"과 "추정"은 자리가 없어 끼니 화면 [자세히]·영양소 상세에서 보인다 */
+function Minor({ detail }: { detail: DetailSummary }) {
   return (
     <div className="minor">
-      {['당류', '식이섬유', '나트륨'].map((n) => (
-        <span key={n}>
-          {n} <b className="num">–</b>
-        </span>
-      ))}
+      {MINOR.map(([n, k]) => {
+        const t = detail.totals[k]
+        return (
+          <span key={k}>
+            {n} <b className="num">{t ? formatDetail(k, t.value) : '–'}</b>
+          </span>
+        )
+      })}
     </div>
   )
 }
@@ -223,7 +233,7 @@ export default function DayBand({ summary, dayError, isToday, goal, online, onSo
             </div>
           </div>
           <Bars summary={summary} targets={targets} />
-          <Minor />
+          <Minor detail={summary.detail} />
           {targets ? (
             <Remain summary={summary} targets={targets} />
           ) : (

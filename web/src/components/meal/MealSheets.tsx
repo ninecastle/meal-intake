@@ -5,10 +5,11 @@
 // - 오류·같은 사진·카메라 권한 안내는 D3-2(분석 중·카메라 화면 다시 그리기) 전까지 예전 촬영 화면의 상자 모양 그대로 시트 맨 위에 둔다.
 import { useState, type ReactNode } from 'react'
 import type { MealType } from '../../data/meals'
+import type { DetailSummary } from '../../data/summary'
 import type { ErrorView } from '../capture/captureText'
 import { CameraHelp } from '../capture/CaptureControls'
 import type { CaptureSource } from '../capture/useCaptureSource'
-import { MEAL_TYPE_LABEL } from '../mealText'
+import { formatDetail, MEAL_TYPE_LABEL } from '../mealText'
 import { BottomSheet, Icon } from '../ui'
 
 const r1 = (n: number) => Math.round(n * 10) / 10
@@ -152,9 +153,31 @@ function TimeForm({ meal, value, onSave }: { meal: MealType; value: string; onSa
   )
 }
 
-/** 시안 nutrientTable(t, true)에서 정한 행만. 세부 4가지(당류·식이섬유·포화지방·나트륨)는 D4(식약처 실제 값) 전까지 "–" */
-function NutrientTable({ t }: { t: MealTotals }) {
-  const dash = <span className="num">–</span>
+/** 세부 영양소 한 줄(D4): 값이 있는 음식만 더한 합, 하나라도 AI 추정이면 시안 "추정" 배지(.est), 일부 음식만 값이 있으면 "음식 ○개 중 ○개 기준" */
+function DetailRow({ label, k, detail, sub }: { label: string; k: 'sugar_g' | 'sodium_mg' | 'satfat_g' | 'fiber_g'; detail: DetailSummary; sub: boolean }) {
+  const t = detail.totals[k]
+  return (
+    <div className={sub ? 'nrow sub' : 'nrow'}>
+      <span>
+        {label}
+        {t && t.count < detail.items && (
+          <small style={{ marginLeft: 6, fontSize: 12, color: 'var(--ink-3)' }}>{`음식 ${detail.items}개 중 ${t.count}개 기준`}</small>
+        )}
+      </span>
+      {t ? (
+        <span className="num">
+          {t.est && <span className="est">추정</span>}
+          {formatDetail(k, t.value, true)}
+        </span>
+      ) : (
+        <span className="num">–</span>
+      )}
+    </div>
+  )
+}
+
+/** 시안 nutrientTable(t, true)에서 정한 행만. 세부 4가지(당류·식이섬유·포화지방·나트륨)는 D4 합계(값 있는 음식만, 없으면 "–") */
+function NutrientTable({ t, detail }: { t: MealTotals; detail: DetailSummary }) {
   return (
     <div className="ntable">
       <div className="nrow total">
@@ -165,14 +188,8 @@ function NutrientTable({ t }: { t: MealTotals }) {
         <span>탄수화물</span>
         <span className="num">{`${r1(t.carbs_g)} g`}</span>
       </div>
-      <div className="nrow sub">
-        <span>당류</span>
-        {dash}
-      </div>
-      <div className="nrow sub">
-        <span>식이섬유</span>
-        {dash}
-      </div>
+      <DetailRow label="당류" k="sugar_g" detail={detail} sub />
+      <DetailRow label="식이섬유" k="fiber_g" detail={detail} sub />
       <div className="nrow">
         <span>단백질</span>
         <span className="num">{`${r1(t.protein_g)} g`}</span>
@@ -181,22 +198,28 @@ function NutrientTable({ t }: { t: MealTotals }) {
         <span>지방</span>
         <span className="num">{`${r1(t.fat_g)} g`}</span>
       </div>
-      <div className="nrow sub">
-        <span>포화지방</span>
-        {dash}
-      </div>
-      <div className="nrow">
-        <span>나트륨</span>
-        {dash}
-      </div>
+      <DetailRow label="포화지방" k="satfat_g" detail={detail} sub />
+      <DetailRow label="나트륨" k="sodium_mg" detail={detail} sub={false} />
     </div>
   )
 }
 
-export function MealInfoSheet({ open, onClose, meal, totals }: { open: boolean; onClose: () => void; meal: MealType; totals: MealTotals }) {
+export function MealInfoSheet({
+  open,
+  onClose,
+  meal,
+  totals,
+  detail,
+}: {
+  open: boolean
+  onClose: () => void
+  meal: MealType
+  totals: MealTotals
+  detail: DetailSummary
+}) {
   return (
     <BottomSheet open={open} onClose={onClose} title={`${MEAL_TYPE_LABEL[meal]} 영양정보`}>
-      <NutrientTable t={totals} />
+      <NutrientTable t={totals} detail={detail} />
     </BottomSheet>
   )
 }

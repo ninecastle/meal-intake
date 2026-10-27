@@ -48,6 +48,12 @@ export function formatMacro(n: number): string {
   return n < 10 ? String(Math.round(n * 10) / 10) : Math.round(n).toLocaleString('ko-KR')
 }
 
+/** 세부 영양소 값(D4): g은 소수 첫째 자리, 나트륨 mg은 쉼표 정수. space면 숫자와 단위 사이를 띄운다(시안 영양정보 표 "12 g") */
+export function formatDetail(key: 'sugar_g' | 'sodium_mg' | 'satfat_g' | 'fiber_g', v: number, space = false): string {
+  const n = key === 'sodium_mg' ? Math.round(v).toLocaleString('ko-KR') : String(Math.round(v * 10) / 10)
+  return `${n}${space ? ' ' : ''}${key === 'sodium_mg' ? 'mg' : 'g'}`
+}
+
 /** 시:분(서울) */
 export const clockFmt = new Intl.DateTimeFormat('ko-KR', { timeZone: APP_TIMEZONE, hour: 'numeric', minute: '2-digit' })
 

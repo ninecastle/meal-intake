@@ -33,6 +33,7 @@ import { formatGrams, homeHref, isDateKey, macroPct, MEAL_TYPE_LABEL, MEAL_TYPES
 import { foodName } from '../lib/foodName'
 import { Icon, IconButton, MealArt, Toast } from '../components/ui'
 import { deleteMeal, saveMeal, subscribeMealsFor, type MealType, type MealWithId } from '../data/meals'
+import { sumDetail } from '../data/summary'
 import { setMealTime, subscribeMealTimes, toHm, type MealTimes } from '../data/mealTimes'
 import { clearFlash, peekFlash, setFlash } from '../lib/flash'
 import { toDateKey } from '../lib/time'
@@ -280,6 +281,8 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
     }
     return { kcal: t.kcal, carbs_g: r1(t.carbs_g), protein_g: r1(t.protein_g), fat_g: r1(t.fat_g) }
   }, [done])
+  // 세부 영양소(D4): 끝난 기록 음식들의 먹은 양 기준 합(값 있는 음식만)
+  const detail = useMemo(() => sumDetail(done.flatMap((m) => (m.analysis ? [m.analysis] : []))), [done])
 
   const groups: Group[] = []
   for (const m of meals ?? []) {
@@ -509,7 +512,7 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
           })
         }}
       />
-      <MealInfoSheet open={sheet === 'mealinfo'} onClose={closeSheet} meal={meal} totals={totals} />
+      <MealInfoSheet open={sheet === 'mealinfo'} onClose={closeSheet} meal={meal} totals={totals} detail={detail} />
       <AfterSheet
         open={sheet === 'after' && target_ != null}
         onClose={closeSheet}
