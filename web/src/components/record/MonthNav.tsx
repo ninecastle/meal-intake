@@ -19,7 +19,8 @@ export default function MonthNav({
   const isThisMonth = month === today.slice(0, 7)
   return (
     <nav aria-label="달 이동" className="flex min-w-0 items-center">
-      <button type="button" onClick={() => onMove(-1)} aria-label="지난달" className={`${arrowBtn} -ml-2`}>
+      {/* 달력 카드 안(좌우 여백 6px)이라 왼쪽으로 내밀지 않는다(예전 -ml-2는 카드 테두리에 닿았다) */}
+      <button type="button" onClick={() => onMove(-1)} aria-label="지난달" className={arrowBtn}>
         ◀
       </button>
       <h2 className="min-w-10 text-center leading-tight whitespace-nowrap">

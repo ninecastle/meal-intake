@@ -1,30 +1,67 @@
 // 기록 보기(S10) ① 주간 추이(3단계 조각 4, M17, 스펙 4.7절 "주간 추이"). AI 호출 없음.
 // 그리기만 한다: 고른 주(?week → parseWeek)·항목·조회 결과는 페이지(CalendarPage)가 넘긴다. 고른 주는 항상 그달 격자 안이라
 // 달력이 이미 구독한 격자 범위 값(날짜별 totals·목표 기록)을 그대로 쓴다(새 구독 없음).
-// 계산은 lib/calendar.ts(metricOf·targetOf·goalForDate)와 lib/week.ts(weekDays·axisTicks·isCurrentOrLaterWeek) 그대로.
-// 그래프는 인라인 SVG(외부 차트 라이브러리 없음, viewBox + 폭 100%). 날짜 칸 누르기는 SVG 위에 겹친 HTML 버튼 7개:
-// 칸 폭 = 전체 폭 ÷ 7(360px 폰에서 약 47px), 높이 = 그래프 전체. 그래서 눈금 숫자는 왼쪽 여백 대신 보조선 위 안쪽에 둔다.
+// 계산은 lib/calendar.ts(metricOf·targetOf·goalForDate)와 lib/week.ts(weekDays·axisTicks·weekGoalSteps·weekAverage·
+// isCurrentOrLaterWeek) 그대로. 그래프는 인라인 SVG(외부 차트 라이브러리 없음, viewBox + 폭 100%).
+// 선(2026-10-27 사용자 요청): 먹은 양 = emerald 실선·점(오늘까지), 목표 = 회색 점선(weekGoalSteps, 월~일 전체 폭, 바뀐 날부터 계단),
+// 평균 = amber 둥근 점 줄(weekAverage, 기록한 날만, 월~일 전체 폭). 목표·평균 값 글은 그래프 오른쪽 전용 자리(LABEL)에 둔다.
+// 날짜 칸 누르기는 SVG 위에 겹친 HTML 버튼 7개(눈금 자리 AXIS와 값 글 자리 LABEL 사이, 높이 = 그래프 전체).
 import { useState } from 'react'
 import type { DatedGoal } from '../../data/goals'
 import { goalForDate, metricOf, METRIC_UNIT, REFERENCE_AMOUNT, targetOf, type Metric } from '../../lib/calendar'
-import { axisTicks, isCurrentOrLaterWeek, weekDays } from '../../lib/week'
+import { axisTicks, isCurrentOrLaterWeek, weekAverage, weekDays, weekGoalSteps } from '../../lib/week'
 import type { Nutrients } from '../../types/analysis'
 import { dateKeyLabel, formatGrams, formatKcal } from '../mealText'
 import { METRIC_NAME } from './MetricToggle'
+import { RECORD_CARD } from './RecordHeatmap'
 
 const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일'] as const
 
-// SVG 좌표(viewBox). 360px 폰(본문 328px)에서 약 0.9배, 태블릿(본문 최대 416px)에서 약 1.14배로 그려진다.
-// 왼쪽 AXIS 폭은 세로축 눈금 숫자 자리(그래프 밖). 숫자가 월요일 점·선에 가리지 않게 칸과 나눈다(리더, 2026-10-27).
-const AXIS = 30
-const COL = 48
-const W = AXIS + COL * 7
-const TOP = 16 // 맨 위 보조선(위에 눈금 숫자 자리)
-const BASE = 152 // 세로축 0
-const WD_Y = 170 // 요일 글자 기준선(요일·날짜 글자 12, 360px 폰에서 약 11.7px)
-const DATE_Y = 187 // 날짜 글자 기준선
-const H = 196
+// SVG 좌표(viewBox). 360px 폰 카드 안쪽 폭 314px와 1:1(태블릿 카드 안쪽 최대 402px에서 약 1.28배).
+// 왼쪽 AXIS = 세로축 눈금 숫자 자리, 가운데 7칸 = 날짜(360px에서 칸·누르는 띠 36.25px),
+// 오른쪽 LABEL = 목표·평균 값 글 자리(두 줄 "목표" / "2,060"). 선·점은 LABEL로 들어가지 않아 값 글과 겹치지 않는다.
+const AXIS = 29.5
+const COL = 36.25
+const LABEL = 30.75
+const PLOT_R = AXIS + COL * 7 // 날짜 칸 오른쪽 끝(목표·평균선 끝)
+const W = PLOT_R + LABEL // 314
+const TOP = 14 // 맨 위 보조선
+const BASE = 138 // 세로축 0
+const WD_Y = 155 // 요일 글자 기준선
+const DATE_Y = 171 // 날짜 글자 기준선
+const H = 180
 const cx = (i: number) => AXIS + COL * i + COL / 2
+
+/** 오른쪽 값 글 한 개: 값 기준선 = cy + 3.5(선 높이에 가운데), 이름 기준선 = cy − 7. 차지하는 높이 = [cy − 15, cy + 5].
+ *  두 글 사이는 6 더 띄운다(한 글 안의 이름·값 줄 간격보다 넓게 해서 "평균 1,919"·"목표 1,900"이 네 줄 같은 간격으로 보이지 않게) */
+const LABEL_UP = 15
+const LABEL_DOWN = 5
+const LABEL_GAP = LABEL_UP + LABEL_DOWN + 6
+
+interface EndLabel {
+  kind: 'goal' | 'avg'
+  word: string
+  value: string
+  /** 선 높이 */
+  y: number
+}
+
+/** 값 글 높이 정하기: 두 글이 겹치면 두 선 가운데를 기준으로 위아래로 비켜 놓고(위쪽 선 글이 위), 그래프 위아래 밖으로 나가지 않게 민다 */
+function placeEndLabels(labels: readonly EndLabel[]): (EndLabel & { cy: number })[] {
+  const out = labels.map((l) => ({ ...l, cy: l.y })).sort((a, b) => a.y - b.y)
+  if (out.length === 2 && out[1].cy - out[0].cy < LABEL_GAP) {
+    const mid = (out[0].y + out[1].y) / 2
+    out[0].cy = mid - LABEL_GAP / 2
+    out[1].cy = mid + LABEL_GAP / 2
+  }
+  if (out.length > 0) {
+    const over = LABEL_UP - out[0].cy
+    if (over > 0) for (const l of out) l.cy += over
+    const under = out[out.length - 1].cy + LABEL_DOWN - H
+    if (under > 0) for (const l of out) l.cy -= under
+  }
+  return out
+}
 
 /** 눈금 숫자: 소수 눈금(예: 1.5g)을 반올림하지 않게 한 자리까지 */
 const tickText = (t: number) => t.toLocaleString('ko-KR', { maximumFractionDigits: 1 })
@@ -35,7 +72,7 @@ interface DayPoint {
   future: boolean
   /** 그날 고른 항목 합계. 기록 없음·미래·불러오기 전이면 null(0으로 그리지 않는다) */
   value: number | null
-  /** 그날 목표(goalForDate). 목표 기록 없음·미래·목표를 못 불러왔으면 null */
+  /** 그날 목표(goalForDate, 상세·화면 읽기용). 목표 기록 없음·미래·목표를 못 불러왔으면 null */
   target: number | null
 }
 
@@ -87,24 +124,40 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
   const loaded = ready && days !== null
   const goalsKnown = ready && goals !== null
 
+  // 7일 모두(미래 포함)의 그날 목표. 목표선은 월~일 전체 폭이라 미래 날도 넣는다
+  const dayGoals = keys.map((d) => {
+    const t = ready && goals ? targetOf(goalForDate(goals, d), metric) : null
+    return t !== null && t > 0 ? t : null
+  })
   const points: DayPoint[] = keys.map((d, i) => {
     const future = d > today
     const totals = ready && !future ? days?.get(d) : undefined
-    const t = ready && !future && goals ? targetOf(goalForDate(goals, d), metric) : null
-    return { i, d, future, value: totals ? metricOf(totals, metric) : null, target: t !== null && t > 0 ? t : null }
+    return { i, d, future, value: totals ? metricOf(totals, metric) : null, target: future ? null : dayGoals[i] }
   })
   const recorded = points.filter((p): p is DayPoint & { value: number } => p.value !== null)
-  const targetDays = points.filter((p) => p.target !== null).length
+  /** 목표선: 바뀐 날부터 계단, 목표 정하기 전 날은 그 주 첫 목표로. 그 주에 목표가 없으면 null(선 없음) */
+  const steps = weekGoalSteps(dayGoals)
+  /** 평균선: 그 주에 기록한 날만으로. 기록이 없으면 null(선 없음) */
+  const avg = loaded ? weekAverage(points.map((p) => p.value)) : null
 
   const ticks = axisTicks(
-    points.flatMap((p) => [p.value, p.target]).filter((v): v is number => v !== null),
+    [...points.map((p) => p.value), ...(steps ?? []), avg].filter((v): v is number => v !== null),
     REFERENCE_AMOUNT[metric],
   )
   const max = ticks[ticks.length - 1]
   const yOf = (v: number) => BASE - (v / max) * (BASE - TOP)
 
   const valueRuns = runs(points, (p) => p.value)
-  const targetRuns = runs(points, (p) => p.target)
+
+  // 목표 계단 경로: 각 날 칸 왼쪽 끝~오른쪽 끝 가로, 값이 바뀌는 칸 경계에서 세로
+  let goalPath = ''
+  if (steps) {
+    goalPath = `M${AXIS},${yOf(steps[0])}`
+    steps.forEach((v, i) => {
+      if (i > 0 && v !== steps[i - 1]) goalPath += ` V${yOf(v)}`
+      goalPath += ` H${AXIS + COL * (i + 1)}`
+    })
+  }
 
   // 고른 날: 다른 주로 옮기면 그 주에 없으니 저절로 풀린다
   const sel = loaded ? (points.find((p) => p.d === picked && !p.future) ?? null) : null
@@ -114,12 +167,24 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
   /** 먹은 양: kcal은 "511kcal", g 항목은 "탄수화물 230g" */
   const eaten = (n: number) => (unit === 'kcal' ? amount(n) : `${METRIC_NAME[metric]} ${amount(n)}`)
 
+  // 오른쪽 값 글: 목표는 일요일 값(계단이면 마지막 값), 평균은 그 주 평균
+  const endLabels = placeEndLabels([
+    ...(steps ? [{ kind: 'goal' as const, word: '목표', value: fmt(steps[6]), y: yOf(steps[6]) }] : []),
+    ...(avg !== null ? [{ kind: 'avg' as const, word: '평균', value: fmt(avg), y: yOf(avg) }] : []),
+  ])
+
   function detailText(p: DayPoint): string {
     const head = p.value === null ? '기록 없음' : eaten(p.value)
     if (!goalsKnown) return head
     if (p.target === null) return `${head} · 목표 없음`
     if (p.value === null) return `${head} · 목표 ${amount(p.target)}`
     return `${head} / 목표 ${amount(p.target)}(${Math.round((p.value / p.target) * 100)}%)`
+  }
+
+  /** 상세 셋째 줄 "주 평균 230g 대비 119%". 그날 기록이 없거나 평균이 없으면(0 포함) null */
+  function avgText(p: DayPoint): string | null {
+    if (p.value === null || avg === null || !(avg > 0)) return null
+    return `주 평균 ${amount(avg)} 대비 ${Math.round((p.value / avg) * 100)}%`
   }
 
   function dayLabel(p: DayPoint): string {
@@ -146,19 +211,20 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
   let summary = `${METRIC_NAME[metric]} 주간 꺾은선그래프, ${range}. `
   if (message) summary += message.replace('…', '')
   else {
-    const avg = recorded.reduce((s, p) => s + p.value, 0) / recorded.length
     const top = recorded.reduce((a, b) => (b.value > a.value ? b : a))
-    summary += `기록 ${recorded.length}일, 하루 평균 ${amount(avg)}, 가장 많은 날 ${dateKeyLabel(top.d)} ${amount(top.value)}`
+    summary += `기록 ${recorded.length}일`
+    if (avg !== null) summary += `, 기록한 날 평균 ${amount(avg)}(주황 점선)`
+    summary += `, 가장 많은 날 ${dateKeyLabel(top.d)} ${amount(top.value)}`
   }
-  if (targetDays > 0) summary += '. 점선은 그날 목표'
+  if (steps) summary += `. 회색 점선은 목표, 일요일 목표 ${amount(steps[6])}`
 
   return (
-    <section aria-labelledby="weekly-trend-title" className="mt-6 border-t border-gray-100 pt-4">
-      <div className="flex flex-wrap items-center justify-between gap-x-2">
+    <section aria-labelledby="weekly-trend-title" className={RECORD_CARD}>
+      <div className="flex flex-wrap items-center justify-between gap-x-2 pl-1.5">
         <h2 id="weekly-trend-title" className="text-base font-bold whitespace-nowrap">
           주간 추이 <span className="font-medium text-gray-600">· {range}</span>
         </h2>
-        <nav aria-label="주 이동" className="-mr-2 ml-auto flex">
+        <nav aria-label="주 이동" className="ml-auto flex">
           <button
             type="button"
             onClick={() => onMoveWeek(-1)}
@@ -177,8 +243,8 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
         </nav>
       </div>
 
-      {/* 범례 "— 먹은 양 · - - 목표"와 단위 */}
-      <div className="mt-1 flex items-center justify-between text-xs text-gray-600">
+      {/* 범례 "— 먹은 양 · - - 목표 · ··· 평균"과 단위 */}
+      <div className="mt-1 flex items-center justify-between gap-2 px-1.5 text-xs text-gray-600">
         <ul aria-label="범례" className="flex items-center gap-3">
           <li className="flex items-center gap-1">
             <svg width="22" height="10" aria-hidden="true">
@@ -193,49 +259,58 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
             </svg>
             목표
           </li>
+          <li className="flex items-center gap-1">
+            <svg width="22" height="10" aria-hidden="true">
+              <line
+                x1="3"
+                y1="5"
+                x2="20"
+                y2="5"
+                className="stroke-amber-600"
+                strokeWidth="2"
+                strokeDasharray="0.1 4"
+                strokeLinecap="round"
+              />
+            </svg>
+            평균
+          </li>
         </ul>
-        <span>단위 {unit}</span>
+        <span className="whitespace-nowrap">단위 {unit}</span>
       </div>
 
       <div className="relative mt-1">
-        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={summary} className="block h-auto w-full">
-          {/* 가로 보조선(칸 영역)과 눈금 숫자(왼쪽 AXIS 자리, 보조선 높이에 맞춰 오른쪽 정렬) */}
+        {/* overflow-visible: 아주 큰 눈금 숫자(예: 12,000)가 왼쪽 자리를 넘어도 카드 안쪽 여백으로 보이게(잘리지 않게) */}
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={summary} className="block h-auto w-full overflow-visible">
+          {/* 가로 보조선(날짜 칸 영역만, 값 글 자리 LABEL에는 긋지 않음)과 눈금 숫자(왼쪽 AXIS 자리, 오른쪽 정렬) */}
           {ticks.map((t, k) => {
             const y = yOf(t)
             return (
               <g key={k}>
-                <line x1={AXIS} x2={W} y1={y} y2={y} className={k === 0 ? 'stroke-gray-300' : 'stroke-gray-200'} strokeWidth={1} />
-                <text x={AXIS - 4} y={y + 3.5} textAnchor="end" fontSize={10} className="fill-gray-500 tabular-nums">
+                <line x1={AXIS} x2={PLOT_R} y1={y} y2={y} className={k === 0 ? 'stroke-gray-300' : 'stroke-gray-200'} strokeWidth={1} />
+                <text x={AXIS - 3} y={y + 3.5} textAnchor="end" fontSize={10} className="fill-gray-500 tabular-nums">
                   {tickText(t)}
                 </text>
               </g>
             )
           })}
 
-          {/* 그날 목표: 회색 점선. 목표 기록 없는 날에서 끊기고, 하루만 있으면 그날 짧은 가로 점선 */}
-          {targetRuns.map((run, k) =>
-            run.length === 1 ? (
-              <line
-                key={k}
-                x1={cx(run[0].i) - 14}
-                x2={cx(run[0].i) + 14}
-                y1={yOf(run[0].v)}
-                y2={yOf(run[0].v)}
-                className="stroke-gray-500"
-                strokeWidth={1.5}
-                strokeDasharray="4 3"
-              />
-            ) : (
-              <polyline
-                key={k}
-                points={run.map((p) => `${cx(p.i)},${yOf(p.v)}`).join(' ')}
-                fill="none"
-                className="stroke-gray-500"
-                strokeWidth={1.5}
-                strokeDasharray="4 3"
-                strokeLinejoin="round"
-              />
-            ),
+          {/* 목표: 회색 점선, 월~일 전체 폭(미래 날 위로도), 목표가 바뀐 날부터 계단 */}
+          {steps && (
+            <path d={goalPath} fill="none" className="stroke-gray-500" strokeWidth={1.5} strokeDasharray="4 3" strokeLinejoin="round" />
+          )}
+
+          {/* 평균: amber 둥근 점 줄, 월~일 전체 폭. 목표선과 겹쳐도 점 모양·색으로 구분된다 */}
+          {avg !== null && (
+            <line
+              x1={AXIS + 2}
+              x2={PLOT_R - 1}
+              y1={yOf(avg)}
+              y2={yOf(avg)}
+              className="stroke-amber-600"
+              strokeWidth={2}
+              strokeDasharray="0.1 4"
+              strokeLinecap="round"
+            />
           )}
 
           {/* 먹은 양: emerald 실선과 점. 기록 없는 날은 0으로 그리지 않고 선을 끊는다. 오늘 이후는 그리지 않는다 */}
@@ -261,6 +336,18 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
               className="fill-emerald-600 stroke-white"
               strokeWidth={2}
             />
+          ))}
+
+          {/* 오른쪽 값 글(LABEL 자리): "목표" / "2,060", "평균" / "1,234". 가까우면 placeEndLabels가 위아래로 비켜 놓는다 */}
+          {endLabels.map((l) => (
+            <g key={l.kind} aria-hidden="true" className={l.kind === 'goal' ? 'fill-gray-600' : 'fill-amber-700'}>
+              <text x={PLOT_R + 2.5} y={l.cy - 7} fontSize={9} fontWeight={500}>
+                {l.word}
+              </text>
+              <text x={PLOT_R + 2.5} y={l.cy + 3.5} fontSize={10} fontWeight={600} className="tabular-nums">
+                {l.value}
+              </text>
+            </g>
           ))}
 
           {/* 가로축: 요일과 날짜(토 파랑, 일 빨강). 주의 첫날과 1일은 "11/1"처럼 달을 붙인다. 오늘은 굵게 + 밑줄 */}
@@ -296,8 +383,11 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
           </p>
         )}
 
-        {/* 누르는 곳: 날짜 칸 세로 띠 전체(눈금 숫자 자리 AXIS 오른쪽을 7칸으로, 높이 = 그래프 전체) */}
-        <div className="absolute inset-y-0 right-0 grid grid-cols-7" style={{ left: `${(AXIS / W) * 100}%` }}>
+        {/* 누르는 곳: 날짜 칸 세로 띠 전체(왼쪽 눈금 자리와 오른쪽 값 글 자리 사이를 7칸으로, 높이 = 그래프 전체) */}
+        <div
+          className="absolute inset-y-0 grid grid-cols-7"
+          style={{ left: `${(AXIS / W) * 100}%`, right: `${(LABEL / W) * 100}%` }}
+        >
           {points.map((p) => {
             const on = sel?.d === p.d
             return (
@@ -317,7 +407,7 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
         </div>
       </div>
 
-      {/* 고른 날: 값과 목표, [그날 기록 보기](달력 날짜 누르기와 같은 onOpenDay) */}
+      {/* 고른 날: 값과 목표, 주 평균 대비, [그날 기록 보기](달력 날짜 누르기와 같은 onOpenDay) */}
       <div aria-live="polite" className="mt-2 flex min-h-14 items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-1.5">
         {sel ? (
           <>
@@ -325,6 +415,12 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
               <span className="block font-semibold">{dateKeyLabel(sel.d)}</span>
               <span className="sr-only"> · </span>
               <span className="block tabular-nums">{detailText(sel)}</span>
+              {avgText(sel) && (
+                <>
+                  <span className="sr-only"> · </span>
+                  <span className="block text-gray-600 tabular-nums">{avgText(sel)}</span>
+                </>
+              )}
             </p>
             <button
               type="button"

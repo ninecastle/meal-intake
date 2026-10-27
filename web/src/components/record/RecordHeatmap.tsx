@@ -24,7 +24,11 @@ import MetricToggle, { METRIC_NAME } from './MetricToggle'
 
 const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일'] as const
 
-/** 날짜 칸 7개 + › 칸 18px. 360px 폰(본문 328px, 칸 사이 2px)에서 날짜 칸 (328 − 14 − 18) ÷ 7 ≈ 42.3px */
+/** 기록 보기 카드 공통(달력 카드·주간 추이 카드, 2026-10-27 사용자 요청). 바깥 간격은 쓰는 쪽이 붙인다.
+ *  좌우 안쪽 여백 6px: 360px 폰에서 카드 안쪽 폭 328 − 테두리 2 − 12 = 314px(8px면 날짜 칸이 40px 아래로 준다) */
+export const RECORD_CARD = 'rounded-2xl border border-gray-200 bg-white px-1.5 pt-1 pb-2'
+
+/** 날짜 칸 7개 + › 칸 18px. 360px 폰(카드 안쪽 314px, 칸 사이 2px)에서 날짜 칸 (314 − 14 − 18) ÷ 7 ≈ 40.3px */
 const GRID_COLS = 'grid-cols-[repeat(7,minmax(0,1fr))_1.125rem]'
 
 /** › 칸 aria-label용 주 범위 글("10월 19일~25일", 달이 바뀌면 "10월 26일~11월 1일"). WeeklyTrend 제목 범위와 같은 글 */
@@ -34,13 +38,14 @@ function weekRangeText(monday: string, sunday: string): string {
   return m1 === m2 ? `${m1}월 ${d1}일~${d2}일` : `${m1}월 ${d1}일~${m2}월 ${d2}일`
 }
 
-/** 진하기별 칸 바탕(2026-10-27 사용자 요청으로 한 단계씩 연하게: 100·300·500·700 → 50·200·400·600). 0 = 기록 없음(칠하지 않음) */
+/** 진하기별 칸 바탕(2026-10-27 사용자 요청으로 한 단계씩 연하게: 100·300·500·700 → 50·200·400·600,
+ *  이어서 110% 초과만 600 → 500: OKLCH 밝기 59.6% → 69.6%, 3단계 400(76.5%)보다는 여전히 진하다). 0 = 기록 없음(칠하지 않음) */
 const LEVEL_BG: Record<HeatLevel, string> = {
   0: 'bg-gray-100',
   1: 'bg-emerald-50',
   2: 'bg-emerald-200',
   3: 'bg-emerald-400',
-  4: 'bg-emerald-600',
+  4: 'bg-emerald-500',
 }
 /** 가장 연한 단계(emerald-50)는 기록 없는 칸(gray-100)과 밝기가 비슷해 얇은 초록 테두리로 구분한다(오늘 칸은 오늘 테두리가 대신한다) */
 const LEVEL_EDGE: Record<HeatLevel, string> = {
@@ -50,7 +55,8 @@ const LEVEL_EDGE: Record<HeatLevel, string> = {
   3: '',
   4: '',
 }
-/** 진하기별 글자색(바탕과 4.5:1 이상: 1~3은 emerald-950 약 8~17:1, 4는 emerald-600 위 gray-950 약 5.4:1. 흰 글자는 약 3.8:1이라 쓰지 않는다) */
+/** 진하기별 글자색(바탕과 4.5:1 이상: 1~3은 emerald-950 약 8~17:1, 4는 emerald-500(#00bc7d) 위 gray-950 약 8.1:1.
+ *  흰 글자는 emerald-500 위 약 2.5:1이라 쓰지 않는다) */
 const LEVEL_TEXT: Record<HeatLevel, string> = {
   0: 'text-gray-700',
   1: 'text-emerald-950',
@@ -239,15 +245,16 @@ export default function RecordHeatmap({
       </div>
 
       {/* 아래 줄: 왼쪽 범례(2×2 + 기준량 한 줄), 오른쪽 항목 선택(위 달력·아래 주간 추이에 함께 적용).
-          범례 묶음은 basis 0 + 자동 최소 폭(= 2×2 칸 폭 약 116px)이라 360px에서 항목 선택(약 192px)과 한 줄에 들어가고,
-          그보다 좁은 화면에서만 항목 선택이 다음 줄 오른쪽으로 내려간다(가로 넘침 없음). 기준량 글은 남은 폭 안에서 줄바꿈 */}
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+          범례 묶음은 basis 0 + 자동 최소 폭(= 2×2 칸 폭 약 112px)이라 360px 카드 안쪽(314px)에서 항목 선택(약 189px)과 한 줄에 들어가고,
+          그보다 좁은 화면에서만 항목 선택이 다음 줄 오른쪽으로 내려간다(가로 넘침 없음). 기준량 글은 남은 폭 안에서 줄바꿈.
+          카드 안으로 들어가며 폭이 14px 줄어 범례 칸 좌우 여백 6→4px, 줄 간격 8→6px로 줄였다 */}
+      <div className="mt-3 flex flex-wrap items-center gap-x-1.5 gap-y-2">
         <div className="grow basis-0">
           <ul aria-label="진하기: 그날 목표 대비" className="grid w-max grid-cols-[auto_auto] gap-0.5">
             {LEGEND.map(({ level, text }) => (
               <li
                 key={level}
-                className={`rounded px-1.5 py-1 text-center text-[10px] leading-none font-medium whitespace-nowrap ${LEVEL_BG[level]} ${LEVEL_TEXT[level]} ${LEVEL_EDGE[level]}`}
+                className={`rounded px-1 py-1 text-center text-[10px] leading-none font-medium whitespace-nowrap ${LEVEL_BG[level]} ${LEVEL_TEXT[level]} ${LEVEL_EDGE[level]}`}
               >
                 {text}
               </li>

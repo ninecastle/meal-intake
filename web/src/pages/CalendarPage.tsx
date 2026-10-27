@@ -17,7 +17,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router'
 import { homeHref } from '../components/mealText'
 import MonthNav from '../components/record/MonthNav'
-import RecordHeatmap, { MonthSummary } from '../components/record/RecordHeatmap'
+import RecordHeatmap, { MonthSummary, RECORD_CARD } from '../components/record/RecordHeatmap'
 import WeeklyTrend from '../components/record/WeeklyTrend'
 import { subscribeGoalsUpTo, type DatedGoal } from '../data/goals'
 import { subscribeDaysInRange } from '../data/meals'
@@ -167,13 +167,16 @@ export default function CalendarPage({ uid }: { uid: string }) {
         <h1 className="text-lg font-bold">기록 보기</h1>
       </header>
 
-      {/* 위쪽 줄: 왼쪽 월 이동, 오른쪽 월 요약(불러오기 전·기록 오류면 비움). 항목 선택은 달력 아래 줄 오른쪽(RecordHeatmap) */}
-      <div className="mt-1 flex items-center justify-between gap-x-2">
-        <MonthNav month={month} today={today} onMove={moveMonth} />
-        <MonthSummary month={month} metric={metric} days={dayTotals} />
-      </div>
+      {/* 달력 카드(2026-10-27 사용자 요청): 월 이동·월 요약 줄 + 요일·날짜 격자 + 범례·항목 선택 줄을 둥근 테두리 하나로 감싼다.
+          안쪽 여백은 좌우 6px(px-1.5)만: 360px 폰에서 카드 안쪽 328 − 테두리 2 − 여백 12 = 314px → 날짜 칸 (314 − 14 − 18) ÷ 7 ≈ 40.3px.
+          8px로 하면 39.7px가 되어 40px 아래로 줄어든다. 화면 좌우 16px(main px-4)는 그대로 */}
+      <div className={`mt-1 ${RECORD_CARD}`}>
+        {/* 위쪽 줄: 왼쪽 월 이동, 오른쪽 월 요약(불러오기 전·기록 오류면 비움). 항목 선택은 달력 아래 줄 오른쪽(RecordHeatmap) */}
+        <div className="flex items-center justify-between gap-x-2 pr-1.5">
+          <MonthNav month={month} today={today} onMove={moveMonth} />
+          <MonthSummary month={month} metric={metric} days={dayTotals} />
+        </div>
 
-      <div className="mt-2">
         <RecordHeatmap
           month={month}
           today={today}
@@ -189,9 +192,9 @@ export default function CalendarPage({ uid }: { uid: string }) {
       </div>
 
       {/* 아래 섹션 순서(같은 metric·month·week와 두 구독 값을 props로 받는다):
-          ① 주간 추이 그래프(무료, 조각 4) → ② PREMIUM 주간 분석 리포트 → ③ PREMIUM 월간 그래프·요약 */}
-      {/* 스크롤 대상(› 누르기). 섹션의 mt-6은 이 div 위로 겹쳐 나가서 스크롤하면 섹션 위 구분선이 화면 맨 위에 온다 */}
-      <div ref={trendRef}>
+          ① 주간 추이 그래프(무료, 조각 4, 달력과 같은 RECORD_CARD 카드) → ② PREMIUM 주간 분석 리포트 → ③ PREMIUM 월간 그래프·요약 */}
+      {/* 스크롤 대상(› 누르기). 카드 사이 간격은 이 div의 mt-3, scroll-mt-2로 스크롤하면 카드 위 테두리가 화면 맨 위에서 8px 아래에 온다 */}
+      <div ref={trendRef} className="mt-3 scroll-mt-2">
         <WeeklyTrend
           weekStart={week}
           today={today}
