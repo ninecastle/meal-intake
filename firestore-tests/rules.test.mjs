@@ -1,4 +1,4 @@
-// firestore.rules v3 테스트(@firebase/rules-unit-testing + node:test).
+// firestore.rules v5 테스트(@firebase/rules-unit-testing + node:test).
 // 실행: firestore-tests 폴더에서 `npm test` (Firestore 에뮬레이터를 띄워 실행, JDK 21+ 필요, firebase-tools 15 기준).
 // 이미 에뮬레이터가 떠 있으면 `npm run test:running`.
 // 실제 프로젝트는 건드리지 않는다(demo- 프로젝트 ID). AI 호출 없음.
@@ -539,5 +539,115 @@ describe('하루 문서 공복 표시(users/{uid}/days/{dateKey}, 디자인 조�
     await seedDay()
     // 옛 updatedAt이 그대로 남는 병합 쓰기
     await assertFails(setDoc(doc(alice(), dayPath()), { dateKey: KEY, fasted: arrayUnion('dinner') }, { merge: true }))
+  })
+})
+
+describe('하루 문서 끼니별 먹은 시간(mealTimes, 규칙 v5, 디자인 조각 D3)', () => {
+  const KEY = '2026-10-27'
+  const dayPath = (uid = 'alice', key = KEY) => `users/${uid}/days/${key}`
+  /** 클라이언트 쓰기(리더 계약): merge setDoc + serverTimestamp. 병합 결과 전체를 규칙이 검사한다. */
+  const setTimes = (fs, mealTimes, path = dayPath(), key = KEY) =>
+    setDoc(doc(fs, path), { dateKey: key, mealTimes, updatedAt: serverTimestamp() }, { merge: true })
+  const seedDay = (extra = { mealTimes: { lunch: '12:40' } }) =>
+    seed(dayPath(), { dateKey: KEY, updatedAt: serverTimestamp(), ...extra })
+  const readDay = async (fs = alice()) => (await getDoc(doc(fs, dayPath()))).data()
+
+  test('본인: 한 끼 생성 → 읽기 → 삭제', async () => {
+    const fs = alice()
+    await assertSucceeds(setTimes(fs, { lunch: '12:40' }))
+    const data = await readDay(fs)
+    assert.deepEqual(data.mealTimes, { lunch: '12:40' })
+    assert.deepEqual(Object.keys(data).sort(), ['dateKey', 'mealTimes', 'updatedAt'])
+    await assertSucceeds(deleteDoc(doc(fs, dayPath())))
+  })
+
+  test('본인: 네 끼 한 번에, 경계값 00:00·23:59·09:05·20:30', async () => {
+    const all = { breakfast: '00:00', lunch: '09:05', dinner: '20:30', snack: '23:59' }
+    await assertSucceeds(setTimes(alice(), all))
+    assert.deepEqual((await readDay()).mealTimes, all)
+  })
+
+  test('본인: fasted와 함께(한 쓰기에 둘 다, 공복 표시 문서에 시각 병합)', async () => {
+    const fs = alice()
+    await assertSucceeds(
+      setDoc(doc(fs, dayPath()), { dateKey: KEY, fasted: arrayUnion('breakfast'), mealTimes: { lunch: '12:40' }, updatedAt: serverTimestamp() }, { merge: true }),
+    )
+    await assertSucceeds(setTimes(fs, { dinner: '19:05' }))
+    // 공복 표시 쓰기(mealTimes 없이)도 그대로 된다
+    await assertSucceeds(setDoc(doc(fs, dayPath()), { dateKey: KEY, fasted: arrayUnion('snack'), updatedAt: serverTimestamp() }, { merge: true }))
+    const data = await readDay(fs)
+    assert.deepEqual(data.fasted, ['breakfast', 'snack'])
+    assert.deepEqual(data.mealTimes, { lunch: '12:40', dinner: '19:05' })
+    assert.deepEqual(Object.keys(data).sort(), ['dateKey', 'fasted', 'mealTimes', 'updatedAt'])
+  })
+
+  test('본인: 기존 문서에 merge로 다른 끼니 추가, 같은 끼니 시각 바꾸기', async () => {
+    await seedDay({ fasted: ['snack'], mealTimes: { lunch: '12:40' } })
+    const fs = alice()
+    await assertSucceeds(setTimes(fs, { dinner: '19:05' }))
+    assert.deepEqual((await readDay(fs)).mealTimes, { lunch: '12:40', dinner: '19:05' })
+    await assertSucceeds(setTimes(fs, { lunch: '13:15' }))
+    const data = await readDay(fs)
+    assert.deepEqual(data.mealTimes, { lunch: '13:15', dinner: '19:05' })
+    assert.deepEqual(data.fasted, ['snack'])
+  })
+
+  test('남의 uid·미로그인: 생성·수정 거부', async () => {
+    for (const other of [db('bob'), db(null)]) {
+      await assertFails(setTimes(other, { lunch: '12:40' }, dayPath('alice', '2026-10-28'), '2026-10-28'))
+    }
+    await seedDay()
+    for (const other of [db('bob'), db(null)]) {
+      await assertFails(setTimes(other, { dinner: '19:05' }))
+      await assertFails(getDoc(doc(other, dayPath())))
+    }
+  })
+
+  test('모르는 끼니 키 거부(생성·병합 수정)', async () => {
+    for (const bad of [{ brunch: '10:00' }, { Lunch: '12:40' }, { lunch: '12:40', late_night: '23:30' }]) {
+      await assertFails(setTimes(alice(), bad))
+    }
+    await seedDay()
+    await assertFails(setTimes(alice(), { brunch: '10:00' }))
+  })
+
+  test('형식이 틀린 시각 거부: 24:00·7:05·12:60 등', async () => {
+    for (const bad of ['24:00', '7:05', '12:60', '12:4', '12:40:00', ' 12:40', '12:40 ', '1240', '12-40', '오후 12:40', '']) {
+      await assertFails(setTimes(alice(), { lunch: bad }))
+    }
+    await seedDay()
+    await assertFails(setTimes(alice(), { dinner: '24:00' }))
+  })
+
+  test('문자열이 아닌 값 거부: 숫자·map·목록·null·불리언·시각', async () => {
+    const at = Timestamp.fromDate(new Date('2026-10-27T03:40:00Z'))
+    for (const bad of [1240, 12.4, { h: 12, m: 40 }, ['12:40'], null, true, at]) {
+      await assertFails(setTimes(alice(), { lunch: bad }))
+    }
+    await seedDay()
+    await assertFails(setTimes(alice(), { dinner: 1905 }))
+  })
+
+  test('mealTimes가 map이 아님 거부', async () => {
+    for (const bad of ['12:40', ['lunch', '12:40'], 1240, null, true]) {
+      await assertFails(setTimes(alice(), bad))
+    }
+    await seedDay()
+    await assertFails(setTimes(alice(), '19:05'))
+  })
+
+  test('키 5개 이상 거부(생성·병합으로 다섯째 키)', async () => {
+    const all = { breakfast: '08:00', lunch: '12:40', dinner: '19:05', snack: '15:30' }
+    await assertFails(setTimes(alice(), { ...all, brunch: '10:00' }))
+    await seedDay({ mealTimes: all })
+    await assertFails(setTimes(alice(), { midnight: '00:30' }))
+    assert.deepEqual((await readDay()).mealTimes, all)
+  })
+
+  test('병합 결과 전체 검사: 기존 문서에 틀린 시각이 있으면 다른 끼니를 써도 거부', async () => {
+    await seedDay({ mealTimes: { lunch: '25:00' } })
+    await assertFails(setTimes(alice(), { dinner: '19:05' }))
+    // 틀린 값을 올바른 값으로 덮어쓰면 허용
+    await assertSucceeds(setTimes(alice(), { lunch: '12:40', dinner: '19:05' }))
   })
 })
