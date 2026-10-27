@@ -1,12 +1,15 @@
 // S2 먹기 전 촬영. 사진을 고르면: 끼니·dateKey(촬영 시각) → 압축 → newMealId → IndexedDB 임시 보관
 // → 먹기 전 분석(호출 A) → awaiting_after 기록(기다리지 않음) → S3. 사진 선택 1회 = 분석 1회, 자동 재호출 없음.
-// 사진을 얻는 방법은 useCaptureSource(M19): 폰·태블릿은 앱 안 카메라 화면(고지 확인 뒤면 바로 연다), PC는 파일 고르기.
+// 사진을 얻는 방법은 useCaptureSource(M19). 처음은 선택 화면(조각 2-1, 2026-10-27 사용자 결정): 폰·태블릿 [카메라로 찍기]
+// (앱 안 카메라 화면, 이때만 연다)·[앨범에서 고르기]·[직접 입력], PC [사진 파일 고르기]·웹캠이 있으면 [카메라로 찍기]·[직접 입력].
+// 날짜: ?date=YYYY-MM-DD(홈에서 보던 날짜)는 선택 화면의 [직접 입력]에만 쓴다. 사진 기록은 그대로 먹기 전 촬영 시각 날짜.
+// 기록: 홈 → S2는 push 한 번, 카메라 화면은 상태로만 열고 닫는다(닫기 X → 이 화면), S2 → S3·S4는 replace.
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { analyzeBefore } from '../analysis/analyze'
 import { loadNutritionDb } from '../analysis/nutrition/db'
 import AnalyzingOverlay from '../components/capture/AnalyzingOverlay'
-import { CameraHelp, CaptureButtons } from '../components/capture/CaptureControls'
+import { CameraHelp, CaptureChoice } from '../components/capture/CaptureControls'
 import {
   describeAnalysisError,
   isAbortError,
@@ -15,7 +18,8 @@ import {
   writeNoticeAck,
   type ErrorView,
 } from '../components/capture/captureText'
-import { captureSourceHint, useCaptureSource } from '../components/capture/useCaptureSource'
+import { useCaptureSource } from '../components/capture/useCaptureSource'
+import { dateKeyLabel, isDateKey } from '../components/mealText'
 import { createAwaitingMeal, newMealId } from '../data/meals'
 import { guessMealType, toDateKey } from '../lib/time'
 import { beforePhotoStore } from '../photos/beforePhotoStore'
@@ -24,6 +28,12 @@ import type { AfterPageState } from './CaptureAfterPage'
 
 export default function CaptureBeforePage({ uid }: { uid: string }) {
   const navigate = useNavigate()
+  const [params] = useSearchParams()
+  // 들어온 때의 오늘(렌더마다 시계를 읽지 않는다)
+  const [today] = useState(() => toDateKey(new Date()))
+  const rawDate = params.get('date')
+  // 선택 화면 [직접 입력] 날짜 = 홈에서 보던 날짜(없거나 틀리거나 미래면 오늘)
+  const manualDate = isDateKey(rawDate) && rawDate <= today ? rawDate : today
   // 고지 확인 창 뒤에 이어서 할 동작(파일 고르기·카메라 열기 중 누른 것)
   const pendingRef = useRef<(() => void) | null>(null)
   const busyRef = useRef(false)
@@ -37,7 +47,6 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
     title: '먹기 전 사진',
     hint: '수저를 함께, 위에서 찍어 주세요',
     onPick: (f) => void onPick(f),
-    autoOpen: readNoticeAck(),
   })
 
   // 결과 화면에서 쓸 식약처 DB JSON을 미리 받아 둔다(실패해도 결과 화면이 다시 시도한다).
@@ -70,10 +79,13 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
     fn?.()
   }
 
-  function goManual() {
+  // replace: 결과 화면에서 저장(→ '/' replace)하거나 뒤로 가면 홈으로 간다(예전 홈 [직접 입력]과 같은 기록 쌓임).
+  function goManual(dateKey: string) {
     abortRef.current?.abort()
-    navigate(`/meal/new/review?date=${toDateKey(new Date())}`)
+    navigate(`/meal/new/review?date=${dateKey}`, { replace: true })
   }
+  // 분석이 안 될 때의 [직접 입력]은 방금 찍은 끼니라 사진 기록과 같은 날짜(오늘)
+  const goManualNow = () => goManual(toDateKey(new Date()))
 
   async function onPick(file: File) {
     await run(() => compressPhoto(file))
@@ -134,9 +146,8 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
         </Link>
       </div>
 
-      <h1 className="mt-2 text-2xl font-bold">먹기 전 사진</h1>
-      <p className="mt-2 text-base text-gray-800">수저를 함께, 위에서 찍어 주세요</p>
-      <p className="mt-1 text-sm text-gray-500">{captureSourceHint(cap)}</p>
+      <h1 className="mt-2 text-2xl font-bold">식사 기록</h1>
+      <p className="mt-2 text-base text-gray-800">먹기 전 사진은 수저를 함께, 위에서 찍어 주세요</p>
       <CameraHelp cap={cap} disabled={busy} />
 
       {error && (
@@ -172,7 +183,7 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
             </button>
             <button
               type="button"
-              onClick={goManual}
+              onClick={goManualNow}
               className="flex min-h-11 w-full items-center justify-center text-sm text-gray-600 underline"
             >
               직접 입력
@@ -180,7 +191,7 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
           </>
         ) : error?.preferManual ? (
           <>
-            <button type="button" onClick={goManual} className={`${primary} bg-emerald-600 text-white`}>
+            <button type="button" onClick={goManualNow} className={`${primary} bg-emerald-600 text-white`}>
               직접 입력
             </button>
             <button
@@ -194,14 +205,19 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
           </>
         ) : (
           <>
-            <CaptureButtons cap={cap} cameraLabel={error ? '다시 찍기' : '카메라로 찍기'} disabled={busy} gate={gated} />
-            <button
-              type="button"
-              onClick={goManual}
-              className="mt-1 flex min-h-11 w-full items-center justify-center text-sm text-gray-600 underline"
-            >
-              직접 입력
-            </button>
+            {/* top: 급식 연동(스펙 4.9) "오늘 ○○ 점심 급식인가요?" 카드 자리 */}
+            <CaptureChoice
+              cap={cap}
+              cameraLabel={error ? '다시 찍기' : '카메라로 찍기'}
+              disabled={busy}
+              gate={gated}
+              onManual={() => goManual(manualDate)}
+            />
+            {manualDate !== today && (
+              <p className="mt-2 text-center text-xs text-gray-500">
+                직접 입력은 {dateKeyLabel(manualDate)} 기록으로, 사진은 찍은 날로 들어가요
+              </p>
+            )}
           </>
         )}
       </div>
@@ -227,7 +243,7 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
         </div>
       )}
 
-      {busy && <AnalyzingOverlay label="음식을 알아보고 있어요" manualLabel="직접 입력" onManual={goManual} />}
+      {busy && <AnalyzingOverlay label="음식을 알아보고 있어요" manualLabel="직접 입력" onManual={goManualNow} />}
     </main>
   )
 }

@@ -1,4 +1,5 @@
-// S2·S3 촬영 버튼(방식별)과 카메라 대체 안내(스펙 4.8, M19 조각 1).
+// S2·S3 촬영 버튼(방식별)과 카메라 대체 안내(스펙 4.8, M19 조각 1). S2 선택 화면 버튼(조각 2-1).
+import type { ReactNode } from 'react'
 import type { CaptureSource } from './useCaptureSource'
 
 const PRIMARY =
@@ -6,7 +7,71 @@ const PRIMARY =
 const SECONDARY =
   'mt-2 flex min-h-12 w-full items-center justify-center rounded-xl border-2 border-emerald-600 text-base font-semibold text-emerald-700 disabled:opacity-50'
 
-/** 평소(오류 없음) 아래 버튼. gate는 S2의 사진 전송 고지 확인처럼 누르기 전에 끼울 동작. */
+const MANUAL =
+  'mt-2 flex min-h-12 w-full items-center justify-center rounded-xl border border-gray-300 bg-white text-base font-semibold text-gray-700'
+
+/**
+ * S2 처음 선택 화면(2026-10-27 사용자 결정, 카메라 조각 2-1): 방식별 사진 버튼 + [직접 입력].
+ * - camera: [카메라로 찍기](앱 안 카메라 화면) / [앨범에서 고르기](capture 없는 input)
+ * - pc: [사진 파일 고르기] / 웹캠이 있으면 [카메라로 찍기](같은 카메라 화면)
+ * - fallback: [카메라로 찍기](capture=environment) / [앨범에서 고르기]
+ * top: 버튼 바로 위 카드 자리. 급식 연동(스펙 4.9) "오늘 ○○ 점심 급식인가요?"가 여기에 들어간다. 비우면 그리지 않는다.
+ * gate는 사진 버튼에만 끼운다([직접 입력]은 사진을 보내지 않는다).
+ */
+export function CaptureChoice({
+  cap,
+  cameraLabel = '카메라로 찍기',
+  disabled,
+  gate = (fn) => fn(),
+  onManual,
+  top,
+}: {
+  cap: CaptureSource
+  /** camera·fallback 방식 주 버튼 글자 */
+  cameraLabel?: string
+  disabled?: boolean
+  gate?: (fn: () => void) => void
+  onManual: () => void
+  top?: ReactNode
+}) {
+  const run = (fn: () => void) => () => gate(fn)
+  return (
+    <section aria-label="기록 방법">
+      {top != null && top !== false && <div className="mb-3 space-y-2">{top}</div>}
+      {cap.mode === 'pc' ? (
+        <>
+          <button type="button" onClick={run(cap.pickAlbum)} disabled={disabled} className={PRIMARY}>
+            사진 파일 고르기
+          </button>
+          {cap.hasWebcam && (
+            <button type="button" onClick={run(cap.openCamera)} disabled={disabled} className={SECONDARY}>
+              카메라로 찍기
+            </button>
+          )}
+        </>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={run(cap.mode === 'camera' ? cap.openCamera : cap.pickCameraInput)}
+            disabled={disabled}
+            className={PRIMARY}
+          >
+            {cameraLabel}
+          </button>
+          <button type="button" onClick={run(cap.pickAlbum)} disabled={disabled} className={SECONDARY}>
+            앨범에서 고르기
+          </button>
+        </>
+      )}
+      <button type="button" onClick={onManual} className={MANUAL}>
+        직접 입력
+      </button>
+    </section>
+  )
+}
+
+/** S3 평소(오류 없음) 아래 버튼. gate는 S2의 사진 전송 고지 확인처럼 누르기 전에 끼울 동작. */
 export function CaptureButtons({
   cap,
   cameraLabel,

@@ -1,6 +1,7 @@
 // S1 홈 = 하루 요약(3단계 조각 1). 위에서부터 사용자 줄, 날짜 이동(◀ 전날 · 날짜 · 다음 날 ▶, 아랫줄 "오늘로"/"오늘" 글자 + 달력 아이콘, ?date=YYYY-MM-DD), 저장·오프라인 안내,
 // 이어 할 기록 카드(awaiting_after·needs_review, 날짜와 무관하게 전부), 그날 합계 kcal·탄·단·지(subscribeDay, 클라이언트 합산),
-// 끼니별 기록 목록(누르면 S7 /meal/:mealId), 영양 정보 출처, 아래 고정 [식사 기록]·[직접 입력](보고 있는 날짜로).
+// 끼니별 기록 목록(누르면 S7 /meal/:mealId), 영양 정보 출처, 아래 고정 [식사 기록] 하나(카메라 조각 2-1: [직접 입력]은 S2 선택 화면으로 합침).
+// [식사 기록] → S2 /capture/before(push), 지난 날짜를 보고 있으면 ?date=YYYY-MM-DD를 넘겨 S2 [직접 입력]이 그 날짜로 간다.
 // 목표(3단계 조각 2·3): 합계 아래 목표 영역. 그날 목표(subscribeGoalForDate, dateKey <= 그날 가운데 가장 늦은 기록)가 있으면
 // "하루 목표|이 날 목표 ○○kcal" + [목표 수정] + GoalBars(먹은 양/목표 막대·남은 양) + 고지. 그날 기록이 없으면
 // 현재 목표도 없을 때 "목표 설정하기" 카드, 현재 목표는 있으면 "이 날은 목표를 정하기 전이라 합계만 보여요".
@@ -503,16 +504,10 @@ export default function HomePage({ user }: { user: User }) {
 
       <div className="sticky bottom-0 -mx-4 bg-white/95 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <Link
-          to="/capture/before"
-          className="flex min-h-14 w-full items-center justify-center rounded-xl bg-emerald-600 text-lg font-semibold text-white"
+          to={isToday ? '/capture/before' : `/capture/before?date=${dateKey}`}
+          className="flex min-h-16 w-full items-center justify-center rounded-2xl bg-emerald-600 text-xl font-bold text-white"
         >
           식사 기록
-        </Link>
-        <Link
-          to={`/meal/new/review?date=${dateKey}`}
-          className="mt-1 flex min-h-11 items-center justify-center text-sm text-gray-600 underline"
-        >
-          {isToday ? '사진 없이 직접 입력' : `${dateKeyLabel(dateKey)} 기록 직접 입력`}
         </Link>
       </div>
     </main>

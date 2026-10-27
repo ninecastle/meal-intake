@@ -37,15 +37,14 @@ export function useCaptureSource(opts: {
   title: string
   hint: string
   onPick: (file: File, meta: PickMeta) => void
-  /** 처음 열 때 바로 카메라 화면을 띄운다(camera 방식일 때만) */
-  autoOpen?: boolean
   /** 먹은 후 겹쳐 보기용 먹기 전 사진 주소(조각 2). 카메라 화면(PC 웹캠 포함)에만 그리고, 파일 고르기·대체 방식에는 없다. */
   overlaySrc?: string | null
 }): CaptureSource {
   const { title, hint, onPick, overlaySrc } = opts
   const [base] = useState<CaptureBase>(() => (typeof window === 'undefined' ? 'pc' : detectCaptureMode(window)))
   const [failReason, setFailReason] = useState<CameraFailReason | null>(() => (base === 'unsupported' ? 'unsupported' : null))
-  const [cameraOpen, setCameraOpen] = useState(() => opts.autoOpen === true && base === 'camera')
+  // 처음에는 항상 닫혀 있다(조각 2-1: S2도 선택 화면에서 [카메라로 찍기]를 눌러야 연다)
+  const [cameraOpen, setCameraOpen] = useState(false)
   const [hasWebcam, setHasWebcam] = useState(false)
   const albumRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
