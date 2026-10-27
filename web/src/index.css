@@ -81,11 +81,13 @@
   .stack div {
     border-radius: 3px;
   }
+  /* 바깥 끝은 막대 높이(30px)의 절반. 999px로 주면 한 변의 반지름 합이 높이를 넘어 CSS가 네 모서리를 함께 줄여
+     안쪽 3px 모서리까지 0에 가깝게 각진다(2026-10-28 사용자 확인으로 고침) */
   .stack div:first-child {
-    border-radius: 999px 3px 3px 999px;
+    border-radius: 15px 3px 3px 15px;
   }
   .stack div:last-child {
-    border-radius: 3px 999px 999px 3px;
+    border-radius: 3px 15px 15px 3px;
   }
 
   /* 사용자가 고른 변경 (8, 2026-10-27): 홈 "나의 하루" 탄·단·지 줄(.ratio). 시안은 한 줄에 점·이름·숫자를 두어 좁은 화면에서 숫자가 크면

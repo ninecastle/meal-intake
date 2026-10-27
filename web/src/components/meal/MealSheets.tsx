@@ -3,7 +3,7 @@
 // - 식사 기록: 급식 카드(.school)는 D13(급식 연동) 전까지 그리지 않는다. PC는 [사진 파일 고르기], 웹캠이 있을 때만 [카메라로 찍기](CLAUDE.md 촬영 화면).
 // - 끼니 영양정보: 시안 nutrientTable에서 정한 행만(총 열량·탄수화물(당류·식이섬유)·단백질·지방(포화지방)·나트륨). 세부 4가지는 D4 전까지 "–".
 // - 오류·같은 사진·카메라 권한 안내는 D3-2(분석 중·카메라 화면 다시 그리기) 전까지 예전 촬영 화면의 상자 모양 그대로 시트 맨 위에 둔다.
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import type { MealType } from '../../data/meals'
 import type { DetailSummary } from '../../data/summary'
 import type { DetailKey } from '../../types/analysis'
@@ -120,34 +120,78 @@ export function TimeSheet({
   )
 }
 
+/** 시·분 숫자 칸(사용자가 고른 변경 9): 크게, 숫자 자판으로 바로 입력 */
+const HM_BOX: CSSProperties = {
+  flex: '1 1 0',
+  width: 0,
+  minWidth: 0,
+  minHeight: 72,
+  borderRadius: 16,
+  border: '1px solid var(--line)',
+  padding: '0 14px',
+  textAlign: 'center',
+  font: '600 36px var(--f-num)',
+}
+const pad2 = (n: number) => String(n).padStart(2, '0')
+const digits = (s: string) => s.replace(/\D/g, '').slice(0, 2)
+
+/**
+ * 먹은 시간 입력(사용자가 고른 변경 9, 2026-10-28): 기기 시간 입력 칸(input type=time) 대신 위에 [오전|오후](.segment),
+ * 아래에 시(1~12)·분(00~59) 큰 숫자 칸 두 개. 시를 두 자리(또는 2~9 한 자리) 넣으면 분 칸으로 넘어간다. 저장은 24시간 "HH:MM".
+ */
 function TimeForm({ meal, value, onSave }: { meal: MealType; value: string; onSave: (hm: string) => void }) {
-  const [v, setV] = useState(value)
+  const [H0, M0] = value.split(':').map(Number)
+  const [pm, setPm] = useState(H0 >= 12)
+  const [h, setH] = useState(String(H0 % 12 || 12))
+  const [m, setM] = useState(pad2(M0 || 0))
+  const minRef = useRef<HTMLInputElement>(null)
+  const hn = Number(h)
+  const mn = Number(m)
+  const ok = h !== '' && m !== '' && hn >= 1 && hn <= 12 && mn >= 0 && mn <= 59
+  const hm = ok ? `${pad2((hn % 12) + (pm ? 12 : 0))}:${pad2(mn)}` : null
   return (
     <>
-      <label htmlFor="mtime" style={{ display: 'block', margin: '12px 0 6px', color: 'var(--ink-2)', fontSize: 14 }}>
-        {`${MEAL_TYPE_LABEL[meal]} 시간`}
-      </label>
-      <input
-        id="mtime"
-        type="time"
-        value={v}
-        onChange={(e) => setV(e.target.value)}
-        style={{
-          width: '100%',
-          minHeight: 52,
-          borderRadius: 14,
-          border: '1px solid var(--line)',
-          padding: '0 14px',
-          font: '600 20px var(--f-num)',
-        }}
-      />
-      <button
-        type="button"
-        className="btn ink"
-        style={{ width: '100%', marginTop: 16 }}
-        disabled={!/^\d{2}:\d{2}$/.test(v)}
-        onClick={() => onSave(v)}
-      >
+      <div style={{ margin: '12px 0 6px', color: 'var(--ink-2)', fontSize: 14 }}>{`${MEAL_TYPE_LABEL[meal]} 시간`}</div>
+      <div className="segment" role="tablist" aria-label="오전 오후">
+        <button type="button" role="tab" aria-selected={!pm} onClick={() => setPm(false)}>
+          오전
+        </button>
+        <button type="button" role="tab" aria-selected={pm} onClick={() => setPm(true)}>
+          오후
+        </button>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 12 }}>
+        <input
+          aria-label="시"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          autoComplete="off"
+          value={h}
+          onFocus={(e) => e.currentTarget.select()}
+          onChange={(e) => {
+            const v = digits(e.target.value)
+            setH(v)
+            if (v.length === 2 || /^[2-9]$/.test(v)) minRef.current?.focus()
+          }}
+          style={HM_BOX}
+        />
+        <span aria-hidden="true" style={{ font: '600 36px var(--f-num)', color: 'var(--ink-2)' }}>
+          :
+        </span>
+        <input
+          ref={minRef}
+          aria-label="분"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          autoComplete="off"
+          value={m}
+          onFocus={(e) => e.currentTarget.select()}
+          onChange={(e) => setM(digits(e.target.value))}
+          onBlur={() => setM((v) => (v === '' ? v : pad2(Number(v))))}
+          style={HM_BOX}
+        />
+      </div>
+      <button type="button" className="btn ink" style={{ width: '100%', marginTop: 16 }} disabled={!hm} onClick={() => hm && onSave(hm)}>
         저장
       </button>
     </>
