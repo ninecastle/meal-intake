@@ -189,7 +189,8 @@ export function normalizeAfterResponse(raw: unknown, before: readonly BeforeItem
       continue
     }
     if (match === 'different' || match === 'unclear') {
-      warnings.push(unsureRatioWarning(name))
+      // 모델이 그 음식 이유를 이미 한국어로 적었으면 같은 뜻의 경고를 또 넣지 않는다
+      if (!modelWarnings.some((w) => w.includes(name))) warnings.push(unsureRatioWarning(name))
       got.set(id, { id, remaining_ratio: null, confidence })
       continue
     }
