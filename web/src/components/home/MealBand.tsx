@@ -2,8 +2,8 @@
 // - 카드 내용은 props day(그날 done 기록 요약)에서만 온다(가짜 숫자 없음). 기록 없는 끼니는 "공복했어요" 토글(data/fasting.ts).
 // - (c) 이어 할 기록은 그 날짜·그 끼니 카드에만 보인다(.mfood 자리 글, 2026-10-27 사용자 결정). 다른 날짜의 것은 그 날짜로 가야 보이고,
 //   기록 취소는 홈에 없다(먹은 후 촬영 화면의 [기록 취소]).
-// - 카드 누르기(D3): 그 날짜·끼니의 끼니 화면(/day/:dateKey/:mealType, push + state.fromHome). 먹은 후 사진을 기다리는 기록이 있으면
-//   끼니 화면에서 "남은 음식을 알려 주세요" 시트를 바로 연다(state.openAfter). 결과 확인을 기다리는 기록이면 결과 화면(/meal/:id/review).
+// - 카드 누르기(D3, 2026-10-27 사용자가 고른 변경): 카드는 늘 그 날짜·끼니의 끼니 화면(/day/:dateKey/:mealType, push + state.fromHome),
+//   [+]는 끼니 화면 + 식사 기록 시트(state.openRecord). 기다리는 기록이 있어도 그대로 두고, 먹은 후 시트는 끼니 화면에서 그 묶음을 누를 때만.
 // - .linkrow [음식 추천 왕관]은 프리미엄 표시만(결제 없음, D12 전까지 onSoon "준비 중이에요"). 식단 앨범은 사진 보관(D9) 전이라
 //   시안 photoKeep=false 모양(grid-template-columns:1fr, 버튼 하나)으로 둔다.
 // - (f) 계속 보이는 알림(이어 할 기록 불러오기 오류, 공복 표시 저장 실패)은 띠 맨 위 .callout.
@@ -12,6 +12,7 @@ import { useNavigate } from 'react-router'
 import { setFasted, subscribeFasted } from '../../data/fasting'
 import type { MealType, MealWithId } from '../../data/meals'
 import type { DaySummary } from '../../data/summary'
+import { foodName } from '../../lib/foodName'
 import { MEAL_TYPES } from '../mealText'
 import { Band, Crown } from '../ui'
 import { BandNotices } from './HomeNotices'
@@ -49,13 +50,8 @@ export default function MealBand({ uid, dateKey, day, pending, listError, onSoon
   const d = day && day.dateKey === dateKey ? day : null
   const pendingOf = (meal: MealType) => (pending ?? []).filter((m) => m.dateKey === dateKey && m.mealType === meal)
 
-  function openMeal(meal: MealType) {
-    const next = pendingOf(meal)[0]
-    if (next?.status === 'needs_review') {
-      navigate(`/meal/${next.id}/review`)
-      return
-    }
-    navigate(`/day/${dateKey}/${meal}`, { state: { fromHome: true, ...(next ? { openAfter: next.id } : {}) } })
+  function openMeal(meal: MealType, add = false) {
+    navigate(`/day/${dateKey}/${meal}`, { state: { fromHome: true, ...(add ? { openRecord: true } : {}) } })
   }
 
   function toggleFasted(meal: MealType) {
@@ -82,11 +78,12 @@ export default function MealBand({ uid, dateKey, day, pending, listError, onSoon
             key={meal}
             meal={meal}
             total={d ? d.byMealType[meal] : null}
-            foods={d ? d.meals.filter((m) => m.mealType === meal).flatMap((m) => m.itemNames.filter(Boolean)) : []}
+            foods={d ? d.meals.filter((m) => m.mealType === meal).flatMap((m) => m.itemNames.map(foodName).filter(Boolean)) : []}
             pending={pendingOf(meal)}
             fasted={fasted ? fasted.includes(meal) : null}
             onToggleFasted={() => toggleFasted(meal)}
             onOpen={() => openMeal(meal)}
+            onAdd={() => openMeal(meal, true)}
           />
         ))}
       </div>

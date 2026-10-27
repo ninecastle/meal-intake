@@ -75,6 +75,18 @@
     color: FieldText;
     background-color: Field;
   }
+
+  /* 사용자가 고른 변경(2026-10-27, 시안과 다르게): 끼니 화면 탄·단·지 비율 막대(.stack)는 맞닿는 안쪽 끝을 거의 수직(3px)으로,
+     맨 왼쪽·맨 오른쪽 바깥 끝만 시안처럼 동그랗게. 같은 모양 막대가 다른 화면에 생기면 이 규칙을 같이 쓴다. */
+  .stack div {
+    border-radius: 3px;
+  }
+  .stack div:first-child {
+    border-radius: 999px 3px 3px 999px;
+  }
+  .stack div:last-child {
+    border-radius: 3px 999px 999px 3px;
+  }
 }
 
 /* 키보드 포커스 테두리(시안 :focus-visible, 하늘 진한 3px). 아직 Tailwind로 그린 화면의 링크 등에 붙인다 */

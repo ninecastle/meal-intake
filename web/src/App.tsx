@@ -6,6 +6,7 @@ import { createContext, lazy, Suspense, useContext, type ReactNode } from 'react
 import { createBrowserRouter, Navigate, Outlet, useLocation, type RouteObject } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import RouteErrorScreen from './components/RouteErrorScreen'
+import ScrollMemory from './components/ScrollMemory'
 import { useAuthUser } from './lib/auth'
 import HomePage from './pages/HomePage'
 import LoginPage from './pages/LoginPage'
@@ -44,6 +45,8 @@ function Loading() {
 function Root() {
   return (
     <Frame>
+      {/* 뒤로 가기로 돌아오면 보던 위치, 새 화면·홈 날짜 바꾸기는 맨 위(2026-10-27 사용자가 고른 변경) */}
+      <ScrollMemory />
       <Suspense fallback={<Loading />}>
         <Outlet />
       </Suspense>

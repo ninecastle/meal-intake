@@ -1,6 +1,8 @@
 // 끼니 화면(디자인 조각 D3, /day/:dateKey/:mealType). 시안 meal() 마크업·클래스·인라인 style·문구 그대로, 숫자만 실제 데이터.
 // div.screen > .mealhero(.topbar 닫기·제목 "점심 N", .art 큰 끼니 그림, .cam → 식사 기록 시트) → .sheetbody.pad(.mtotal 총 kcal·[시간 입력]·[자세히],
-// .timebox, .stack·.legend 탄단지, .foods) → .bottom .inner([음식 추가]·[수정 완료]).
+// .stack·.legend 탄단지, .foods) → .bottom .inner([음식 추가]·[수정 완료]).
+// 사용자가 고른 변경(시안과 다르게, 2026-10-27): 먹은 시간은 .timebox 줄 대신 [시간 입력] 칩 글자("10:47"), 음식 이름은 foodName(DB 표기 정리),
+// 탄단지 막대 안쪽 끝은 거의 수직(index.css .stack).
 // 데이터(AI 호출 없음): subscribeMealsFor(그 날짜·끼니 모든 상태 기록), subscribeMealTimes(하루 문서 mealTimes). 합계는 done 기록만(클라이언트).
 // 사용자 결정(2026-10-27, CLAUDE.md 디자인 기준 "끼니 화면"):
 // - 모든 기록의 음식을 한 목록으로. done 음식 줄: 먹은 양 kcal·출처 배지·설명 줄(먹기 전 무게·남긴 비율·인원), 누르면 그 기록 수정 화면,
@@ -26,6 +28,7 @@ import {
 import { afterTarget, useAfterFlow, type ReviewEntry } from '../components/meal/useAfterFlow'
 import { useBeforeFlow } from '../components/meal/useBeforeFlow'
 import { formatGrams, homeHref, isDateKey, MEAL_TYPE_LABEL, MEAL_TYPES, sourceLabel } from '../components/mealText'
+import { foodName } from '../lib/foodName'
 import { Icon, IconButton, MealArt, Toast } from '../components/ui'
 import { deleteMeal, saveMeal, subscribeMealsFor, type MealType, type MealWithId } from '../data/meals'
 import { setMealTime, subscribeMealTimes, toHm, type MealTimes } from '../data/mealTimes'
@@ -221,7 +224,7 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
   }
 
   async function removeItem(m: MealWithId, item: MealItem) {
-    if (!m.analysis || !window.confirm(`${item.name || '이 음식'}을(를) 지울까요?`)) return
+    if (!m.analysis || !window.confirm(`${foodName(item.name) || '이 음식'}을(를) 지울까요?`)) return
     setActionError(null)
     const rest = m.analysis.items.filter((it) => it.id !== item.id)
     // 기다리지 않는다(오프라인이면 끝나지 않는다). 구독은 로컬 캐시로 바로 바뀐다.
@@ -263,7 +266,7 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
       for (const it of m.analysis.items) {
         rows.push({
           key: `${m.id}/${it.id}`,
-          name: it.name,
+          name: foodName(it.name),
           src: sourceLabel(it),
           desc: describeItem(it, !!m.editedAt),
           kcal: Math.round(it.consumed.kcal),
@@ -273,13 +276,13 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
       }
     } else if (m.status === 'awaiting_after' && m.beforeAnalysis) {
       for (const it of m.beforeAnalysis.items) {
-        rows.push({ key: `${m.id}/${it.id}`, name: it.name, src: null, desc: '먹은 후 사진 기다림', kcal: null, onOpen: () => openAfter(m.id) })
+        rows.push({ key: `${m.id}/${it.id}`, name: foodName(it.name), src: null, desc: '먹은 후 사진 기다림', kcal: null, onOpen: () => openAfter(m.id) })
       }
     } else if (m.status === 'needs_review' && m.analysis) {
       for (const it of m.analysis.items) {
         rows.push({
           key: `${m.id}/${it.id}`,
-          name: it.name,
+          name: foodName(it.name),
           src: sourceLabel(it),
           desc: '결과 확인 기다림',
           kcal: null,
@@ -293,7 +296,7 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
   const time = times[meal]
   const p = pct(totals)
   const afterFoods = target_ ? target_.beforeAnalysis.items : []
-  const afterSubtitle = `${label} · ${afterFoods[0]?.name ?? ''}${afterFoods.length > 1 ? ` 외 ${afterFoods.length - 1}개` : ''}`
+  const afterSubtitle = `${label} · ${foodName(afterFoods[0]?.name ?? '')}${afterFoods.length > 1 ? ` 외 ${afterFoods.length - 1}개` : ''}`
   const closeSheet = () => setSheet(null)
 
   return (
@@ -329,8 +332,15 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
               <span className="num">{`${Math.round(totals.kcal)}kcal`}</span>
             </span>
             <div style={{ display: 'flex', gap: 6 }}>
-              <button type="button" className="chipbtn" style={{ background: 'var(--sky-soft)' }} onClick={() => setSheet('time')}>
-                시간 입력
+              {/* 먹은 시간이 있으면 칩 글자가 그 시각(사용자가 고른 변경), 누르면 바꾸는 시트 */}
+              <button
+                type="button"
+                className="chipbtn"
+                style={{ background: 'var(--sky-soft)' }}
+                aria-label={time ? `먹은 시간 ${time}, 바꾸기` : undefined}
+                onClick={() => setSheet('time')}
+              >
+                {time ?? '시간 입력'}
               </button>
               <button
                 type="button"
@@ -342,12 +352,6 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
               </button>
             </div>
           </div>
-          {time && (
-            <div className="timebox">
-              {'시간 '}
-              <span className="num">{time}</span>에 먹었어요
-            </div>
-          )}
           {done.length > 0 && (
             <>
               <div className="stack">
@@ -492,7 +496,7 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
       <RatioSheet
         open={sheet === 'ratio' && target_ != null}
         onClose={closeSheet}
-        foods={afterFoods.map((it) => ({ id: it.id, name: it.name, beforeGrams: it.before_grams }))}
+        foods={afterFoods.map((it) => ({ id: it.id, name: foodName(it.name), beforeGrams: it.before_grams }))}
         onSubmit={(ratios) => {
           setSheet(null)
           after.chooseRatios(ratios)

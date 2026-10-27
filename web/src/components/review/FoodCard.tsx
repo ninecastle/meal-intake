@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent, type Ref } from 'react'
 import { MAX_EATERS } from '../../analysis/compute'
 import { listFoodVariants, searchFoodNames, type FoodSuggestion } from '../../analysis/nutrition'
+import { foodName } from '../../lib/foodName'
 import type { MealItem } from '../../types/analysis'
 import SourceBadge from './SourceBadge'
 
@@ -83,7 +84,7 @@ export default function FoodCard(p: FoodCardProps) {
         <div className="flex items-start gap-2">
           <button type="button" onClick={p.onStartEdit} className="focus-ring min-h-11 min-w-0 flex-1 text-left">
             <span className="block break-words text-base font-semibold">
-              {name || <span className="text-ink-3">이름을 입력하세요</span>}
+              {foodName(name) || <span className="text-ink-3">이름을 입력하세요</span>}
             </span>
             <span className="text-xs text-ink-2">눌러서 이름·종류 고치기</span>
           </button>
@@ -103,13 +104,13 @@ export default function FoodCard(p: FoodCardProps) {
         </div>
         {item.nutrition_source === 'db' && item.db_name && (
           <p className="text-xs text-ink-2">
-            DB 이름: {item.db_name}
+            DB 이름: {foodName(item.db_name)}
             {dbNote && ` (${dbNote})`}
           </p>
         )}
         {ref && (
           <p className="text-xs text-ink-2">
-            참고 DB 대표값 {Math.round(ref.kcal_per_100g)}kcal/100g ({ref.db_name}
+            참고 DB 대표값 {Math.round(ref.kcal_per_100g)}kcal/100g ({foodName(ref.db_name)}
             {ref.db_match === 'partial' ? ', 부분 일치' : ''}
             {ref.ml_converted ? ', 환산' : ''})
           </p>
@@ -340,7 +341,8 @@ function NumField(props: {
 // 이름 고치기: 입력 중 자동완성(searchFoodNames) + 같은 음식의 세부 종류 목록(listFoodVariants)과 걸러 보기
 function NameEditor(props: { item: MealItem; onConfirm: (name: string, dbCode?: string) => void; onCancel: () => void }) {
   const { item, onConfirm, onCancel } = props
-  const [draft, setDraft] = useState(item.name)
+  // 화면 이름으로 연다(DB 표기 "분류_세부"를 보이지 않는다). 그대로 [확인]하면 바뀐 것이 없으므로 닫기만 한다.
+  const [draft, setDraft] = useState(() => foodName(item.name))
   const [sugs, setSugs] = useState<FoodSuggestion[]>([])
   const [variants, setVariants] = useState<FoodSuggestion[] | null>(null)
   const [filter, setFilter] = useState('')
@@ -379,7 +381,8 @@ function NameEditor(props: { item: MealItem; onConfirm: (name: string, dbCode?: 
   function submit(e: FormEvent) {
     e.preventDefault()
     const nm = draft.trim()
-    if (nm) onConfirm(nm)
+    if (nm && nm === foodName(item.name)) onCancel()
+    else if (nm) onConfirm(nm)
   }
 
   const f = compact(filter)
@@ -409,7 +412,7 @@ function NameEditor(props: { item: MealItem; onConfirm: (name: string, dbCode?: 
         <ul className="mt-1 divide-y divide-line rounded-tile border border-line bg-surface">
           {sugs.map((s, i) => (
             <li key={`${s.dbCode}-${i}`}>
-              <SuggestionButton s={s} onPick={() => onConfirm(s.label, s.dbCode)} />
+              <SuggestionButton s={s} onPick={() => onConfirm(foodName(s.label), s.dbCode)} />
             </li>
           ))}
         </ul>
@@ -417,7 +420,7 @@ function NameEditor(props: { item: MealItem; onConfirm: (name: string, dbCode?: 
 
       {baseName && (
         <div className="mt-3">
-          <p className="text-xs text-ink-2">‘{baseName}’ 세부 종류</p>
+          <p className="text-xs text-ink-2">‘{foodName(baseName)}’ 세부 종류</p>
           <input
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
@@ -433,7 +436,7 @@ function NameEditor(props: { item: MealItem; onConfirm: (name: string, dbCode?: 
             <ul className="mt-1 max-h-60 divide-y divide-line overflow-y-auto rounded-tile border border-line bg-surface">
               {shown.map((s, i) => (
                 <li key={`${s.dbCode}-${i}`}>
-                  <SuggestionButton s={s} onPick={() => onConfirm(s.label, s.dbCode)} />
+                  <SuggestionButton s={s} onPick={() => onConfirm(foodName(s.label), s.dbCode)} />
                 </li>
               ))}
             </ul>
@@ -448,7 +451,7 @@ function SuggestionButton({ s, onPick }: { s: FoodSuggestion; onPick: () => void
   return (
     <button type="button" onClick={onPick} className="focus-ring flex min-h-11 w-full items-center justify-between gap-2 px-2 text-left">
       <span className="min-w-0 break-words">
-        {s.label}
+        {foodName(s.label)}
         {s.kind === 'group' && <span className="ml-1 text-xs text-ink-2">대표값</span>}
         {s.mlConverted && <span className="ml-1 text-xs text-ink-2">환산</span>}
       </span>

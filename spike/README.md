@@ -17,6 +17,7 @@
 | `chunk_reload_test.mjs` | 화면 파일 불러오기 실패 판별·60초 1회 자동 새로고침(`lib/chunkReload.ts`) | `node spike/tests/chunk_reload_test.mjs .` |
 | `calendar_test.mjs` | 기록 보기 히트맵 `lib/calendar.ts`(진하기 4단계·✓·기준량, 월요일 시작 앞뒤 달 격자, 월 요약, 날짜별 목표) | `node spike/tests/calendar_test.mjs .` |
 | `week_test.mjs` | 주간 추이 `lib/week.ts`(월요일 주, 기본 주, 달 따라가기, ?week 검증, 세로축 눈금) | `node spike/tests/week_test.mjs .` |
+| `food_name_test.mjs` | 화면 음식 이름 `lib/foodName.ts`(DB 표기 "분류_세부" → 분류는 앞에서 빼고 겹치는 말 없이, 없으면 뒤에 한 번, DB 이름 전체에 밑줄·빈 이름 없음) | `node spike/tests/food_name_test.mjs .` |
 | `time_test.mjs` | 끼니 자동 선택 `guessMealType` 시간대(05~10 아침·10~15 점심·15~21 저녁·그 밖 간식, Asia/Seoul) | `node spike/tests/time_test.mjs .` |
 | `korean_unsure_test.mjs` | 프롬프트 a4·b2: 영어 경고 → 일반 안내, 확신 낮은 끝값(≥0.95·≤0.05) → null, 모델 null 유지, 분당 429 재시도 없음(가짜 모델로 `aiCall.ts`) | `node spike/tests/korean_unsure_test.mjs` |
 | `b3_test.mjs` | 프롬프트 b3: `same_scene`·`match` 규칙(같은 장면 + 안 보임 → 0과 `ratio_assumed`, 다른 그릇·판단 불가·다른 장면 → null, 같은 그릇 0개면 안 보임도 null, match 없음 → b2), 캐시 다시 읽기, assemble·compute 전달, `setRemainingRatio`, validate.ts·`validate_analysis.mjs`·스키마 | `node spike/tests/b3_test.mjs` |

@@ -85,6 +85,12 @@ function dateLabel(dateKey: string): string {
   return dateKey === toDateKey(new Date()) ? `오늘 · ${s}` : s
 }
 
+/** 이 탭 방문 기록에서 지금 칸의 순서(react-router가 history.state.idx에 둔다). 주소로 바로 열었으면 0 */
+function historyIdx(): number {
+  const idx = (window.history.state as { idx?: unknown } | null)?.idx
+  return typeof idx === 'number' ? idx : 0
+}
+
 /** 브라우저 뒤로 가기 막기. useBlocker는 데이터 라우터(createBrowserRouter)에서만 동작하므로 그때만 렌더링한다. */
 function LeaveGuard({ shouldBlock }: { shouldBlock: () => boolean }) {
   const blocker = useBlocker(({ currentLocation, nextLocation }) => currentLocation.pathname !== nextLocation.pathname && shouldBlock())
@@ -236,6 +242,10 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
         const { dateKey, mealType } = phase.initial
         navigate(`/day/${dateKey}/${mealType}`, { replace: true })
       } else navigate(`/meal/${routeId}`, { replace: true })
+    } else if (!saved && historyIdx() > 0) {
+      // 저장하지 않고 나가기(‹)는 뒤로 가기: 이 화면은 끼니 화면 칸을 바꿔 들어오므로 한 칸 뒤가 그 앞 화면(보통 홈)이고,
+      // 그 화면은 내렸던 위치 그대로 돌아온다(ScrollMemory, 2026-10-27 사용자가 고른 변경)
+      navigate(-1)
     } else navigate('/', { replace: true, state: saved ? { saved } : undefined })
   }
 

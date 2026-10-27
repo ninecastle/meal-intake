@@ -1,6 +1,7 @@
 // 결과 확인·수정 화면(S4) 편집기. 제어형: 바뀔 때마다 buildAnalysis로 만든 새 분석을 onChange로 올린다.
 // 계산은 모두 analysis/compute.ts 함수로 한다(화면에서 공식을 다시 구현하지 않는다). 사진은 다시 분석하지 않는다.
 // 규칙: 스펙 2.3절 표, CLAUDE.md "결과 수정 규칙".
+import { foodName } from '../../lib/foodName'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { WARN_NO_AFTER } from '../../analysis/assemble'
 import {
@@ -248,7 +249,7 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
 
       {undo && (
         <div className="sticky bottom-2 flex items-center justify-between gap-2 rounded-tile bg-ink px-3 py-1 text-white shadow-[0_1px_3px_rgba(31,42,46,.12)]">
-          <span className="min-w-0 truncate">‘{undo.item.name || '이름 없음'}’ 삭제함</span>
+          <span className="min-w-0 truncate">‘{foodName(undo.item.name) || '이름 없음'}’ 삭제함</span>
           <button type="button" onClick={restore} className="focus-ring min-h-11 shrink-0 px-2 font-semibold text-butter">
             되돌리기
           </button>
