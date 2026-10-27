@@ -174,7 +174,7 @@ export default function RecordHeatmap({
                 const valueText = value === null ? '' : formatMetric(value, metric)
 
                 const tone = isFuture
-                  ? 'text-ink-3/50'
+                  ? 'text-ink-3'
                   : !days
                     ? `bg-surface text-ink ${isToday ? '' : 'ring-1 ring-line ring-inset'}`
                     : `${LEVEL_BG[heat?.level ?? 0]} ${LEVEL_TEXT[heat?.level ?? 0]}`
@@ -233,7 +233,7 @@ export default function RecordHeatmap({
                 aria-label={`${weekRangeText(monday, week[6].dateKey)} 주간 추이 보기`}
                 aria-current={selected ? 'true' : undefined}
                 className={`focus-ring flex min-h-11 items-center justify-center rounded-chip text-lg leading-none ${
-                  selected ? 'bg-sky text-ink' : futureWeek ? 'text-ink-3/40' : 'bg-ground text-ink-2'
+                  selected ? 'bg-sky text-ink' : futureWeek ? 'text-ink-3' : 'bg-ground text-ink-2'
                 }`}
               >
                 ›
