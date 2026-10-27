@@ -127,6 +127,13 @@ export function setBeforeGrams(item: MealItem, g: number): MealItem {
   return recomputeItem(next)
 }
 
+/** 사용자가 남긴 비율을 골랐다: 값을 넣고 "그릇이 안 보여 다 먹음으로 둠" 표시(ratio_assumed)를 지운 뒤 다시 계산한다. */
+export function setRemainingRatio(item: MealItem, r: number): MealItem {
+  const next: MealItem = { ...item, remaining_ratio: r, user_edited: true }
+  delete next.ratio_assumed
+  return recomputeItem(next)
+}
+
 /** 숫자면 칼로리 직접 입력(kcal_overridden=true), null이면 해제 후 공식대로 다시 계산.
  *  per_100g=null(직접 입력 출처)은 해제할 수 없어 그대로 둔다. */
 export function setKcalOverride(item: MealItem, kcal: number | null): MealItem {

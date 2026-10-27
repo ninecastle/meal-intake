@@ -42,8 +42,11 @@ export interface MealItem {
   published_g?: number
   /** 통째로 보인 개수(호출 A whole_count, 정수 1~10) */
   unit_count?: number
-  /** 0~1, null = 매칭 실패 */
+  /** 0~1, null = 매칭 실패·판단 불확실(다른 음식·장면처럼 보임). null이면 사용자가 고르기 전에는 저장하지 않는다 */
   remaining_ratio: number | null
+  /** 같은 장면인데 먹은 후 사진에 그 그릇이 안 보여 remaining_ratio=0(다 먹음)으로 미리 골라 둔 경우만(2026-10-27 사용자 결정).
+   *  화면: "그릇이 안 보여서 다 드신 걸로 했어요. 아니면 바꿔 주세요"(노란 표시, 저장 허용). 사용자가 남긴 비율을 고치면 setRemainingRatio가 지운다 */
+  ratio_assumed?: 'not_visible'
   consumed_grams: number
   /** user_input일 때만 null */
   per_100g: Nutrients | null
@@ -81,7 +84,13 @@ export interface BeforeItem {
   whole_count?: number | null
 }
 export interface BeforeAnalysis { items: BeforeItem[]; warnings: string[]; model: string; prompt_version: string }
-export interface AfterItem { id: string; remaining_ratio: number | null; confidence: number }
+export interface AfterItem {
+  id: string
+  remaining_ratio: number | null
+  confidence: number
+  /** 같은 장면인데 그 그릇이 안 보여 remaining_ratio=0으로 둔 경우(MealItem.ratio_assumed로 옮긴다) */
+  ratio_assumed?: 'not_visible'
+}
 export interface AfterAnalysis {
   items: AfterItem[]
   warnings: string[]
