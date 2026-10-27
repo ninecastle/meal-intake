@@ -3,7 +3,15 @@
 // 규칙: 스펙 2.3절 표, CLAUDE.md "결과 수정 규칙".
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { WARN_NO_AFTER } from '../../analysis/assemble'
-import { applyNutrition, buildAnalysis, newUserItem, recomputeItem, setBeforeGrams, setKcalOverride } from '../../analysis/compute'
+import {
+  applyNutrition,
+  buildAnalysis,
+  newUserItem,
+  recomputeItem,
+  setBeforeGrams,
+  setKcalOverride,
+  setRemainingRatio,
+} from '../../analysis/compute'
 import { resolveNutrition } from '../../analysis/nutrition'
 import type { MealIntakeAnalysis, MealItem, NutritionResult } from '../../types/analysis'
 import FoodCard, { type RatioHint } from './FoodCard'
@@ -23,8 +31,9 @@ const LATER = 1_000_000
 /** 이름이 바뀌면 다른 메뉴이므로 "공개 중량" 표시만 지운다(무게는 그대로, 스펙 4.5.5) */
 const dropPublished = (it: MealItem) => (it.grams_source ? setBeforeGrams(it, it.before_grams) : it)
 
-/** needs_review 또는 AI 추정: 먼저, 노란 테두리로 */
-const isFlagged = (it: MealItem) => it.needs_review || it.nutrition_source === 'ai_estimate'
+/** needs_review, AI 추정, 그릇이 안 보여 다 먹음으로 둔 항목(ratio_assumed): 먼저, 노란 테두리로 */
+const isFlagged = (it: MealItem) =>
+  it.needs_review || it.nutrition_source === 'ai_estimate' || it.ratio_assumed === 'not_visible'
 
 function omit<T>(rec: Record<string, T>, key: string): Record<string, T> {
   if (!(key in rec)) return rec
@@ -174,7 +183,7 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
   }
 
   // 보이는 순서는 처음 본 순간에 정하고 고정한다(고치는 중에 카드가 움직이지 않게).
-  // 처음 받은 항목 중 확인 필요·AI 추정을 먼저, 나머지와 나중에 추가한 항목은 받은 순서대로.
+  // 처음 받은 항목 중 확인 필요·AI 추정·그릇 안 보임을 먼저, 나머지와 나중에 추가한 항목은 받은 순서대로.
   const order = useRef(new Map<string, number>())
   const seq = useRef(0)
   const ord = order.current
@@ -218,7 +227,7 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
             onConfirmName={(name, dbCode) => confirmName(it.id, name, dbCode)}
             onAnswerAsk={answer}
             onGrams={(g) => update(it.id, (x) => setBeforeGrams({ ...x, user_edited: true }, g))}
-            onRatio={(r) => update(it.id, (x) => recomputeItem({ ...x, remaining_ratio: r, user_edited: true }))}
+            onRatio={(r) => update(it.id, (x) => setRemainingRatio(x, r))}
             onEaters={(n) => update(it.id, (x) => recomputeItem({ ...x, eaters: n }))}
             onKcal={(k) => update(it.id, (x) => setKcalOverride(x, k))}
             onDelete={() => remove(it.id)}

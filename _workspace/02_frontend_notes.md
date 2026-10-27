@@ -134,6 +134,14 @@
 - 같은 먹은 후 사진을 다시 고르면 분석 결과 캐시가 같은 null 결과를 돌려줄 수 있다(분석 모듈 쪽 판단).
 - 브라우저 확인 필요: 빠른 선택 3개 버튼 폭(작은 폰), 다시 찍기 → S3 → 다시 S4 흐름, 분당 한도 [다시 시도].
 
+### 덧붙임: 남긴 비율 안내 나누기 (2026-10-27, 계약 `d747fe6`)
+- 그릇이 먹은 후 사진에 안 보임(`ratio_assumed: 'not_visible'`, `remaining_ratio` 0): 남긴 비율 칸 아래 노란 안내 "그릇이 안 보여서 다 드신 걸로 했어요. 아니면 바꿔 주세요", 0%·[다 먹음] 선택 상태로 보임. 저장은 막지 않음. 노란 테두리·먼저 보이기(`isFlagged`)에 포함.
+- 다른 음식·장면처럼 보임(`remaining_ratio` null): 기존 그대로 "확인 필요" + 저장 막음. `CaptureAfterPage` 다시 찍기 판단도 null만 봄(안 바꿈).
+- 고르는 경로(슬라이더·빠른 선택)는 모두 `setRemainingRatio`(분석 모듈)로 바꿈. 같은 0%를 다시 눌러도 표시를 지움. 슬라이더는 값이 안 바뀌면 onChange가 없어 `onPointerUp`에서 미리 고른 상태일 때만 같은 값으로 한 번 더 부름.
+- "확인 필요" 배지는 지금처럼 `needs_review`만 봄. `ratio_assumed`면 `remaining_ratio`가 0이라 배지는 확신 낮음(confidence < 0.6)일 때만 붙음.
+- 기록 상세(S7) `FoodRow`: 저장된 기록에 `ratio_assumed`가 남아 있으면 남긴 비율 옆에 작게 "(그릇이 안 보여 다 먹음으로 둠)". `Field` 값을 ReactNode로 넓히고 오른쪽 정렬.
+- 남은 이슈: 브라우저 확인 안 함(샘플 결과에 `ratio_assumed` 항목이 아직 없음). 기록 수정(S8)에서도 같은 카드라 표시가 남아 있으면 그대로 보임.
+
 ## 3단계 조각 3 (2026-10-27): 하루 요약 목표 대비 비교(S1)
 `components/GoalBars.tsx`(새 파일), `pages/HomePage.tsx`. 계산은 `analysis/goal.ts`의 `compareToGoal`, 그날 목표는 `data/goals.ts`의 `subscribeGoalForDate` 그대로 쓴다. `tsc -b`·`npm run build` 통과, AI 호출 0회, 개발 서버 시험 안 함.
 

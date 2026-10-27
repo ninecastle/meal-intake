@@ -246,7 +246,18 @@ function FoodRow({ it }: { it: MealItem }) {
         />
         <Field
           label="남긴 비율"
-          value={it.remaining_ratio === null ? '확인 안 됨' : `${Math.round(it.remaining_ratio * 100)}%`}
+          value={
+            it.remaining_ratio === null ? (
+              '확인 안 됨'
+            ) : (
+              <>
+                {Math.round(it.remaining_ratio * 100)}%
+                {it.ratio_assumed === 'not_visible' && (
+                  <span className="ml-1 text-xs font-normal text-amber-700">(그릇이 안 보여 다 먹음으로 둠)</span>
+                )}
+              </>
+            )
+          }
         />
         <Field label="같이 먹은 인원" value={`${it.eaters}명`} />
         <Field label="먹은 양" value={`${formatGrams(it.consumed_grams)}g`} />
@@ -269,11 +280,11 @@ function FoodRow({ it }: { it: MealItem }) {
   )
 }
 
-function Field({ label, value }: { label: string; value: string }) {
+function Field({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div className="flex justify-between gap-2">
-      <dt className="text-gray-500">{label}</dt>
-      <dd className="font-medium">{value}</dd>
+      <dt className="shrink-0 text-gray-500">{label}</dt>
+      <dd className="min-w-0 text-right font-medium">{value}</dd>
     </div>
   )
 }

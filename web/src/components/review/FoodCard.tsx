@@ -21,6 +21,8 @@ const RATIO_HINT: Record<RatioHint, string> = {
   mismatch: '사진이 먹기 전과 달라 보여요. 다시 찍거나 남긴 양을 직접 골라 주세요',
   manual: '남긴 양을 직접 골라 주세요',
 }
+/** ratio_assumed === 'not_visible': 같은 장면인데 그릇이 안 보여 다 먹음(0)으로 미리 골라 둔 경우. 저장은 막지 않는다(2026-10-27). */
+const ASSUMED_HINT = '그릇이 안 보여서 다 드신 걸로 했어요. 아니면 바꿔 주세요'
 /** 빠른 선택: 남긴 비율 0(다 먹음)·0.5(반)·1(그대로 남김) */
 const QUICK_RATIOS = [
   { r: 0, label: '다 먹음' },
@@ -30,7 +32,7 @@ const QUICK_RATIOS = [
 
 export interface FoodCardProps {
   item: MealItem
-  /** needs_review 또는 AI 추정: 노란 테두리 */
+  /** needs_review, AI 추정, 그릇이 안 보여 다 먹음으로 둠(ratio_assumed): 노란 테두리 */
   flagged: boolean
   /** 영양값 조회 중이면 새 이름(카드를 잠근다) */
   pendingName: string | null
@@ -68,6 +70,9 @@ export default function FoodCard(p: FoodCardProps) {
 
   const name = p.pendingName ?? item.name
   const ratioPct = item.remaining_ratio == null ? 0 : Math.round(item.remaining_ratio * 100)
+  // 미리 고른 0%(다 먹음). 사용자가 슬라이더·빠른 선택으로 고르면(같은 0%라도) setRemainingRatio가 표시를 지운다.
+  const assumed = item.ratio_assumed === 'not_visible' && item.remaining_ratio !== null
+  const ratioOpen = item.remaining_ratio == null || assumed
   const canAuto = item.kcal_overridden && item.per_100g !== null
   const dbNote = item.db_match ? MATCH_NOTE[item.db_match] : null
   const ref = item.db_reference
@@ -174,7 +179,7 @@ export default function FoodCard(p: FoodCardProps) {
         <div>
           <div className="flex justify-between text-xs text-gray-600">
             <span>남긴 비율</span>
-            <span className={`font-medium ${item.remaining_ratio == null ? 'text-amber-700' : 'text-gray-900'}`}>
+            <span className={`font-medium ${ratioOpen ? 'text-amber-700' : 'text-gray-900'}`}>
               {item.remaining_ratio == null ? '아직 안 고름' : `${ratioPct}%`}
             </span>
           </div>
@@ -185,23 +190,31 @@ export default function FoodCard(p: FoodCardProps) {
             step={5}
             value={ratioPct}
             onChange={(e) => p.onRatio(Number(e.target.value) / 100)}
+            // 값이 그대로(0%)면 onChange가 없으므로, 미리 고른 상태에서 슬라이더를 누르고 떼도 확인한 것으로 본다
+            onPointerUp={(e) => {
+              if (assumed) p.onRatio(Number(e.currentTarget.value) / 100)
+            }}
             aria-label="남긴 비율"
             className="h-11 w-full accent-amber-500"
           />
-          {item.remaining_ratio == null && (
+          {ratioOpen && (
             <div role="status" className="rounded bg-amber-50 p-2 text-amber-900">
-              <p className="text-sm font-medium">{RATIO_HINT[p.ratioHint]}</p>
+              <p className="text-sm font-medium">{assumed ? ASSUMED_HINT : RATIO_HINT[p.ratioHint]}</p>
               <div className="mt-2 grid grid-cols-3 gap-2">
-                {QUICK_RATIOS.map((q) => (
-                  <button
-                    key={q.r}
-                    type="button"
-                    onClick={() => p.onRatio(q.r)}
-                    className="min-h-11 rounded border border-amber-400 bg-white px-2 text-sm"
-                  >
-                    {q.label}
-                  </button>
-                ))}
+                {QUICK_RATIOS.map((q) => {
+                  const sel = assumed && q.r === item.remaining_ratio
+                  return (
+                    <button
+                      key={q.r}
+                      type="button"
+                      aria-pressed={sel}
+                      onClick={() => p.onRatio(q.r)}
+                      className={`min-h-11 rounded border px-2 text-sm ${sel ? 'border-amber-600 bg-amber-500 font-medium text-white' : 'border-amber-400 bg-white'}`}
+                    >
+                      {q.label}
+                    </button>
+                  )
+                })}
               </div>
             </div>
           )}
