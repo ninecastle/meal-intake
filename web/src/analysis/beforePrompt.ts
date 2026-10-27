@@ -1,13 +1,16 @@
-// 호출 A(먹기 전 분석) 프롬프트 a3·응답 스키마·응답 정리.
+// 호출 A(먹기 전 분석) 프롬프트 a4·응답 스키마·응답 정리.
 // 출처: .claude/skills/intake-calorie-estimation/references/prompt-template.md 호출 A.
 // a2(2026-10-26): a1 + 종류에 따라 칼로리 차이가 큰 음식은 보이는 특징까지 넣은 구체적인 이름, per_100g_guess는 보이는 구성을 따져 추정
 // (CLAUDE.md "칼로리 계산 순서"). 같은 사진 캐시는 prompt_version으로 구분되므로 a1 결과는 다시 쓰지 않는다.
 // a3(2026-10-26): a2 + whole_count(한 개·한 마리·한 판·1인분이 통째로 보이는 개수). 공개 중량(스펙 4.5.5)에 쓴다. a2 캐시는 다시 분석한다.
+// a4(2026-10-27): a3 + name·location·warnings를 모두 한국어로 쓴다(결과 화면 경고가 영어로 나온 문제, 사용자 결정).
+//   응답 정리에서도 모델 warnings를 koreanWarnings로 거른다(한국어가 아니면 일반 안내 한 줄). a3 캐시는 다시 분석한다.
 // 이 파일은 import.meta.env를 쓰지 않는다(Node 시험 스크립트에서도 그대로 불러 쓴다).
 import { Schema, ThinkingLevel, type GenerationConfig } from 'firebase/ai'
 import type { BeforeItem, Nutrients } from '../types/analysis'
+import { koreanWarnings } from './koreanText.ts'
 
-export const PROMPT_VERSION_A = 'a3'
+export const PROMPT_VERSION_A = 'a4'
 
 export const SYSTEM_INSTRUCTION_A = `당신은 식사 사진을 분석하는 영양 보조 도구다. 먹기 전 식탁 사진 한 장이 주어진다.
 
@@ -23,7 +26,8 @@ export const SYSTEM_INSTRUCTION_A = `당신은 식사 사진을 분석하는 영
 
 규칙:
 - 섭취량이나 총 칼로리를 계산하지 않는다.
-- 확신이 없으면 confidence를 낮게 준다. 추측을 사실처럼 쓰지 않는다.`
+- 확신이 없으면 confidence를 낮게 준다. 추측을 사실처럼 쓰지 않는다.
+- name, location, warnings의 모든 문자열은 한국어로 쓴다. 영어 문장이나 로마자 음식명으로 쓰지 않는다. 브랜드·메뉴 이름도 한글로 적는다(예: "빅맥", "치즈와퍼 버거"). warnings는 "음식 이름: 이유" 형식의 짧은 한국어 문장으로 쓴다.`
 
 /** 사용자 메시지 첫 텍스트 파트. 그다음 파트가 이미지다. */
 export const USER_TEXT_A = 'BEFORE 사진'
@@ -118,12 +122,9 @@ export function normWholeCount(v: unknown): number | null {
 /** 모델 원본(JSON 객체) → 정리된 항목. id는 i1부터 다시 매긴다. */
 export function normalizeBeforeResponse(raw: unknown): NormalizeBeforeResult {
   if (!isObj(raw) || !Array.isArray(raw.items)) return { ok: false, kind: 'invalid', detail: 'items 배열이 없습니다' }
+  // 모델 경고는 한국어만 그대로 두고, 아니면 일반 안내 한 줄로 바꾼다(koreanText.ts). 코드 경고는 아래에서 한국어로 붙인다.
   const warnings: string[] = Array.isArray(raw.warnings)
-    ? raw.warnings
-        .filter((w): w is string => typeof w === 'string')
-        .map((w) => w.trim())
-        .filter((w) => w.length > 0)
-        .slice(0, 10)
+    ? koreanWarnings(raw.warnings.filter((w): w is string => typeof w === 'string')).slice(0, 10)
     : []
   if (raw.items.length === 0) return { ok: false, kind: 'empty' }
 

@@ -1,5 +1,10 @@
 // 호출 A·B·D 공통: 시도당 시간 제한(기본 40초, 호출 D는 10초), 2초 뒤 1회 재시도, SDK 오류 → AnalysisError 변환(스펙 4.2·4.4절).
-// 시간 초과는 다시 시도하지 않는다(서버가 느린 시간대에 호출만 2번 쓰고 실패하지 않게, 2026-10-27 사용자 결정).
+// 다시 시도하는 것: 네트워크 오류, 5xx, 응답 형식 오류(길이 잘림 포함).
+// 다시 시도하지 않는 것(바로 ANALYSIS_UNAVAILABLE):
+// - 시간 초과(자체 타이머, SDK AbortError, HTTP 408). 서버가 느린 시간대에 호출만 2번 쓰고 실패하지 않게(2026-10-27 사용자 결정).
+// - 429 전부. 분당 한도는 2초 뒤 다시 보내도 같은 분 안이라 또 막히고 한도만 쓴다(2026-10-27 사용자 결정).
+//   quotaScope('minute' | 'day')는 그대로 넘긴다. 화면이 minute면 "잠시 후 다시 시도해 주세요", day면 한도 모드로 안내한다.
+// - 차단(SAFETY 등), 401·403(App Check), 400·404, 413(PHOTO_INVALID).
 import {
   AIError,
   AIErrorCode,
@@ -136,7 +141,8 @@ function fromStatus(status: number, e: AIError, message: string): AttemptFailure
   if (status === 429) {
     const detail = message + JSON.stringify(e.customErrorData?.errorDetails ?? [])
     const quotaScope: QuotaScope = /per ?day|daily/i.test(detail) ? 'day' : 'minute'
-    return { reason: 'quota', retryable: quotaScope === 'minute', quotaScope, message, cause: e }
+    // 분당·일일 모두 재시도하지 않는다(머리 주석). 화면 문구는 quotaScope로 고른다.
+    return { reason: 'quota', retryable: false, quotaScope, message, cause: e }
   }
   if (status === 401 || status === 403) return { reason: 'app_check', retryable: false, message, cause: e }
   if (status === 408) return { reason: 'timeout', retryable: false, message, cause: e }
