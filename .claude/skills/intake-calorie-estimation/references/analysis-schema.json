@@ -64,7 +64,7 @@
             "properties": {"carbs_g": {"$ref": "#/$defs/fillSource"}, "fat_g": {"$ref": "#/$defs/fillSource"}},
             "description": "v2. db이고 DB 행에 탄·지 값이 비어 있을 때만. 영양소 단위 출처"
           },
-          "nutrition_source": {"enum": ["db", "search", "ai_estimate", "user_input"], "description": "화면 표시: DB(db_ml_converted면 DB(환산)) / 검색 기반 / AI 추정(db_reference면 DB 참고 함께) / 직접 입력"},
+          "nutrition_source": {"enum": ["db", "search", "ai_estimate", "user_input"], "description": "화면 표시: DB(db_ml_converted면 DB 환산) / 검색 기반 / AI 추정(db_reference면 DB 참고 함께) / 직접 입력"},
           "consumed": {"$ref": "#/$defs/nutrients", "description": "per_100g × consumed_grams ÷ 100. kcal_overridden이면 kcal은 사용자 입력값"},
           "kcal_overridden": {"type": "boolean", "description": "사용자가 칼로리를 직접 고쳤으면 true(user_input은 항상 true)"},
           "confidence": {"type": "number", "minimum": 0, "maximum": 1},

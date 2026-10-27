@@ -15,7 +15,7 @@ const OUT = path.join(HERE, '../public/data/mfds-foods-20261006.json')
 const STATS_OUT = path.join(HERE, 'build-mfds-db.stats.json')
 const SRC_LABEL = '식품의약품안전처 전국통합식품영양성분정보(음식)표준데이터(15100070)'
 
-// 4.5.3 (a)-2: 100ml 행만 있는 이름은 분류와 상관없이 밀도 1.0g/ml로 환산해 넣는다(ml: 1, 화면 출처 "DB(환산)").
+// 4.5.3 (a)-2: 100ml 행만 있는 이름은 분류와 상관없이 밀도 1.0g/ml로 환산해 넣는다(ml: 1, 화면 출처 "DB 환산").
 // 아래 액체 분류는 통계에서 고형·액체를 나눠 세는 데만 쓴다(원본 식품대분류명 그대로)
 const LIQUID_CATEGORIES = new Set(['음료 및 차류', '국 및 탕류', '찌개 및 전골류', '죽 및 스프류'])
 

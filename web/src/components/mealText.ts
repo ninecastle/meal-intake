@@ -15,7 +15,7 @@ type SourceFields = Pick<MealItem, 'nutrition_source' | 'db_ml_converted'>
 export function sourceLabel(it: SourceFields): string {
   switch (it.nutrition_source) {
     case 'db':
-      return it.db_ml_converted ? 'DB(환산)' : 'DB'
+      return it.db_ml_converted ? 'DB 환산' : 'DB' // 시안 배지 문구(2026-10-27 사용자 결정)
     case 'search':
       return '검색 기반'
     case 'ai_estimate':

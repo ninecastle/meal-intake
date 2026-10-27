@@ -201,7 +201,7 @@ export interface FoodSuggestion {
   dbName: string
   kcalPer100g: number
   kind: 'group' | 'name'
-  /** 원본 기준량 100ml를 밀도 1.0으로 100g 환산한 행. 화면은 "DB(환산)"으로 표시한다 */
+  /** 원본 기준량 100ml를 밀도 1.0으로 100g 환산한 행. 화면은 "DB 환산"으로 표시한다 */
   mlConverted?: boolean
 }
 

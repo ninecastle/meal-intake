@@ -1,5 +1,5 @@
 // 분석 결과 타입(스펙 4.3절, analysis-schema.json v2와 1:1). 타입만 둔다. 구현은 web/src/analysis/.
-// 사용자 결정으로 추가한 필드: MealItem.db_ml_converted, NutritionResult db 분기의 ml_converted(화면 출처 "DB(환산)").
+// 사용자 결정으로 추가한 필드: MealItem.db_ml_converted, NutritionResult db 분기의 ml_converted(화면 출처 "DB 환산").
 // MealItem.db_reference, NutritionResult ai_estimate 분기의 reference: 종류별 차이가 큰 음식이 DB 대표값·일반 이름에만
 // 맞았을 때 값은 AI 추정을 쓰고, 그 DB 값은 화면에 참고로만 보인다(2026-10-26 사용자 결정).
 // MealItem.grams_source·published_g·unit_count, BeforeItem.whole_count, NutritionResult db 분기의 published_g: 공개 중량(스펙 4.5.5).
@@ -28,7 +28,7 @@ export interface MealItem {
   db_name?: string | null
   /** v2 */
   db_match?: DbMatch
-  /** true면 100ml 기준 DB 값을 1ml=1g으로 환산해 썼다. 화면 출처 "DB(환산)" */
+  /** true면 100ml 기준 DB 값을 1ml=1g으로 환산해 썼다. 화면 출처 "DB 환산" */
   db_ml_converted?: boolean
   /** nutrition_source가 ai_estimate일 때만. 참고로 보이는 DB 대표값(값 계산에는 쓰지 않음) */
   db_reference?: DbReference
@@ -108,7 +108,7 @@ export type NutritionResult =
       db_food_code: string
       db_name: string
       db_match: DbMatch
-      /** 화면 출처 "DB(환산)" */
+      /** 화면 출처 "DB 환산" */
       ml_converted?: true
       /** 매칭된 행의 공개 중량(g, 4.5.5). assembleAnalysis가 db_match === 'name'이고 whole_count가 있을 때만 쓴다 */
       published_g?: number

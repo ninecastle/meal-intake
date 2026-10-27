@@ -92,7 +92,7 @@ function DbSearchTest() {
               <tr key={h.index} className="border-t border-gray-100">
                 <td className="py-0.5">
                   {h.label}
-                  {h.food.ml ? ' · DB(환산)' : ''}
+                  {h.food.ml ? ' · DB 환산' : ''}
                 </td>
                 <td className="text-right">{fmt(h.food.k)}</td>
                 <td className="text-right">{fmt(h.food.cb)}</td>

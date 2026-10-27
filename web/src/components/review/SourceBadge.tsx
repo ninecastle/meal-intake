@@ -1,4 +1,4 @@
-// 영양값 출처 배지(DB·DB(환산)·검색 기반·AI 추정·직접 입력). 결과 수정 편집기(FoodCard)와 기록 상세(S7)가 함께 쓴다.
+// 영양값 출처 배지(DB·DB 환산·검색 기반·AI 추정·직접 입력). 결과 수정 편집기(FoodCard)와 기록 상세(S7)가 함께 쓴다.
 // 색(디자인 조각 D1-b2): DB 하늘(환산은 점선 테두리 더함), 검색 기반 복숭아, AI 추정 버터(테두리로 눈에 띄게), 직접 입력 회색.
 import type { MealItem } from '../../types/analysis'
 import { sourceLabel } from '../mealText'
