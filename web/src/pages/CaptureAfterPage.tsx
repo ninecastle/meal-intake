@@ -6,6 +6,7 @@
 // 먹는 동안 카메라가 켜져 있지 않게 S3는 카메라를 바로 열지 않는다.
 // 기록: 카메라 화면은 같은 주소 칸을 하나 더 쌓아 연다(이 화면의 state에 카메라 키만 더함). 닫기 X·셔터·기기 뒤로 가기는
 // 그 칸을 빼서 이 화면(먹기 전 결과 그대로)으로 돌아오고, 분석 뒤 S3 → S4는 replace라 S4에서 뒤로 가면 홈이다.
+import { Button } from '../components/ui'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { analyzeAfter, assembleAnalysis } from '../analysis/analyze'
@@ -222,27 +223,26 @@ export default function CaptureAfterPage({ uid }: { uid: string }) {
     navigate('/', { replace: true })
   }
 
-  const primary = 'flex min-h-14 w-full items-center justify-center rounded-xl text-lg font-semibold'
-  const secondary = 'flex min-h-11 w-full items-center justify-center text-sm text-gray-600 underline'
+  const secondary = 'focus-ring flex min-h-11 w-full items-center justify-center text-sm text-ink-2 underline'
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col px-4 pt-2">
+    <main className="mx-auto flex min-h-dvh max-w-[430px] flex-col px-4 pt-2">
       <div className="flex items-center justify-between text-sm">
-        <Link to="/" className="flex min-h-11 items-center pr-3 text-gray-600">
+        <Link to="/" className="focus-ring flex min-h-11 items-center pr-3 text-ink-2">
           ← 홈
         </Link>
-        <button type="button" onClick={cancelMeal} className="min-h-11 pl-3 text-gray-500 underline">
+        <button type="button" onClick={cancelMeal} className="focus-ring min-h-11 pl-3 text-ink-2 underline">
           기록 취소
         </button>
       </div>
 
       <h1 className="mt-2 text-2xl font-bold">먹은 후 사진</h1>
 
-      {!meal && !loadError && <p className="mt-4 text-sm text-gray-500">불러오는 중…</p>}
+      {!meal && !loadError && <p className="mt-4 text-sm text-ink-2">불러오는 중…</p>}
       {loadError && (
-        <div role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+        <div role="alert" className="mt-4 rounded-tile border border-red-200 bg-red-50 p-3 text-sm text-red-800">
           기록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.
-          <Link to="/" className="mt-2 flex min-h-11 items-center font-medium underline">
+          <Link to="/" className="focus-ring mt-2 flex min-h-11 items-center font-medium underline">
             홈으로
           </Link>
         </div>
@@ -252,45 +252,45 @@ export default function CaptureAfterPage({ uid }: { uid: string }) {
         <>
           {photoUrl && (
             <figure className="mt-3">
-              <img src={photoUrl} alt="먹기 전 사진" className="max-h-64 w-full rounded-xl object-cover" />
-              <figcaption className="mt-1 text-xs text-gray-500">먹기 전</figcaption>
+              <img src={photoUrl} alt="먹기 전 사진" className="max-h-64 w-full rounded-tile object-cover" />
+              <figcaption className="mt-1 text-xs text-ink-2">먹기 전</figcaption>
             </figure>
           )}
           {hasBeforePhoto === false && (
-            <p className="mt-3 rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-700">
+            <p className="mt-3 rounded-tile bg-surface px-3 py-2 text-sm text-ink">
               먹기 전 사진이 이 기기에 없어 음식 목록만으로 분석해요. 정확도가 낮을 수 있어요.
             </p>
           )}
 
-          <ul className="mt-3 divide-y divide-gray-100 rounded-xl border border-gray-200">
+          <ul className="mt-3 divide-y divide-line rounded-tile border border-line bg-surface">
             {meal.beforeAnalysis.items.map((it) => (
               <li key={it.id} className="flex items-center justify-between gap-2 px-3 py-2 text-sm">
                 <span className="truncate">{it.name}</span>
-                <span className="shrink-0 text-gray-500">{Math.round(it.before_grams)}g</span>
+                <span className="shrink-0 text-ink-2">{Math.round(it.before_grams)}g</span>
               </li>
             ))}
           </ul>
 
-          <p className="mt-3 text-base text-gray-800">같은 위치·각도로 찍어 주세요</p>
-          <p className="mt-1 text-sm text-gray-500">{captureSourceHint(cap)}</p>
+          <p className="mt-3 text-base text-ink">같은 위치·각도로 찍어 주세요</p>
+          <p className="mt-1 text-sm text-ink-2">{captureSourceHint(cap)}</p>
           <CameraHelp cap={cap} disabled={busy != null} />
 
           {samePending && (
-            <div role="alert" className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3">
-              <p className="font-semibold text-amber-900">먹기 전과 같은 사진이에요</p>
-              <p className="mt-1 text-sm text-amber-800">다 먹은 뒤의 사진을 골라 주세요.</p>
+            <div role="alert" className="mt-3 rounded-tile border border-butter bg-butter-soft p-3">
+              <p className="font-semibold text-ink">먹기 전과 같은 사진이에요</p>
+              <p className="mt-1 text-sm text-ink">다 먹은 뒤의 사진을 골라 주세요.</p>
               <div className="mt-2 flex gap-2">
                 <button
                   type="button"
                   onClick={pickOther}
-                  className="min-h-11 flex-1 rounded-lg bg-amber-500 px-3 font-semibold text-white"
+                  className="focus-ring min-h-11 flex-1 rounded-full bg-butter px-3 text-ink"
                 >
                   다른 사진 고르기
                 </button>
                 <button
                   type="button"
                   onClick={() => void analyzeSameAnyway()}
-                  className="min-h-11 flex-1 rounded-lg border border-amber-400 px-3 text-amber-900"
+                  className="focus-ring min-h-11 flex-1 rounded-full border border-butter bg-surface px-3 text-ink"
                 >
                   그대로 분석
                 </button>
@@ -299,27 +299,27 @@ export default function CaptureAfterPage({ uid }: { uid: string }) {
           )}
 
           {error && (
-            <div role="alert" className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3">
+            <div role="alert" className="mt-3 rounded-tile border border-red-200 bg-red-50 p-3">
               <p className="font-semibold text-red-800">{error.title}</p>
               <p className="mt-1 text-sm text-red-700">{error.detail}</p>
-              {import.meta.env.DEV && error.devCode && <p className="mt-1 text-xs text-gray-500">{error.devCode}</p>}
+              {import.meta.env.DEV && error.devCode && <p className="mt-1 text-xs text-ink-2">{error.devCode}</p>}
             </div>
           )}
 
           <div className="flex-1" />
-          <p className="mt-4 text-xs leading-relaxed text-gray-500">{PHOTO_NOTICE}</p>
+          <p className="mt-4 text-xs leading-relaxed text-ink-2">{PHOTO_NOTICE}</p>
 
-          <div className="sticky bottom-0 -mx-4 bg-white/95 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+          <div className="sticky bottom-0 -mx-4 bg-surface/95 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
             {error?.retry ? (
               <>
-                <button
+                <Button
+                  full
                   type="button"
                   onClick={() => void retryLast()}
                   disabled={busy != null}
-                  className={`${primary} bg-emerald-600 text-white disabled:opacity-50`}
                 >
                   다시 시도
-                </button>
+                </Button>
                 <button type="button" onClick={cap.take} disabled={busy != null} className={secondary}>
                   다시 찍기
                 </button>
@@ -329,9 +329,9 @@ export default function CaptureAfterPage({ uid }: { uid: string }) {
               </>
             ) : error?.preferManual ? (
               <>
-                <button type="button" onClick={() => void chooseManually()} className={`${primary} bg-emerald-600 text-white`}>
+                <Button full type="button" onClick={() => void chooseManually()}>
                   남긴 양 직접 고르기
-                </button>
+                </Button>
                 <button type="button" onClick={cap.take} className={secondary}>
                   다시 찍기
                 </button>

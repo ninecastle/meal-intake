@@ -199,16 +199,18 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
 
   return (
     <div className="space-y-3 text-sm">
-      <div className="rounded-lg bg-gray-900 p-3 text-white">
-        <p className="text-xs text-gray-300">섭취 합계 (먹기 전 {Math.round(t.before_kcal)} kcal)</p>
-        <p className="text-2xl font-bold">{Math.round(t.consumed.kcal)} kcal</p>
+      <div className="rounded-card bg-ink p-4 text-white">
+        <p className="text-xs text-white/70">섭취 합계 (먹기 전 {Math.round(t.before_kcal)} kcal)</p>
+        <p className="num text-3xl">{Math.round(t.consumed.kcal)} kcal</p>
         <p>
-          탄 {t.consumed.carbs_g.toFixed(1)}g · 단 {t.consumed.protein_g.toFixed(1)}g · 지 {t.consumed.fat_g.toFixed(1)}g
+          탄 <span className="num text-carb">{t.consumed.carbs_g.toFixed(1)}g</span> · 단{' '}
+          <span className="num text-prot">{t.consumed.protein_g.toFixed(1)}g</span> · 지{' '}
+          <span className="num text-fat">{t.consumed.fat_g.toFixed(1)}g</span>
         </p>
-        {unpicked > 0 && <p className="mt-1 text-xs text-amber-300">남긴 양을 고르면 합계가 바뀌어요({unpicked}개 남음)</p>}
+        {unpicked > 0 && <p className="mt-1 text-xs text-butter">남긴 양을 고르면 합계가 바뀌어요({unpicked}개 남음)</p>}
       </div>
 
-      {shown.length === 0 && <p className="text-gray-500">음식이 없어요. 아래 버튼으로 추가하세요.</p>}
+      {shown.length === 0 && <p className="text-ink-2">음식이 없어요. 아래 버튼으로 추가하세요.</p>}
 
       <ul className="space-y-3">
         {shown.map((it) => (
@@ -239,21 +241,21 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
       <button
         type="button"
         onClick={add}
-        className="min-h-11 w-full rounded-lg border-2 border-dashed border-gray-300 font-medium text-gray-700"
+        className="focus-ring min-h-11 w-full rounded-tile border-2 border-dashed border-ink-3 bg-surface text-ink"
       >
         + 음식 추가
       </button>
 
       {undo && (
-        <div className="sticky bottom-2 flex items-center justify-between gap-2 rounded-lg bg-gray-800 px-3 py-1 text-white shadow">
+        <div className="sticky bottom-2 flex items-center justify-between gap-2 rounded-tile bg-ink px-3 py-1 text-white shadow">
           <span className="min-w-0 truncate">‘{undo.item.name || '이름 없음'}’ 삭제함</span>
-          <button type="button" onClick={restore} className="min-h-11 shrink-0 px-2 font-semibold text-amber-300">
+          <button type="button" onClick={restore} className="focus-ring min-h-11 shrink-0 px-2 font-semibold text-butter">
             되돌리기
           </button>
         </div>
       )}
 
-      <p className="text-xs text-gray-500">영양 정보: 식품의약품안전처 식품영양성분 DB(2026-10-06 갱신본)</p>
+      <p className="text-xs text-ink-2">영양 정보: 식품의약품안전처 식품영양성분 DB(2026-10-06 갱신본)</p>
     </div>
   )
 }

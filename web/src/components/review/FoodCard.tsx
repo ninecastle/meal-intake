@@ -78,19 +78,19 @@ export default function FoodCard(p: FoodCardProps) {
   const ref = item.db_reference
 
   return (
-    <li className={`rounded-lg bg-white p-3 shadow-sm ${p.flagged ? 'border-2 border-amber-400' : 'border border-gray-200'}`}>
+    <li className={`rounded-card bg-surface p-4 ${p.flagged ? 'border-2 border-butter' : 'border border-line'}`}>
       <fieldset disabled={pending} className="min-w-0 space-y-3">
         <div className="flex items-start gap-2">
-          <button type="button" onClick={p.onStartEdit} className="min-h-11 min-w-0 flex-1 text-left">
+          <button type="button" onClick={p.onStartEdit} className="focus-ring min-h-11 min-w-0 flex-1 text-left">
             <span className="block break-words text-base font-semibold">
-              {name || <span className="text-gray-400">이름을 입력하세요</span>}
+              {name || <span className="text-ink-3">이름을 입력하세요</span>}
             </span>
-            <span className="text-xs text-gray-500">눌러서 이름·종류 고치기</span>
+            <span className="text-xs text-ink-2">눌러서 이름·종류 고치기</span>
           </button>
           <button
             type="button"
             onClick={p.onDelete}
-            className="min-h-11 min-w-11 rounded border border-gray-300 px-2 text-gray-600"
+            className="focus-ring min-h-11 min-w-11 rounded-full border border-line px-2 text-ink-2"
           >
             삭제
           </button>
@@ -98,17 +98,17 @@ export default function FoodCard(p: FoodCardProps) {
 
         <div className="flex flex-wrap items-center gap-1 text-xs">
           <SourceBadge item={item} />
-          {item.needs_review && <span className="rounded bg-amber-100 px-2 py-0.5 text-amber-800">확인 필요</span>}
-          {pending && <span className="font-medium text-blue-700">계산 중…</span>}
+          {item.needs_review && <span className="rounded-md border border-butter bg-butter-soft px-2 py-0.5 text-ink">확인 필요</span>}
+          {pending && <span className="font-medium text-sky-deep">계산 중…</span>}
         </div>
         {item.nutrition_source === 'db' && item.db_name && (
-          <p className="text-xs text-gray-600">
+          <p className="text-xs text-ink-2">
             DB 이름: {item.db_name}
             {dbNote && ` (${dbNote})`}
           </p>
         )}
         {ref && (
-          <p className="text-xs text-gray-600">
+          <p className="text-xs text-ink-2">
             참고 DB 대표값 {Math.round(ref.kcal_per_100g)}kcal/100g ({ref.db_name}
             {ref.db_match === 'partial' ? ', 부분 일치' : ''}
             {ref.ml_converted ? ', 환산' : ''})
@@ -118,20 +118,20 @@ export default function FoodCard(p: FoodCardProps) {
         {p.editing && <NameEditor item={item} onConfirm={p.onConfirmName} onCancel={p.onCancelEdit} />}
 
         {p.askName !== null && (
-          <div className="rounded bg-amber-50 p-2">
+          <div className="rounded-tile border border-butter bg-butter-soft p-3">
             <p>칼로리를 직접 고친 음식이에요. ‘{p.askName}’ 기준으로 다시 계산할까요?</p>
             <div className="mt-2 flex gap-2">
               <button
                 type="button"
                 onClick={() => p.onAnswerAsk(true)}
-                className="min-h-11 flex-1 rounded bg-gray-900 px-2 text-white"
+                className="focus-ring min-h-11 flex-1 rounded-full bg-ink px-2 text-white"
               >
                 예, 다시 계산
               </button>
               <button
                 type="button"
                 onClick={() => p.onAnswerAsk(false)}
-                className="min-h-11 flex-1 rounded border border-gray-400 px-2"
+                className="focus-ring min-h-11 flex-1 rounded-full border border-ink-3 bg-surface px-2"
               >
                 아니요, 이름만
               </button>
@@ -141,18 +141,18 @@ export default function FoodCard(p: FoodCardProps) {
 
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
-            <span className="text-xs text-gray-600">중량(g, 먹기 전)</span>
+            <span className="text-xs text-ink-2">중량(g, 먹기 전)</span>
             <NumField value={item.before_grams} min={0} max={MAX_GRAMS} onCommit={p.onGrams} label="중량(g)" />
             {item.grams_source === 'published' && item.published_g != null && (
-              <span className="mt-0.5 block text-xs text-emerald-700">
+              <span className="mt-0.5 block text-xs text-lime-deep">
                 공개 중량 {Math.round(item.published_g)}g × {item.unit_count ?? 1}
               </span>
             )}
           </label>
           <div>
             <label className="block">
-              <span className="text-xs text-gray-600">
-                섭취 kcal{canAuto && <span className="ml-1 font-medium text-purple-700">직접 입력</span>}
+              <span className="text-xs text-ink-2">
+                섭취 kcal{canAuto && <span className="ml-1 font-medium text-peach-deep">직접 입력</span>}
               </span>
               <NumField
                 inputRef={kcalRef}
@@ -168,7 +168,7 @@ export default function FoodCard(p: FoodCardProps) {
               <button
                 type="button"
                 onClick={() => p.onKcal(null)}
-                className="mt-1 min-h-11 w-full rounded border border-gray-300 text-xs"
+                className="focus-ring mt-1 min-h-11 w-full rounded-full border border-line text-xs"
               >
                 자동 계산
               </button>
@@ -177,9 +177,9 @@ export default function FoodCard(p: FoodCardProps) {
         </div>
 
         <div>
-          <div className="flex justify-between text-xs text-gray-600">
+          <div className="flex justify-between text-xs text-ink-2">
             <span>남긴 비율</span>
-            <span className={`font-medium ${ratioOpen ? 'text-amber-700' : 'text-gray-900'}`}>
+            <span className={`font-medium ${ratioOpen ? 'text-peach-deep' : 'text-ink'}`}>
               {item.remaining_ratio == null ? '아직 안 고름' : `${ratioPct}%`}
             </span>
           </div>
@@ -195,10 +195,10 @@ export default function FoodCard(p: FoodCardProps) {
               if (assumed) p.onRatio(Number(e.currentTarget.value) / 100)
             }}
             aria-label="남긴 비율"
-            className="h-11 w-full accent-amber-500"
+            className="h-11 w-full accent-lime-deep"
           />
           {ratioOpen && (
-            <div role="status" className="rounded bg-amber-50 p-2 text-amber-900">
+            <div role="status" className="rounded-tile border border-butter bg-butter-soft p-3 text-ink">
               <p className="text-sm font-medium">{assumed ? ASSUMED_HINT : RATIO_HINT[p.ratioHint]}</p>
               <div className="mt-2 grid grid-cols-3 gap-2">
                 {QUICK_RATIOS.map((q) => {
@@ -209,7 +209,7 @@ export default function FoodCard(p: FoodCardProps) {
                       type="button"
                       aria-pressed={sel}
                       onClick={() => p.onRatio(q.r)}
-                      className={`min-h-11 rounded border px-2 text-sm ${sel ? 'border-amber-600 bg-amber-500 font-medium text-white' : 'border-amber-400 bg-white'}`}
+                      className={`focus-ring min-h-11 rounded-full border px-2 text-sm ${sel ? 'border-ink bg-butter text-ink' : 'border-butter bg-surface text-ink'}`}
                     >
                       {q.label}
                     </button>
@@ -221,7 +221,7 @@ export default function FoodCard(p: FoodCardProps) {
         </div>
 
         <div>
-          <p className="text-xs text-gray-600">같이 먹은 인원수</p>
+          <p className="text-xs text-ink-2">같이 먹은 인원수</p>
           <div className="mt-1 flex flex-wrap items-center gap-1">
             {[1, 2, 3, 4, 5].map((n) => {
               const sel = n < 5 ? item.eaters === n : item.eaters >= 5
@@ -234,7 +234,7 @@ export default function FoodCard(p: FoodCardProps) {
                     if (n === 5 && item.eaters >= 5) return
                     p.onEaters(n)
                   }}
-                  className={`min-h-11 min-w-11 rounded border px-2 ${sel ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300'}`}
+                  className={`focus-ring min-h-11 min-w-11 rounded-full border px-2 ${sel ? 'border-ink bg-ink text-white' : 'border-line bg-surface'}`}
                 >
                   {n === 5 ? '5+' : n}
                 </button>
@@ -249,7 +249,7 @@ export default function FoodCard(p: FoodCardProps) {
                   max={MAX_EATERS}
                   onCommit={(n) => p.onEaters(Math.round(n))}
                   label={`같이 먹은 인원수(5~${MAX_EATERS})`}
-                  className="min-h-11 w-16 rounded border border-gray-300 px-2 text-base"
+                  className="min-h-11 w-16 rounded-tile border border-line bg-surface px-2 text-base"
                 />
                 명
               </label>
@@ -257,7 +257,7 @@ export default function FoodCard(p: FoodCardProps) {
           </div>
         </div>
 
-        <p className="text-xs text-gray-700">
+        <p className="text-xs text-ink">
           섭취 {item.consumed_grams.toFixed(0)}g · 탄 <Macro item={item} k="carbs_g" /> · 단 <Macro item={item} k="protein_g" /> · 지{' '}
           <Macro item={item} k="fat_g" />
         </p>
@@ -268,6 +268,9 @@ export default function FoodCard(p: FoodCardProps) {
   )
 }
 
+// 탄·단·지 숫자 색(디자인 시안 carb·prot·fat)
+const MACRO_TEXT = { carbs_g: 'text-carb', protein_g: 'text-prot', fat_g: 'text-fat' } as const
+
 // 탄·단·지(읽기 전용). 값이 없으면 –, DB에 없어 AI 추정으로 채웠으면 작은 표시
 function Macro({ item, k }: { item: MealItem; k: 'carbs_g' | 'protein_g' | 'fat_g' }) {
   if (!item.per_100g) return <>–</>
@@ -275,7 +278,8 @@ function Macro({ item, k }: { item: MealItem; k: 'carbs_g' | 'protein_g' | 'fat_
   if (fill === 'missing') return <>–</>
   return (
     <>
-      {item.consumed[k].toFixed(1)}g{fill === 'ai_estimate' && <span className="ml-0.5 text-[10px] text-amber-700">AI 추정</span>}
+      <span className={MACRO_TEXT[k]}>{item.consumed[k].toFixed(1)}g</span>
+      {fill === 'ai_estimate' && <span className="ml-0.5 rounded-sm bg-butter-soft px-0.5 text-[10px] text-ink">AI 추정</span>}
     </>
   )
 }
@@ -328,7 +332,7 @@ function NumField(props: {
       onKeyDown={(e) => {
         if (e.key === 'Enter') e.currentTarget.blur()
       }}
-      className={props.className ?? 'mt-1 min-h-11 w-full rounded border border-gray-300 px-2 text-base'}
+      className={props.className ?? 'mt-1 min-h-11 w-full rounded-tile border border-line bg-surface px-2 text-base'}
     />
   )
 }
@@ -382,7 +386,7 @@ function NameEditor(props: { item: MealItem; onConfirm: (name: string, dbCode?: 
   const shown = (variants ?? []).filter((v) => !f || compact(v.label).includes(f) || compact(v.dbName).includes(f))
 
   return (
-    <div className="rounded border border-gray-300 bg-gray-50 p-2">
+    <div className="rounded-tile border border-line bg-ground p-2">
       <form onSubmit={submit} className="flex gap-2">
         <input
           autoFocus
@@ -391,18 +395,18 @@ function NameEditor(props: { item: MealItem; onConfirm: (name: string, dbCode?: 
           placeholder="음식 이름"
           enterKeyHint="done"
           aria-label="음식 이름"
-          className="min-h-11 min-w-0 flex-1 rounded border border-gray-300 px-2 text-base"
+          className="min-h-11 min-w-0 flex-1 rounded-tile border border-line bg-surface px-2 text-base"
         />
-        <button type="submit" disabled={!draft.trim()} className="min-h-11 rounded bg-gray-900 px-3 text-white disabled:opacity-40">
+        <button type="submit" disabled={!draft.trim()} className="focus-ring min-h-11 rounded-full bg-ink px-3 text-white disabled:opacity-40">
           확인
         </button>
-        <button type="button" onClick={onCancel} className="min-h-11 rounded border border-gray-400 px-3">
+        <button type="button" onClick={onCancel} className="focus-ring min-h-11 rounded-full border border-ink-3 bg-surface px-3">
           취소
         </button>
       </form>
 
       {sugs.length > 0 && (
-        <ul className="mt-1 divide-y divide-gray-200 rounded border border-gray-200 bg-white">
+        <ul className="mt-1 divide-y divide-line rounded-tile border border-line bg-surface">
           {sugs.map((s, i) => (
             <li key={`${s.dbCode}-${i}`}>
               <SuggestionButton s={s} onPick={() => onConfirm(s.label, s.dbCode)} />
@@ -413,20 +417,20 @@ function NameEditor(props: { item: MealItem; onConfirm: (name: string, dbCode?: 
 
       {baseName && (
         <div className="mt-3">
-          <p className="text-xs text-gray-600">‘{baseName}’ 세부 종류</p>
+          <p className="text-xs text-ink-2">‘{baseName}’ 세부 종류</p>
           <input
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
             placeholder="걸러 보기 (예: 양념, 순살)"
             aria-label="세부 종류 걸러 보기"
-            className="mt-1 min-h-11 w-full rounded border border-gray-300 px-2 text-base"
+            className="mt-1 min-h-11 w-full rounded-tile border border-line bg-surface px-2 text-base"
           />
           {variants === null ? (
-            <p className="mt-1 text-xs text-gray-500">불러오는 중…</p>
+            <p className="mt-1 text-xs text-ink-2">불러오는 중…</p>
           ) : shown.length === 0 ? (
-            <p className="mt-1 text-xs text-gray-500">맞는 종류가 없어요. 이름을 직접 쓰고 확인을 누르세요.</p>
+            <p className="mt-1 text-xs text-ink-2">맞는 종류가 없어요. 이름을 직접 쓰고 확인을 누르세요.</p>
           ) : (
-            <ul className="mt-1 max-h-60 divide-y divide-gray-200 overflow-y-auto rounded border border-gray-200 bg-white">
+            <ul className="mt-1 max-h-60 divide-y divide-line overflow-y-auto rounded-tile border border-line bg-surface">
               {shown.map((s, i) => (
                 <li key={`${s.dbCode}-${i}`}>
                   <SuggestionButton s={s} onPick={() => onConfirm(s.label, s.dbCode)} />
@@ -442,13 +446,13 @@ function NameEditor(props: { item: MealItem; onConfirm: (name: string, dbCode?: 
 
 function SuggestionButton({ s, onPick }: { s: FoodSuggestion; onPick: () => void }) {
   return (
-    <button type="button" onClick={onPick} className="flex min-h-11 w-full items-center justify-between gap-2 px-2 text-left">
+    <button type="button" onClick={onPick} className="focus-ring flex min-h-11 w-full items-center justify-between gap-2 px-2 text-left">
       <span className="min-w-0 break-words">
         {s.label}
-        {s.kind === 'group' && <span className="ml-1 text-xs text-gray-500">대표값</span>}
-        {s.mlConverted && <span className="ml-1 text-xs text-gray-500">환산</span>}
+        {s.kind === 'group' && <span className="ml-1 text-xs text-ink-2">대표값</span>}
+        {s.mlConverted && <span className="ml-1 text-xs text-ink-2">환산</span>}
       </span>
-      <span className="shrink-0 text-xs text-gray-600">{Math.round(s.kcalPer100g)}kcal/100g</span>
+      <span className="shrink-0 text-xs text-ink-2">{Math.round(s.kcalPer100g)}kcal/100g</span>
     </button>
   )
 }

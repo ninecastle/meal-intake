@@ -1,14 +1,7 @@
 // S2·S3 촬영 버튼(방식별)과 카메라 대체 안내(스펙 4.8, M19 조각 1). S2 선택 화면 버튼(조각 2-1).
+import { Button } from '../ui'
 import type { ReactNode } from 'react'
 import type { CaptureSource } from './useCaptureSource'
-
-const PRIMARY =
-  'flex min-h-14 w-full items-center justify-center rounded-xl bg-emerald-600 text-lg font-semibold text-white disabled:opacity-50'
-const SECONDARY =
-  'mt-2 flex min-h-12 w-full items-center justify-center rounded-xl border-2 border-emerald-600 text-base font-semibold text-emerald-700 disabled:opacity-50'
-
-const MANUAL =
-  'mt-2 flex min-h-12 w-full items-center justify-center rounded-xl border border-gray-300 bg-white text-base font-semibold text-gray-700'
 
 /**
  * S2 처음 선택 화면(2026-10-27 사용자 결정, 카메라 조각 2-1): 방식별 사진 버튼 + [직접 입력].
@@ -40,33 +33,33 @@ export function CaptureChoice({
       {top != null && top !== false && <div className="mb-3 space-y-2">{top}</div>}
       {cap.mode === 'pc' ? (
         <>
-          <button type="button" onClick={run(cap.pickAlbum)} disabled={disabled} className={PRIMARY}>
+          <Button full type="button" onClick={run(cap.pickAlbum)} disabled={disabled}>
             사진 파일 고르기
-          </button>
+          </Button>
           {cap.hasWebcam && (
-            <button type="button" onClick={run(cap.openCamera)} disabled={disabled} className={SECONDARY}>
+            <Button variant="ghost" full type="button" onClick={run(cap.openCamera)} disabled={disabled} className="mt-2">
               카메라로 찍기
-            </button>
+            </Button>
           )}
         </>
       ) : (
         <>
-          <button
+          <Button
+            full
             type="button"
             onClick={run(cap.mode === 'camera' ? cap.openCamera : cap.pickCameraInput)}
             disabled={disabled}
-            className={PRIMARY}
           >
             {cameraLabel}
-          </button>
-          <button type="button" onClick={run(cap.pickAlbum)} disabled={disabled} className={SECONDARY}>
+          </Button>
+          <Button variant="ghost" full type="button" onClick={run(cap.pickAlbum)} disabled={disabled} className="mt-2">
             앨범에서 고르기
-          </button>
+          </Button>
         </>
       )}
-      <button type="button" onClick={onManual} className={MANUAL}>
+      <Button variant="ghost" full type="button" onClick={onManual} className="mt-2">
         직접 입력
-      </button>
+      </Button>
     </section>
   )
 }
@@ -87,33 +80,33 @@ export function CaptureButtons({
   const run = (fn: () => void) => () => gate(fn)
   if (cap.mode === 'camera') {
     return (
-      <button type="button" onClick={run(cap.openCamera)} disabled={disabled} className={PRIMARY}>
+      <Button full type="button" onClick={run(cap.openCamera)} disabled={disabled}>
         {cameraLabel}
-      </button>
+      </Button>
     )
   }
   if (cap.mode === 'pc') {
     return (
       <>
-        <button type="button" onClick={run(cap.pickAlbum)} disabled={disabled} className={PRIMARY}>
+        <Button full type="button" onClick={run(cap.pickAlbum)} disabled={disabled}>
           사진 파일 고르기
-        </button>
+        </Button>
         {cap.hasWebcam && (
-          <button type="button" onClick={run(cap.openCamera)} disabled={disabled} className={SECONDARY}>
+          <Button variant="ghost" full type="button" onClick={run(cap.openCamera)} disabled={disabled} className="mt-2">
             카메라로 찍기
-          </button>
+          </Button>
         )}
       </>
     )
   }
   return (
     <>
-      <button type="button" onClick={run(cap.pickCameraInput)} disabled={disabled} className={PRIMARY}>
+      <Button full type="button" onClick={run(cap.pickCameraInput)} disabled={disabled}>
         카메라로 찍기
-      </button>
-      <button type="button" onClick={run(cap.pickAlbum)} disabled={disabled} className={SECONDARY}>
+      </Button>
+      <Button variant="ghost" full type="button" onClick={run(cap.pickAlbum)} disabled={disabled} className="mt-2">
         앨범에서 고르기
-      </button>
+      </Button>
     </>
   )
 }
@@ -130,18 +123,18 @@ export function CameraHelp({ cap, disabled }: { cap: CaptureSource; disabled?: b
   if (!reason) return null
   if (reason === 'unsupported') {
     return (
-      <p className="mt-3 rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-700">
+      <p className="mt-3 rounded-tile bg-surface px-3 py-2 text-sm text-ink">
         이 브라우저에서는 앱 안 카메라를 쓸 수 없어요. 아래 버튼으로 찍거나 골라 주세요.
       </p>
     )
   }
   return (
-    <div role="status" className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+    <div role="status" className="mt-3 rounded-tile border border-butter bg-butter-soft p-3 text-sm text-ink">
       <p className="font-semibold">{TITLE[reason]}</p>
       {reason === 'denied' ? (
         <>
           <p className="mt-1">아래 버튼으로 찍을 수 있어요. 앱 안 카메라를 쓰려면 권한을 켠 뒤 [다시 시도]를 눌러 주세요.</p>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-amber-800">
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-ink">
             <li>아이폰·아이패드(사파리): 주소창 "aA" → 웹사이트 설정 → 카메라 → 허용. 또는 설정 → 앱 → Safari → 카메라</li>
             <li>안드로이드(크롬): 주소창 왼쪽 아이콘 → 권한 → 카메라 → 허용</li>
             {cap.base === 'pc' && <li>PC(크롬·엣지): 주소창 왼쪽 아이콘 → 카메라 → 허용</li>}
@@ -158,7 +151,7 @@ export function CameraHelp({ cap, disabled }: { cap: CaptureSource; disabled?: b
         type="button"
         onClick={cap.retryCamera}
         disabled={disabled}
-        className="mt-2 flex min-h-11 w-full items-center justify-center rounded-lg border border-amber-400 bg-white font-semibold text-amber-900 disabled:opacity-50"
+        className="focus-ring mt-2 flex min-h-11 w-full items-center justify-center rounded-full border border-butter bg-surface font-semibold text-ink disabled:opacity-50"
       >
         다시 시도
       </button>

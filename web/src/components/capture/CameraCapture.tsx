@@ -75,7 +75,7 @@ function waitForFrame(v: HTMLVideoElement, ms: number): Promise<boolean> {
 
 const SLOT = 'flex h-14 w-14 items-center justify-center'
 const ROUND =
-  'flex h-12 w-12 items-center justify-center rounded-full bg-black/45 text-white ring-1 ring-white/40 active:bg-black/70 disabled:opacity-40'
+  'focus-ring flex h-12 w-12 items-center justify-center rounded-full bg-black/45 text-white ring-1 ring-white/40 active:bg-black/70 disabled:opacity-40'
 
 export default function CameraCapture({ title, hint, onShot, onAlbum, onClose, onFail, overlaySrc }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -242,7 +242,7 @@ export default function CameraCapture({ title, hint, onShot, onAlbum, onClose, o
       {/* 위: 닫기 + 제목 + (먹기 전 사진이 있으면) 겹쳐 보기 + 안내. 가로면 오른쪽 셔터 줄 자리를 비운다. */}
       <div className="absolute top-0 right-0 left-0 bg-linear-to-b from-black/70 to-transparent pt-[max(0.5rem,env(safe-area-inset-top))] pr-3 pb-6 pl-[max(0.75rem,env(safe-area-inset-left))] landscape:right-28">
         <div className="flex items-center gap-2">
-          <button type="button" onClick={onClose} aria-label="닫기" className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full active:bg-white/20">
+          <button type="button" onClick={onClose} aria-label="닫기" className="focus-ring flex h-11 w-11 shrink-0 items-center justify-center rounded-full active:bg-white/20">
             <svg viewBox="0 0 24 24" className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true">
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
@@ -254,8 +254,8 @@ export default function CameraCapture({ title, hint, onShot, onAlbum, onClose, o
               onClick={() => setOverlayOn((o) => !o)}
               aria-label="먹기 전 사진 겹쳐 보기"
               aria-pressed={overlayOn}
-              className={`ml-auto flex h-11 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold ring-1 ${
-                overlayOn ? 'bg-white text-black ring-white' : 'bg-black/45 text-white ring-white/40 active:bg-black/70'
+              className={`focus-ring ml-auto flex h-11 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold ring-1 ${
+                overlayOn ? 'bg-lime text-ink ring-lime' : 'bg-black/45 text-white ring-white/40 active:bg-black/70'
               }`}
             >
               <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
@@ -289,7 +289,7 @@ export default function CameraCapture({ title, hint, onShot, onAlbum, onClose, o
           onClick={shoot}
           disabled={!live}
           aria-label="사진 찍기"
-          className="flex h-[76px] w-[76px] items-center justify-center rounded-full border-4 border-white disabled:opacity-40"
+          className="focus-ring flex h-[76px] w-[76px] items-center justify-center rounded-full border-4 border-white disabled:opacity-40"
         >
           <span className="h-[60px] w-[60px] rounded-full bg-white active:scale-90" />
         </button>
@@ -327,7 +327,7 @@ export default function CameraCapture({ title, hint, onShot, onAlbum, onClose, o
               onChange={(e) => changeOpacity(Number(e.target.value))}
               aria-label="겹쳐 보기 진하기"
               aria-valuetext={`${opacity}%`}
-              className="h-11 min-w-0 flex-1 cursor-pointer accent-white"
+              className="h-11 min-w-0 flex-1 cursor-pointer accent-lime"
             />
             <span aria-hidden="true" className="w-9 shrink-0 text-right tabular-nums">
               {opacity}%

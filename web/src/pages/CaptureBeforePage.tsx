@@ -6,6 +6,7 @@
 // 날짜, 없으면 오늘). 끼니: 앨범 사진은 EXIF 찍은 시각(없거나 미래면 지금), 카메라는 지금. 사진 날짜는 쓰지 않는다.
 // 기록: 홈 → S2는 push 한 번. 카메라 화면은 같은 주소 칸을 하나 더 쌓아 열고(location.state 카메라 키, ?date= 유지),
 // 닫기 X·셔터·기기 뒤로 가기는 그 칸을 빼서 이 선택 화면으로 돌아온다(useCaptureSource). S2 → S3·S4는 replace.
+import { Button } from '../components/ui'
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { analyzeBefore } from '../analysis/analyze'
@@ -152,69 +153,67 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
     }
   }
 
-  const primary = 'flex min-h-14 w-full items-center justify-center rounded-xl text-lg font-semibold'
-
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col px-4 pt-2">
+    <main className="mx-auto flex min-h-dvh max-w-[430px] flex-col px-4 pt-2">
       <div className="flex items-center justify-between text-sm">
-        <Link to="/" className="flex min-h-11 items-center pr-3 text-gray-600">
+        <Link to="/" className="focus-ring flex min-h-11 items-center pr-3 text-ink-2">
           ← 홈
         </Link>
       </div>
 
       <h1 className="mt-2 text-2xl font-bold">식사 기록</h1>
-      <p className="mt-2 text-base text-gray-800">먹기 전 사진은 수저를 함께, 위에서 찍어 주세요</p>
+      <p className="mt-2 text-base text-ink">먹기 전 사진은 수저를 함께, 위에서 찍어 주세요</p>
       <CameraHelp cap={cap} disabled={busy} />
 
       {error && (
-        <div role="alert" className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3">
+        <div role="alert" className="mt-4 rounded-tile border border-red-200 bg-red-50 p-3">
           <p className="font-semibold text-red-800">{error.title}</p>
           <p className="mt-1 text-sm text-red-700">{error.detail}</p>
-          {import.meta.env.DEV && error.devCode && <p className="mt-1 text-xs text-gray-500">{error.devCode}</p>}
+          {import.meta.env.DEV && error.devCode && <p className="mt-1 text-xs text-ink-2">{error.devCode}</p>}
         </div>
       )}
 
       <div className="flex-1" />
 
-      <p className="mt-4 text-xs leading-relaxed text-gray-500">{PHOTO_NOTICE}</p>
+      <p className="mt-4 text-xs leading-relaxed text-ink-2">{PHOTO_NOTICE}</p>
 
-      <div className="sticky bottom-0 -mx-4 bg-white/95 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <div className="sticky bottom-0 -mx-4 bg-surface/95 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
         {error?.retry ? (
           <>
-            <button
+            <Button
+              full
               type="button"
               onClick={() => void retryLast()}
               disabled={busy}
-              className={`${primary} bg-emerald-600 text-white disabled:opacity-50`}
             >
               다시 시도
-            </button>
+            </Button>
             <button
               type="button"
               onClick={startCapture}
               disabled={busy}
-              className="mt-1 flex min-h-11 w-full items-center justify-center text-sm text-gray-600 underline disabled:opacity-50"
+              className="focus-ring mt-1 flex min-h-11 w-full items-center justify-center text-sm text-ink-2 underline disabled:opacity-50"
             >
               다시 찍기
             </button>
             <button
               type="button"
               onClick={goManualNow}
-              className="flex min-h-11 w-full items-center justify-center text-sm text-gray-600 underline"
+              className="focus-ring flex min-h-11 w-full items-center justify-center text-sm text-ink-2 underline"
             >
               직접 입력
             </button>
           </>
         ) : error?.preferManual ? (
           <>
-            <button type="button" onClick={goManualNow} className={`${primary} bg-emerald-600 text-white`}>
+            <Button full type="button" onClick={goManualNow}>
               직접 입력
-            </button>
+            </Button>
             <button
               type="button"
               onClick={startCapture}
               disabled={busy}
-              className="mt-1 flex min-h-11 w-full items-center justify-center text-sm text-gray-600 underline disabled:opacity-50"
+              className="focus-ring mt-1 flex min-h-11 w-full items-center justify-center text-sm text-ink-2 underline disabled:opacity-50"
             >
               다시 찍기
             </button>
@@ -230,7 +229,7 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
               onManual={() => goManual(manualDate)}
             />
             {manualDate !== today && (
-              <p className="mt-2 text-center text-xs text-gray-500">
+              <p className="mt-2 text-center text-xs text-ink-2">
                 {cap.mode === 'pc' && !cap.hasWebcam
                   ? `고른 사진과 직접 입력은 ${dateKeyLabel(manualDate)} 기록으로 들어가요`
                   : `${cap.mode === 'pc' ? '고른 사진' : '앨범 사진'}과 직접 입력은 ${dateKeyLabel(manualDate)}, 카메라로 찍은 사진은 오늘 기록으로 들어가요`}
@@ -244,16 +243,16 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
 
       {showNotice && (
         <div role="dialog" aria-modal="true" className="fixed inset-0 z-40 flex items-end justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-4">
+          <div className="w-full max-w-[430px] rounded-card bg-surface p-4">
             <p className="font-semibold">사진을 보내기 전에 알려 드려요</p>
-            <p className="mt-2 text-sm leading-relaxed text-gray-700">{PHOTO_NOTICE}</p>
-            <button type="button" onClick={acceptNotice} className={`${primary} mt-4 bg-emerald-600 text-white`}>
+            <p className="mt-2 text-sm leading-relaxed text-ink">{PHOTO_NOTICE}</p>
+            <Button full type="button" onClick={acceptNotice} className="mt-4">
               확인하고 찍기
-            </button>
+            </Button>
             <button
               type="button"
               onClick={() => setShowNotice(false)}
-              className="mt-1 flex min-h-11 w-full items-center justify-center text-sm text-gray-600"
+              className="focus-ring mt-1 flex min-h-11 w-full items-center justify-center text-sm text-ink-2"
             >
               닫기
             </button>

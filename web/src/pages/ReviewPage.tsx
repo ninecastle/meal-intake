@@ -7,6 +7,7 @@
 // 주소로 바로 열었으면 상세로 replace한다. 저장했으면 상세가 "수정했어요"를 보인다(flash 또는 state { edited: true }).
 // 남긴 비율을 모르는(null) 음식이 하나라도 있으면 저장을 막는다(2026-10-27). S3이 state { retake: true }를 넘기면
 // (먹은 후 사진이 달라 보임, 문서는 awaiting_after 그대로) [먹은 후 사진 다시 찍기]를 보인다. state는 새로고침해도 남는다.
+import { Button, IconButton, TopBar } from '../components/ui'
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   UNSAFE_DataRouterContext,
@@ -296,30 +297,29 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
   const exitLabel = isEdit ? '기록으로' : '홈으로'
 
   return (
-    <div className="mx-auto flex h-dvh max-w-md flex-col bg-white text-gray-900">
+    <div className="mx-auto flex h-dvh max-w-[430px] flex-col bg-ground text-ink">
       {dataRouter && <LeaveGuard shouldBlock={shouldBlock} />}
-      <header className="flex shrink-0 items-center gap-1 border-b border-gray-200 px-2">
-        <button type="button" onClick={onBack} aria-label={exitLabel} className="min-h-11 min-w-11 px-2 text-lg">
-          ‹
-        </button>
-        <h1 className="text-base font-semibold">{title}</h1>
-      </header>
+      <TopBar
+        className="shrink-0 border-b border-line bg-surface"
+        left={<IconButton icon="back" label={exitLabel} onClick={onBack} />}
+        title={title}
+      />
 
       {(loading || phase.kind === 'loading') && (
-        <main className="flex flex-1 items-center justify-center text-gray-500">불러오는 중…</main>
+        <main className="flex flex-1 items-center justify-center text-ink-2">불러오는 중…</main>
       )}
 
       {phase.kind === 'awaiting' && (
         <main className="flex flex-1 flex-col justify-center gap-3 px-4">
           <p className="text-center">먹은 후 사진을 아직 안 찍었어요.</p>
-          <button
+          <Button
+            full
             type="button"
             onClick={() => navigate(`/meal/${phase.mealId}/after`, { replace: true })}
-            className="min-h-12 rounded-xl bg-emerald-600 font-semibold text-white"
           >
             남은 음식 찍기
-          </button>
-          <button type="button" onClick={() => leave()} className="min-h-11 text-gray-600">
+          </Button>
+          <button type="button" onClick={() => leave()} className="focus-ring min-h-11 text-ink-2">
             홈으로
           </button>
         </main>
@@ -328,14 +328,15 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
       {phase.kind === 'load_error' && (
         <main className="flex flex-1 flex-col justify-center gap-3 px-4">
           <p className="text-center">기록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.</p>
-          <button
+          <Button
+            variant="ink"
+            full
             type="button"
             onClick={() => setReloadSeq((n) => n + 1)}
-            className="min-h-12 rounded-xl bg-gray-900 font-semibold text-white"
           >
             다시 시도
-          </button>
-          <button type="button" onClick={() => leave()} className="min-h-11 text-gray-600">
+          </Button>
+          <button type="button" onClick={() => leave()} className="focus-ring min-h-11 text-ink-2">
             {exitLabel}
           </button>
         </main>
@@ -348,7 +349,7 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
               {/* 날짜는 새 기록(사진 결과·직접 입력)과 수정 모두 바꿀 수 있다(앨범 사진의 찍은 시각으로 미리 채워진 날짜도 고치게).
                   오늘과 지난 날짜만(max=오늘, 직접 타이핑한 미래 날짜도 받지 않는다) */}
               <label className="flex items-center justify-between gap-2">
-                <span className="text-sm font-medium text-gray-600">{dateLabel(draft.dateKey)}</span>
+                <span className="text-sm font-medium text-ink-2">{dateLabel(draft.dateKey)}</span>
                 <input
                   type="date"
                   required
@@ -359,7 +360,7 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
                     const v = parseDateKey(e.target.value)
                     if (v && v <= today) setDraft((d) => (d ? { ...d, dateKey: v } : d))
                   }}
-                  className="min-h-11 rounded-lg border border-gray-300 bg-white px-3 text-base"
+                  className="min-h-11 rounded-tile border border-line bg-surface px-3 text-base"
                 />
               </label>
               <div className="grid grid-cols-4 gap-2">
@@ -372,8 +373,8 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
                       aria-pressed={on}
                       disabled={saving}
                       onClick={() => setDraft((d) => (d ? { ...d, mealType: m.value } : d))}
-                      className={`min-h-11 rounded-full border text-sm font-medium ${
-                        on ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300 bg-white text-gray-700'
+                      className={`focus-ring min-h-11 rounded-full border text-sm font-medium ${
+                        on ? 'border-ink bg-ink text-white' : 'border-line bg-surface text-ink'
                       }`}
                     >
                       {m.label}
@@ -384,9 +385,9 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
             </section>
 
             {warnings.length > 0 && (
-              <section aria-label="확인할 점" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">
-                <p className="font-semibold text-amber-900">확인해 주세요</p>
-                <ul className="mt-1 list-disc space-y-1 pl-5 text-amber-900">
+              <section aria-label="확인할 점" className="rounded-tile border border-butter bg-butter-soft p-3 text-sm">
+                <p className="font-semibold text-ink">확인해 주세요</p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-ink">
                   {warnings.map((w) => (
                     <li key={w}>{w}</li>
                   ))}
@@ -400,11 +401,11 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
             </fieldset>
           </main>
 
-          <footer className="shrink-0 space-y-2 border-t border-gray-200 bg-white px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <footer className="shrink-0 space-y-2 border-t border-line bg-surface px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             {slow && (
-              <div className="flex items-center justify-between gap-2 rounded-lg bg-sky-50 p-2 text-sm text-sky-900">
+              <div className="flex items-center justify-between gap-2 rounded-tile bg-sky-soft p-2 text-sm text-ink">
                 <span>연결이 느려요. 연결되면 자동으로 저장돼요.</span>
-                <button type="button" onClick={leaveWhilePending} className="min-h-11 shrink-0 px-2 font-semibold">
+                <button type="button" onClick={leaveWhilePending} className="focus-ring min-h-11 shrink-0 px-2 font-semibold">
                   {exitLabel}
                 </button>
               </div>
@@ -415,38 +416,39 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
                 {saveError.code === 'MEAL_SAVE_REJECTED' && <p className="text-xs text-red-500">{saveError.detail}</p>}
               </div>
             )}
-            {!saving && editorBusy && <p className="text-sm text-gray-500">음식 정보를 다시 계산하는 중이에요. 끝나면 저장할 수 있어요.</p>}
+            {!saving && editorBusy && <p className="text-sm text-ink-2">음식 정보를 다시 계산하는 중이에요. 끝나면 저장할 수 있어요.</p>}
             {!saving && itemCount === 0 && (
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-ink-2">
                 {isEdit ? '음식을 모두 지웠다면 상세에서 기록을 삭제해 주세요.' : '음식을 하나 이상 넣어 주세요.'}
               </p>
             )}
             {!saving && unpicked > 0 && (
-              <p className="text-sm text-amber-700">
+              <p className="rounded-tile border border-butter bg-butter-soft px-3 py-2 text-sm text-ink">
                 남긴 양을 고르지 않은 음식이 {unpicked}개 있어요. 카드에서 남긴 양을 고르면 저장할 수 있어요.
               </p>
             )}
             {canRetake && (
-              <button
+              <Button
+                variant="ghost"
+                full
                 type="button"
                 onClick={onRetake}
                 disabled={saving}
-                className="min-h-11 w-full rounded-xl border border-emerald-600 text-base font-semibold text-emerald-700 disabled:opacity-50"
               >
                 먹은 후 사진 다시 찍기
-              </button>
+              </Button>
             )}
             {!saving && itemCount > 0 && unpicked === 0 && check && !check.ok && (
-              <p className="text-sm text-amber-700">저장 전에 고칠 값이 있어요: {check.errors[0]}</p>
+              <p className="rounded-tile border border-butter bg-butter-soft px-3 py-2 text-sm text-ink">저장 전에 고칠 값이 있어요: {check.errors[0]}</p>
             )}
-            <button
+            <Button
+              full
               type="button"
               onClick={onSave}
               disabled={!canSave}
-              className="min-h-12 w-full rounded-xl bg-emerald-600 text-base font-semibold text-white disabled:bg-gray-300 disabled:text-gray-500"
             >
               {saving ? '저장 중…' : saveError ? '다시 시도' : isEdit ? '수정 저장' : '저장'}
-            </button>
+            </Button>
           </footer>
         </>
       )}
