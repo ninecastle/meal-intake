@@ -108,6 +108,8 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
   const entryState = useRef<unknown>(location.state)
   const entryRetake = (entryState.current as { retake?: unknown } | null)?.retake === true
   const entryDate = useRef(searchParams.get('date'))
+  // 홈 끼니 카드에서 [직접 입력]으로 오면 ?meal(디자인 조각 D2, 끼니는 누른 카드)
+  const entryMeal = useRef(searchParams.get('meal'))
   const navRef = useRef(navigate)
   useEffect(() => {
     navRef.current = navigate
@@ -153,12 +155,12 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
       return
     }
     if (routeId === null) {
-      // 직접 입력: 빈 분석, 날짜는 ?date(틀리면 오늘), 끼니는 지금 시각
+      // 직접 입력: 빈 분석, 날짜는 ?date(틀리면 오늘), 끼니는 ?meal(카드로 들어온 경우) 아니면 지금 시각
       const now = new Date()
       ready({
         mealId: newMealId(uid),
         dateKey: fromState?.dateKey ?? parseDateKey(entryDate.current) ?? toDateKey(now),
-        mealType: fromState?.mealType ?? guessMealType(now),
+        mealType: fromState?.mealType ?? (isMealType(entryMeal.current) ? entryMeal.current : guessMealType(now)),
         analysis: fromState?.analysis ?? buildAnalysis([], []),
         isNew: true,
       })
