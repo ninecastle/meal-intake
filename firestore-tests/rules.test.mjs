@@ -404,3 +404,45 @@ describe('목표 설정(users/{uid}.goal, goals/{dateKey}, 스펙 4.7절)', () =
     await assertFails(deleteDoc(doc(alice(), goalPath(DAY))))
   })
 })
+
+describe('달력·주간 추이 조회(3단계 조각 3-1, 스펙 4.7절 "달력")', () => {
+  const mealPath = (id) => 'users/alice/meals/' + id
+  const goalPath = (id) => 'users/alice/goals/' + id
+  const targets = () => ({ target_kcal: 2060, carbs_g: 283, protein_g: 103, fat_g: 57, source: 'recommended' })
+  /** subscribeDaysInRange와 같은 쿼리: dateKey 범위 조건 두 개, orderBy·status 조건 없음 */
+  const rangeQuery = (fs, uid, start, end) =>
+    query(collection(fs, 'users/' + uid + '/meals'), where('dateKey', '>=', start), where('dateKey', '<=', end))
+  /** subscribeGoalsUpTo와 같은 쿼리: dateKey <= end, 오름차순 */
+  const goalsUpTo = (fs, uid, end) =>
+    query(collection(fs, 'users/' + uid + '/goals'), where('dateKey', '<=', end), orderBy('dateKey'))
+
+  test('본인 meals 범위 쿼리 허용: 양 끝 포함, 범위 밖 제외, 상태는 거르지 않음(done은 클라이언트가 거름)', async () => {
+    await seed(mealPath('a'), doneDoc(analysis(), { dateKey: '2026-09-30' }))
+    await seed(mealPath('b'), doneDoc(analysis(), { dateKey: '2026-10-01' }))
+    await seed(mealPath('c'), awaitingDoc({ dateKey: '2026-10-15' }))
+    await seed(mealPath('d'), doneDoc(analysis(), { dateKey: '2026-10-31' }))
+    await seed(mealPath('e'), doneDoc(analysis(), { dateKey: '2026-11-01' }))
+    const snap = await assertSucceeds(getDocs(rangeQuery(alice(), 'alice', '2026-10-01', '2026-10-31')))
+    assert.deepEqual(snap.docs.map((d) => d.id).sort(), ['b', 'c', 'd'])
+  })
+
+  test('남의 uid·미로그인 meals 범위 쿼리 거부', async () => {
+    await seed(mealPath('b'), doneDoc(analysis(), { dateKey: '2026-10-01' }))
+    await assertFails(getDocs(rangeQuery(db('bob'), 'alice', '2026-10-01', '2026-10-31')))
+    await assertFails(getDocs(rangeQuery(db(), 'alice', '2026-10-01', '2026-10-31')))
+  })
+
+  test('본인 goals dateKey <= end 오름차순 쿼리 허용: 끝 날짜 포함, 그 뒤 제외, 그달 1일 전 목표 포함', async () => {
+    for (const k of ['2026-10-25', '2026-09-10', '2026-10-31', '2026-11-02']) {
+      await seed(goalPath(k), { dateKey: k, targets: targets(), updatedAt: serverTimestamp() })
+    }
+    const snap = await assertSucceeds(getDocs(goalsUpTo(alice(), 'alice', '2026-10-31')))
+    assert.deepEqual(snap.docs.map((d) => d.data().dateKey), ['2026-09-10', '2026-10-25', '2026-10-31'])
+  })
+
+  test('남의 uid·미로그인 goals 쿼리 거부', async () => {
+    await seed(goalPath('2026-10-25'), { dateKey: '2026-10-25', targets: targets(), updatedAt: serverTimestamp() })
+    await assertFails(getDocs(goalsUpTo(db('bob'), 'alice', '2026-10-31')))
+    await assertFails(getDocs(goalsUpTo(db(), 'alice', '2026-10-31')))
+  })
+})

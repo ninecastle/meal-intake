@@ -303,7 +303,9 @@ export function subscribeDay(
 /**
  * 달력(S10)·주간 추이(S9): startKey~endKey(둘 다 포함) done 식사를 날짜별로 summarizeDay해 구독한다(스펙 4.7절 "달력").
  * dateKey 범위 쿼리 하나(단일 필드 인덱스), done은 클라이언트에서 거른다. 기록이 있는 날만 Map에 넣는다.
- * 리더가 시그니처만 둔 자리표시(3단계 조각 3-1). 구현은 firebase-engineer.
+ * 같은 필드의 범위 조건 두 개이고 orderBy·status 조건이 없어 복합 인덱스가 필요 없다(firestore.indexes.json 그대로).
+ * Map은 dateKey 오름차순으로 넣고, 날마다 hasPendingWrites는 그날 문서 가운데 하나라도 저장 대기면 true.
+ * 키 형식이 틀리거나 startKey > endKey이거나 31일을 넘으면 쿼리하지 않고 onError('MEAL_STORE_UNAVAILABLE')를 비동기로 알린다.
  */
 export function subscribeDaysInRange(
   uid: string,
@@ -312,12 +314,50 @@ export function subscribeDaysInRange(
   cb: (days: Map<string, DaySummary>) => void,
   onError?: (code: MealStoreErrorCode) => void,
 ): () => void {
-  void uid
-  void startKey
-  void endKey
-  void cb
-  void onError
-  return () => {}
+  if (!validRange(startKey, endKey)) {
+    console.warn('[meals] subscribeDaysInRange 범위 오류', startKey, endKey)
+    let live = true
+    queueMicrotask(() => live && onError?.('MEAL_STORE_UNAVAILABLE'))
+    return () => {
+      live = false
+    }
+  }
+  const q = query(mealsCol(uid), where('dateKey', '>=', startKey), where('dateKey', '<=', endKey))
+  return onSnapshot(
+    q,
+    { includeMetadataChanges: true },
+    (snap) => {
+      const byDay = new Map<string, MealWithId[]>()
+      const pending = new Set<string>()
+      for (const s of snap.docs) {
+        const m = toMeal(s)
+        if (m.status !== 'done') continue
+        const list = byDay.get(m.dateKey)
+        if (list) list.push(m)
+        else byDay.set(m.dateKey, [m])
+        if (s.metadata.hasPendingWrites) pending.add(m.dateKey)
+      }
+      const days = new Map<string, DaySummary>()
+      for (const k of [...byDay.keys()].sort()) {
+        const sum = summarizeDay(k, byDay.get(k)!)
+        if (sum.meals.length > 0) days.set(k, { ...sum, hasPendingWrites: pending.has(k) })
+      }
+      cb(days)
+    },
+    (e) => {
+      console.warn('[meals] subscribeDaysInRange 오류', e)
+      onError?.('MEAL_STORE_UNAVAILABLE')
+    },
+  )
+}
+
+const MAX_RANGE_DAYS = 31
+
+/** YYYY-MM-DD 두 개, start <= end, 양 끝 포함 31일 이하. */
+function validRange(startKey: string, endKey: string): boolean {
+  if (!DATE_KEY_RE.test(startKey) || !DATE_KEY_RE.test(endKey) || startKey > endKey) return false
+  const ms = (k: string) => Date.UTC(+k.slice(0, 4), +k.slice(5, 7) - 1, +k.slice(8, 10))
+  return (ms(endKey) - ms(startKey)) / 86_400_000 + 1 <= MAX_RANGE_DAYS
 }
 
 /** 기록 상세(S7): 문서 하나를 구독한다. 없거나 지워지면 null(화면은 S1로 이동). */

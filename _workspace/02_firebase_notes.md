@@ -159,3 +159,11 @@ firebase firestore:databases:create "(default)" --location asia-northeast3 --edi
 - `npx tsc -b` 통과.
 - 배포: 2026-10-27 `firebase deploy --only firestore:rules --project meal-intake-2026` 성공(규칙만, 인덱스·Hosting 안 함). AI 호출 0회.
 - 남은 이슈: override 값의 타입·범위는 규칙에서 보지 않는다(실제로 쓰는 값인 targets를 검사하므로 충분). 클라이언트 위조로 result와 targets가 어긋날 수 있으나 본인 기록만 영향이라 받아들인다.
+
+## 3단계 조각 3-1 달력 조회 (스펙 4.7절 "달력"·"주간 추이" 데이터, 2026-10-27, firebase-engineer)
+- `web/src/data/meals.ts` `subscribeDaysInRange(uid, startKey, endKey, cb, onError)`(시그니처 그대로): `where('dateKey','>=',start)`, `where('dateKey','<=',end)` 하나, orderBy·status 조건 없음, `includeMetadataChanges`. `toMeal` 후 `done`만 거르고 날짜별로 `summarizeDay`, 기록이 있는 날만 dateKey 오름차순으로 Map에 넣는다. 날마다 `hasPendingWrites`는 그날 문서 하나라도 저장 대기면 true(subscribeDay는 스냅숏 전체 값). 키 형식 오류·start > end·31일 초과면 쿼리하지 않고 `MEAL_STORE_UNAVAILABLE`을 비동기로 알린다. 구독 오류도 `MEAL_STORE_UNAVAILABLE`.
+- `web/src/data/goals.ts` `subscribeGoalsUpTo(uid, endKey, cb, onError)`(시그니처 그대로): `where('dateKey','<=',end)`, `orderBy('dateKey')`, limit 없음, 오름차순 `DatedGoal[]`(dateKey·targets만). 오류는 `GOAL_STORE_UNAVAILABLE`.
+- 인덱스: 두 쿼리 모두 한 필드(dateKey)의 범위(+같은 필드 정렬)라 단일 필드 인덱스로 동작한다. `firestore.indexes.json`은 빈 채로 둔다. 에뮬레이터는 인덱스를 검사하지 않으므로 배포본 첫 사용 때 콘솔 오류(`requires an index`)가 없는지 한 번 본다.
+- 읽기 비용: 달력 한 달 = 그달 식사 문서 수(모든 상태) + 목표 문서 수. Spark 하루 읽기 5만 건에 비해 작다.
+- 규칙: 바꾸지 않음(본인 `allow read`가 쿼리도 허용). 배포 안 함.
+- 규칙 테스트: 조회 시험 4개 추가(본인 meals 범위 허용·경계 포함·범위 밖 제외, 남·미로그인 meals 거부, 본인 goals 오름차순·그달 전 목표 포함, 남·미로그인 goals 거부) → **37개 통과, 실패 0**. `npx tsc -b` 통과. AI 호출 0회.

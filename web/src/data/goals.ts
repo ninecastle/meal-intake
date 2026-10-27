@@ -149,7 +149,8 @@ export function subscribeGoal(
 /**
  * 달력(S10)·주간 추이(S9): dateKey <= endKey인 날짜별 목표 기록 전부(dateKey 오름차순). 날마다 lib/calendar.ts의
  * goalForDate로 고른다(그달 1일 전에 정한 목표도 필요해서 시작 날짜로 자르지 않는다).
- * 리더가 시그니처만 둔 자리표시(3단계 조각 3-1). 구현은 firebase-engineer.
+ * 범위 조건과 정렬이 같은 필드라 단일 필드 인덱스로 동작한다(firestore.indexes.json 추가 없음).
+ * 목표는 저장할 때마다 하루 문서 하나라 사용자당 문서 수가 적어 limit을 두지 않는다.
  */
 export function subscribeGoalsUpTo(
   uid: string,
@@ -157,11 +158,21 @@ export function subscribeGoalsUpTo(
   cb: (goals: DatedGoal[]) => void,
   onError?: (code: GoalStoreErrorCode) => void,
 ): () => void {
-  void uid
-  void endKey
-  void cb
-  void onError
-  return () => {}
+  const q = query(goalsCol(uid), where('dateKey', '<=', endKey), orderBy('dateKey'))
+  return onSnapshot(
+    q,
+    (snap) =>
+      cb(
+        snap.docs.map((d) => {
+          const x = d.data() as DatedGoal
+          return { dateKey: x.dateKey, targets: x.targets }
+        }),
+      ),
+    (e) => {
+      console.warn('[goals] subscribeGoalsUpTo 오류', e)
+      onError?.('GOAL_STORE_UNAVAILABLE')
+    },
+  )
 }
 
 /** 날짜 D의 비교 목표: goals에서 dateKey <= D 가운데 가장 늦은 것. 없으면 null(목표를 처음 정하기 전의 날). */
