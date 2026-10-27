@@ -34,9 +34,11 @@ export function hourIn(d: Date, tz: string = APP_TIMEZONE): number {
 
 /** 먹기 전 촬영 시각 기준 끼니(스펙 2.2절): 05~10시 아침, 11~15시 점심, 17~21시 저녁, 그 밖(16시, 22~04시) 간식 */
 export function guessMealType(d: Date, tz: string = APP_TIMEZONE): MealType {
+  // 2026-10-27 사용자 결정: 아침 05:00~09:59, 점심 10:00~14:59, 저녁 15:00~20:59, 그 밖(21:00~04:59)은 간식.
+  // 기준 시각은 먹기 전 사진 시각(앨범 사진이면 찍은 시각, 카메라 조각 3)이다.
   const h = hourIn(d, tz)
-  if (h >= 5 && h <= 10) return 'breakfast'
-  if (h >= 11 && h <= 15) return 'lunch'
-  if (h >= 17 && h <= 21) return 'dinner'
+  if (h >= 5 && h < 10) return 'breakfast'
+  if (h >= 10 && h < 15) return 'lunch'
+  if (h >= 15 && h < 21) return 'dinner'
   return 'snack'
 }
