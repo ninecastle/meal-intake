@@ -5,7 +5,8 @@
 // "하루 목표|이 날 목표 ○○kcal" + [목표 수정] + GoalBars(먹은 양/목표 막대·남은 양) + 고지. 그날 기록이 없으면
 // 현재 목표도 없을 때 "목표 설정하기" 카드, 현재 목표는 있으면 "이 날은 목표를 정하기 전이라 합계만 보여요".
 // 링크는 모두 /goal(push + state.fromHome). 그날 목표와 합계의 첫 값 전에는 비운다(깜빡임 방지).
-// 달력(3단계 조각 3-1): 날짜 글자와 옆 달력 아이콘을 누르면 그 날짜가 든 달의 S10 /calendar?month=YYYY-MM(push + state.fromHome).
+// 기록 보기(3단계 조각 3-1): 날짜 글자와 옆 달력 아이콘을 누르면 그 날짜가 든 달의 S10 /calendar?month=YYYY-MM(push + state.fromHome).
+// 접근성 이름: 아이콘 "기록 보기", 날짜 글자는 날짜 + "기록 보기"(h1 글자는 그대로).
 import { useEffect, useState } from 'react'
 import type { User } from 'firebase/auth'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
@@ -276,7 +277,7 @@ export default function HomePage({ user }: { user: User }) {
     <Link
       to={calendarHref}
       state={{ fromHome: true }}
-      aria-label="달력"
+      aria-label="기록 보기"
       className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-600"
     >
       <svg
@@ -332,11 +333,12 @@ export default function HomePage({ user }: { user: User }) {
           ◀ 전날
         </Link>
         <div className="min-w-0 text-center">
-          {/* 날짜 글자·달력 아이콘 = 그 날짜가 든 달의 S10 달력(push + state.fromHome). 아이콘은 오늘이면 날짜 옆, 지난 날이면 [오늘로] 옆 */}
+          {/* 날짜 글자·달력 아이콘 = 그 날짜가 든 달의 S10 기록 보기(push + state.fromHome). 아이콘은 오늘이면 날짜 옆, 지난 날이면 [오늘로] 옆 */}
           <div className="flex items-center justify-center">
             <Link to={calendarHref} state={{ fromHome: true }} className="min-w-0 rounded-lg px-1">
               <h1 className="text-xl font-bold">{isToday ? '오늘' : dateKeyLabel(dateKey)}</h1>
               {isToday && <p className="text-xs text-gray-500">{dateKeyLabel(dateKey)}</p>}
+              <span className="sr-only">, 기록 보기</span>
             </Link>
             {isToday && calendarIcon}
           </div>

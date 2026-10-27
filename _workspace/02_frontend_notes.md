@@ -190,3 +190,45 @@
 ### 남은 이슈
 - data 쪽 구현(firebase-engineer)이 들어온 뒤 브라우저 확인 필요: 360px에서 7칸·kcal 글씨, 날짜 누르기 → 홈(D) → 뒤로 가기 때 홈이 한 칸인지, 달 이동 뒤 새로고침해도 ‹가 홈 한 칸인지, 오프라인 대기 기록이 달력 숫자에 들어오는지.
 - 그날 목표 기록이 없고 현재 목표만 있는 오늘(예전 데이터)은 홈은 현재 목표로 비교하지만 달력은 색 없이 숫자만 보인다(`goalForDate`만 씀).
+
+## 기록 보기 히트맵 (2026-10-27, S10 `/calendar?month=YYYY-MM` 다시 만듦)
+`pages/CalendarPage.tsx`(상태·조회·방문 기록), 새 컴포넌트 `components/record/MonthNav.tsx`·`MetricToggle.tsx`·`RecordHeatmap.tsx`, `pages/HomePage.tsx`(접근성 이름만). 계산은 `lib/calendar.ts`(`heatLevelFor`·`monthGrid`·`gridRange`·`monthSummary`·`goalForDate`·`targetOf`·`metricOf`) 그대로, 옛 `calendarTone`·`monthCells`는 더 쓰지 않는다. `tsc -b`·`npm run build` 통과, AI 호출 0회, 브라우저 확인 안 함.
+
+### 구조(아래 섹션에 넘기기)
+- 페이지가 상태를 갖는다: 보고 있는 달 = `?month`(`parseMonth`), 고른 항목 `metric` = `useState(readMetric)`(localStorage `record-view-metric`, 읽기·쓰기 try/catch, 못 읽거나 모르는 값이면 `kcal`).
+- 조회도 페이지: `subscribeDaysInRange(uid, gridRange.start, gridRange.end)` → 날짜별 `totals`(Nutrients) Map, `subscribeGoalsUpTo(uid, gridRange.end)`. `forMonth` 처리·두 구독 첫 값 뒤에만 숫자·색은 전과 같다.
+- `RecordHeatmap`은 그리기만(props: `month`·`today`·`metric`·`ready`·`days`·`goals`·`onOpenDay`). 아래 섹션(① 주간 추이 ② PREMIUM 주간 리포트 ③ PREMIUM 월간)은 페이지 `</main>` 앞 주석 자리에 같은 `metric`·`month`를 props로 받아 붙인다.
+
+### 화면 구성
+- 헤더: ‹(aria-label "홈으로") + h1 "기록 보기".
+- 조작 줄(`flex-wrap justify-between`): 왼쪽 `MonthNav` "◀ 10월 ▶"(◀·▶ 44px, aria-label "지난달"·"다음 달", 이번 달이면 ▶ 비활성, 올해가 아니면 h2 위에 작은 "2025년"), 오른쪽 `MetricToggle` [칼로리|탄|단|지](`role="group"` "항목 선택", 버튼 `aria-pressed`, aria-label 칼로리·탄수화물·단백질·지방, 고른 것 `bg-emerald-600` 흰 글자). 달 이동은 전과 같이 `?month` replace + `state` 유지.
+- 격자: 월~일 머리줄(토 `text-blue-600`, 일 `text-red-600`) + `monthGrid` 칸(앞뒤 달 날짜 포함, 빈칸 없음). 칸 = `aspect-square min-h-11` 버튼, 위에 날짜 숫자(`text-xs`, sm `text-sm`), 아래 둥근 상자(`rounded-full bg-white/90 ring-1 ring-black/5 text-gray-900`, `whitespace-nowrap tabular-nums`, 6자 이상 9px·그 밖 10px, sm 11px)에 그날 값(kcal `formatKcal`, g `formatGrams` 정수). 기록 없으면 상자 없음. 목표 범위면 오른쪽 위 작은 ✓(aria-hidden).
+- 360px 폭: 격자 칸 약 45px, "12,345"도 상자 약 35px. 조작 줄은 약 320px/328px로 한 줄, 넘치면 항목 선택이 다음 줄로(가로 스크롤 없음).
+- 아래: 왼쪽 범례 4칸(진하기 1~4 바탕·글자색 그대로, "0~50%"·"50~90%"·"90~110% ✓"·"110%+", `ul` aria-label "진하기: 그날 목표 대비") + "목표가 없는 날은 기준량(2,000kcal) 대비"(g 항목은 275g·100g·56g). 오른쪽 월 요약 두 줄 "10월 · 기록 12일" / "하루 평균 1,850kcal"(g 항목은 g, 기록 0일이면 평균 줄 없음, 앞뒤 달 날짜 제외 = `monthSummary`).
+- 상태 줄(`role="status"`): 불러오는 중… / 기록 오류 / 목표 오류("목표를 불러오지 못해 색 없이 보여요.") 전과 같다.
+- aria-label: "10월 27일 (화), 오늘, 1,850kcal, 목표의 90%, 목표 범위" / g 항목 "…, 탄수화물 230g, 기준량의 84%" / "…, 기록 없음" / "…, 아직 오지 않은 날" / "…, 불러오는 중". 오늘 `aria-current="date"`.
+- 홈: 달력 아이콘 aria-label "달력" → "기록 보기". 날짜 글자 링크는 h1을 그대로 두고 안에 `sr-only` ", 기록 보기"를 붙였다(링크 이름 "오늘 10월 27일 (화), 기록 보기").
+
+### 색·진하기(Tailwind v4 emerald)
+| 단계 | 기준 | 칸 바탕 | 글자 |
+| --- | --- | --- | --- |
+| 0 기록 없음 | - | `bg-gray-100` | `text-gray-700` |
+| 1 | 50% 미만 | `bg-emerald-100` | `text-emerald-950` |
+| 2 | 50~90% | `bg-emerald-300` | `text-emerald-950` |
+| 3 목표 범위 ✓ | 90~110% | `bg-emerald-500` | `text-emerald-950`(약 6:1) |
+| 4 | 110% 초과 | `bg-emerald-700` | `text-white`(약 5.4:1) |
+- 오늘 테두리 `ring-2 ring-inset ring-gray-900`(가장 진한 칸 위에서도 약 3.3:1) + 굵은 숫자.
+- 앞뒤 달의 지난 날짜: 값·색 그대로 `opacity-40`, 누르면 그날 홈. 미래 날짜(이번 달 남은 날, 다음 달 날짜): 바탕 없이 `text-gray-300`, `disabled`.
+- 불러오는 중·기록 오류: 흰 칸(`ring-1 ring-inset ring-gray-100`), 숫자·색 없음. 목표 오류: 바탕 0단계(회색) + 값 상자만.
+
+### 다르게 정한 점
+1. 올해가 아닌 달의 연도는 "12월" 위 작은 글자 줄로 둔다(한 줄 "2025년 12월"이면 360px에서 항목 선택과 한 줄에 안 들어감). 제목 h2의 글자는 "2025년 12월"로 읽힌다.
+2. 월 요약을 두 줄로 나눴다(범례와 나란히 두려고). 화면 읽기에는 둘째 줄 앞에 "·"를 숨겨 넣었다.
+3. 칸 값 상자에 단위를 붙이지 않았다(46px 칸). 단위는 항목 선택·범례·월 요약·aria-label에 있다.
+4. 목표를 못 불러오면 기준량으로도 칠하지 않는다(목표가 있는 사람의 날이 기준량 색으로 잘못 보이지 않게).
+5. 오늘 테두리를 emerald-600에서 gray-900으로 바꿨다(emerald-500·700 칸 위에서 안 보여서).
+6. 옛 안내 문구("숫자는 그날 먹은 kcal이에요…")는 뺐다. 조작 줄은 sticky가 아니다(아래 섹션이 생길 때 정한다).
+
+### 남은 이슈
+- 브라우저 확인 필요: 360px에서 조작 줄 한 줄·칸 숫자·범례와 요약 나란히, 진하기 4단계 구분, 앞뒤 달 칸 누르기 → 그날 홈 → 뒤로 가기 때 홈 한 칸, 항목 바꾼 뒤 새로고침해도 기억되는지, 사생활 보호 모드에서 칼로리로 시작하는지.
+- 전과 같이 그날 목표 기록이 없고 현재 목표만 있는 날(예전 데이터)은 기준량 대비로 칠하고 ✓가 없다(`goalForDate`만 씀).
