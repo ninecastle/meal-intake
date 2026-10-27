@@ -12,13 +12,6 @@ export const NUTRITION_SOURCE_NOTE = '영양 정보: 식품의약품안전처 �
 
 type SourceFields = Pick<MealItem, 'nutrition_source' | 'db_ml_converted'>
 
-export const SOURCE_BADGE_CLASS: Record<MealItem['nutrition_source'], string> = {
-  db: 'bg-green-100 text-green-800',
-  search: 'bg-blue-100 text-blue-800',
-  ai_estimate: 'bg-amber-100 text-amber-800',
-  user_input: 'bg-gray-200 text-gray-800',
-}
-
 export function sourceLabel(it: SourceFields): string {
   switch (it.nutrition_source) {
     case 'db':
