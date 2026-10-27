@@ -27,7 +27,7 @@ export interface AssembleOptions {
 /** 영양값 조회 동시 실행 상한 */
 export const RESOLVE_CONCURRENCY = 4
 
-const WARN_NO_AFTER = '먹은 후 분석 결과가 없어 남긴 비율을 직접 골라야 합니다'
+export const WARN_NO_AFTER = '먹은 후 분석 결과가 없어 남긴 비율을 직접 골라야 합니다'
 
 async function mapLimit<T, R>(xs: T[], limit: number, fn: (x: T) => Promise<R>): Promise<R[]> {
   const out: R[] = new Array<R>(xs.length)
