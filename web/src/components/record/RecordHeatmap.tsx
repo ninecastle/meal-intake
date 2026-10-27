@@ -26,7 +26,8 @@ const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일'] as const
 
 /** 기록 보기 카드 공통(달력 카드·주간 추이 카드, 2026-10-27 사용자 요청). 바깥 간격은 쓰는 쪽이 붙인다.
  *  좌우 안쪽 여백 6px: 360px 폰에서 카드 안쪽 폭 328 − 테두리 2 − 12 = 314px(8px면 날짜 칸이 40px 아래로 준다) */
-export const RECORD_CARD = 'rounded-2xl border border-gray-200 bg-white px-1.5 pt-1 pb-2'
+// 테두리: 2026-10-27 사용자 요청으로 굵고 진하게(1px gray-200 → 2px gray-300)
+export const RECORD_CARD = 'rounded-2xl border-2 border-gray-300 bg-white px-1.5 pt-1 pb-2'
 
 /** 날짜 칸 7개 + › 칸 18px. 360px 폰(카드 안쪽 314px, 칸 사이 2px)에서 날짜 칸 (314 − 14 − 18) ÷ 7 ≈ 40.3px */
 const GRID_COLS = 'grid-cols-[repeat(7,minmax(0,1fr))_1.125rem]'

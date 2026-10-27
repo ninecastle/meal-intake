@@ -173,18 +173,23 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
     ...(avg !== null ? [{ kind: 'avg' as const, word: '평균', value: fmt(avg), y: yOf(avg) }] : []),
   ])
 
-  function detailText(p: DayPoint): string {
-    const head = p.value === null ? '기록 없음' : eaten(p.value)
-    if (!goalsKnown) return head
-    if (p.target === null) return `${head} · 목표 없음`
-    if (p.value === null) return `${head} · 목표 ${amount(p.target)}`
-    return `${head} / 목표 ${amount(p.target)}(${Math.round((p.value / p.target) * 100)}%)`
-  }
-
-  /** 상세 셋째 줄 "주 평균 230g 대비 119%". 그날 기록이 없거나 평균이 없으면(0 포함) null */
-  function avgText(p: DayPoint): string | null {
-    if (p.value === null || avg === null || !(avg > 0)) return null
-    return `주 평균 ${amount(avg)} 대비 ${Math.round((p.value / avg) * 100)}%`
+  /**
+   * 날짜 상세 줄(2026-10-27 사용자 결정): "탄수화물 274g" / "목표 376g 대비 73%" / "주 평균 202g 대비 136%".
+   * 칼로리도 "칼로리 511kcal". 목표가 없는 날은 목표 줄 대신 "목표 없음", 그날 기록이 없으면 목표 줄에 %를 붙이지 않는다.
+   * 주 평균 줄은 그날 기록과 평균(0 초과)이 있을 때만. 목표를 못 불러왔으면 목표 줄은 뺀다.
+   */
+  function detailLines(p: DayPoint): string[] {
+    const name = METRIC_NAME[metric]
+    const lines = [p.value === null ? `${name} 기록 없음` : `${name} ${amount(p.value)}`]
+    if (goalsKnown) {
+      if (p.target === null) lines.push('목표 없음')
+      else if (p.value === null || !(p.target > 0)) lines.push(`목표 ${amount(p.target)}`)
+      else lines.push(`목표 ${amount(p.target)} 대비 ${Math.round((p.value / p.target) * 100)}%`)
+    }
+    if (p.value !== null && avg !== null && avg > 0) {
+      lines.push(`주 평균 ${amount(avg)} 대비 ${Math.round((p.value / avg) * 100)}%`)
+    }
+    return lines
   }
 
   function dayLabel(p: DayPoint): string {
@@ -408,27 +413,28 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
       </div>
 
       {/* 고른 날: 값과 목표, 주 평균 대비, [그날 기록 보기](달력 날짜 누르기와 같은 onOpenDay) */}
-      <div aria-live="polite" className="mt-2 flex min-h-14 items-center justify-between gap-2 rounded-lg bg-gray-50 px-3 py-1.5">
+      {/* 버튼은 날짜 줄 오른쪽에 두고, 값 줄 3개는 전체 폭을 써서 360px에서도 한 줄씩 들어가게 한다 */}
+      <div aria-live="polite" className="mt-2 flex min-h-14 flex-col justify-center rounded-lg bg-gray-50 px-3 py-1.5">
         {sel ? (
           <>
-            <p className="min-w-0 text-sm leading-snug text-gray-800">
-              <span className="block font-semibold">{dateKeyLabel(sel.d)}</span>
-              <span className="sr-only"> · </span>
-              <span className="block tabular-nums">{detailText(sel)}</span>
-              {avgText(sel) && (
-                <>
-                  <span className="sr-only"> · </span>
-                  <span className="block text-gray-600 tabular-nums">{avgText(sel)}</span>
-                </>
-              )}
+            <div className="flex items-center justify-between gap-2">
+              <p className="min-w-0 text-sm font-semibold text-gray-800">{dateKeyLabel(sel.d)}</p>
+              <button
+                type="button"
+                onClick={() => onOpenDay(sel.d)}
+                className="min-h-11 shrink-0 rounded-lg border border-emerald-600 bg-white px-3 text-sm font-semibold whitespace-nowrap text-emerald-700"
+              >
+                그날 기록 보기
+              </button>
+            </div>
+            <p className="text-sm leading-snug text-gray-800">
+              {detailLines(sel).map((line, k) => (
+                <span key={k} className={`block whitespace-nowrap tabular-nums ${k === 0 ? '' : 'text-gray-600'}`}>
+                  {k > 0 && <span className="sr-only"> · </span>}
+                  {line}
+                </span>
+              ))}
             </p>
-            <button
-              type="button"
-              onClick={() => onOpenDay(sel.d)}
-              className="min-h-11 shrink-0 rounded-lg border border-emerald-600 bg-white px-3 text-sm font-semibold whitespace-nowrap text-emerald-700"
-            >
-              그날 기록 보기
-            </button>
           </>
         ) : (
           <p className="text-sm text-gray-500">점이나 날짜를 누르면 그날 값을 볼 수 있어요</p>
