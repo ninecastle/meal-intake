@@ -1,4 +1,4 @@
-// S1 홈 = 하루 요약(3단계 조각 1). 위에서부터 사용자 줄, 날짜 이동(◀ 전날 · 날짜(오늘이 아니면 [오늘로]) · 다음 날 ▶, ?date=YYYY-MM-DD), 저장·오프라인 안내,
+// S1 홈 = 하루 요약(3단계 조각 1). 위에서부터 사용자 줄, 날짜 이동(◀ 전날 · 날짜 · 다음 날 ▶, 아랫줄 "오늘로"/"오늘" 글자 + 달력 아이콘, ?date=YYYY-MM-DD), 저장·오프라인 안내,
 // 이어 할 기록 카드(awaiting_after·needs_review, 날짜와 무관하게 전부), 그날 합계 kcal·탄·단·지(subscribeDay, 클라이언트 합산),
 // 끼니별 기록 목록(누르면 S7 /meal/:mealId), 영양 정보 출처, 아래 고정 [식사 기록]·[직접 입력](보고 있는 날짜로).
 // 목표(3단계 조각 2·3): 합계 아래 목표 영역. 그날 목표(subscribeGoalForDate, dateKey <= 그날 가운데 가장 늦은 기록)가 있으면
@@ -273,6 +273,8 @@ export default function HomePage({ user }: { user: User }) {
   }
 
   const calendarHref = `/calendar?month=${dateKey.slice(0, 7)}`
+  /** 아랫줄 "오늘로"·"오늘" 글자 자리(테두리 없음, 두 경우 같은 크기) */
+  const todayText = 'inline-flex min-h-11 min-w-11 items-center justify-center px-2 text-sm font-semibold'
   const calendarIcon = (
     <Link
       to={calendarHref}
@@ -333,27 +335,25 @@ export default function HomePage({ user }: { user: User }) {
           ◀ 전날
         </Link>
         <div className="min-w-0 text-center">
-          {/* 날짜 글자·달력 아이콘 = 그 날짜가 든 달의 S10 기록 보기(push + state.fromHome). 아이콘은 오늘이면 날짜 옆, 지난 날이면 [오늘로] 옆 */}
-          <div className="flex items-center justify-center">
-            <Link to={calendarHref} state={{ fromHome: true }} className="min-w-0 rounded-lg px-1">
-              <h1 className="text-xl font-bold">{isToday ? '오늘' : dateKeyLabel(dateKey)}</h1>
-              {isToday && <p className="text-xs text-gray-500">{dateKeyLabel(dateKey)}</p>}
-              <span className="sr-only">, 기록 보기</span>
-            </Link>
-            {isToday && calendarIcon}
-          </div>
-          {!isToday && (
-            <div className="mt-0.5 flex items-center justify-center gap-1">
-              <Link
-                to={homeHref(today, today)}
-                replace
-                className="inline-flex min-h-11 items-center rounded-full border border-gray-300 px-3 text-xs font-medium text-gray-700"
-              >
+          {/* 오늘·지난 날 같은 구성(2026-10-27 사용자 결정): 윗줄 날짜 글자, 아랫줄 "오늘로"(지난 날, 초록 글자, 누르면 오늘)
+              또는 "오늘"(회색, 누를 수 없음) + 달력 아이콘. 두 줄이 항상 있어 날짜를 옮겨도 줄 높이가 같다.
+              날짜 글자·달력 아이콘 = 그 날짜가 든 달의 S10 기록 보기(push + state.fromHome). */}
+          <Link to={calendarHref} state={{ fromHome: true }} className="block min-w-0 rounded-lg px-1">
+            <h1 className="text-xl font-bold">{dateKeyLabel(dateKey)}</h1>
+            <span className="sr-only">{isToday ? ', 오늘' : ''}, 기록 보기</span>
+          </Link>
+          <div className="flex items-center justify-center gap-1">
+            {isToday ? (
+              <span aria-hidden="true" className={`${todayText} text-gray-400`}>
+                오늘
+              </span>
+            ) : (
+              <Link to={homeHref(today, today)} replace className={`${todayText} text-emerald-700`}>
                 오늘로
               </Link>
-              {calendarIcon}
-            </div>
-          )}
+            )}
+            {calendarIcon}
+          </div>
         </div>
         {isToday ? (
           <button type="button" disabled className={`${navBtn} justify-end text-gray-300`}>

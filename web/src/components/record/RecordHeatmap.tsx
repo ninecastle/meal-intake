@@ -227,7 +227,7 @@ export default function RecordHeatmap({
                   </button>
                 )
               })}
-              {/* 주 줄 끝 ›: 그 주를 고르고 아래 주간 추이로 스크롤(페이지 showWeek). 고른 주는 진하게, 미래 주는 비활성 */}
+              {/* 주 줄 끝 ›: 그 주를 고르고 아래 주간 추이로 스크롤(페이지 showWeek). 모든 주는 연한 바탕, 고른 주는 진한 바탕(2026-10-27 사용자 결정), 미래 주는 흐리게·비활성 */}
               <button
                 type="button"
                 disabled={futureWeek}
@@ -235,7 +235,7 @@ export default function RecordHeatmap({
                 aria-label={`${weekRangeText(monday, week[6].dateKey)} 주간 추이 보기`}
                 aria-current={selected ? 'true' : undefined}
                 className={`flex min-h-11 items-center justify-center rounded-md text-lg leading-none ${
-                  selected ? 'bg-gray-100 font-bold text-gray-900' : futureWeek ? 'text-gray-200' : 'text-gray-500'
+                  selected ? 'bg-gray-300 font-bold text-gray-900' : futureWeek ? 'text-gray-200' : 'bg-gray-100 text-gray-500'
                 }`}
               >
                 ›
