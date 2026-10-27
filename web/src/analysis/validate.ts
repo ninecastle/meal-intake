@@ -22,8 +22,10 @@ const ITEM_KEYS = new Set([...REQUIRED, 'location', 'db_name', 'db_match', 'db_m
   'per_100g_fill', 'user_edited', 'grams_source', 'published_g', 'unit_count', 'ratio_assumed',
   'detail_per_100g', 'detail_source', 'detail_consumed'])
 const REF_KEYS = new Set(['db_food_code', 'db_name', 'db_match', 'kcal_per_100g', 'ml_converted'])
-// D4-a 세부 영양소(당류·나트륨·포화지방·식이섬유): 100g당 상한(g은 100, 나트륨 mg은 40000), 출처는 db·ai_estimate
-const DETAIL_MAX: Record<string, number> = { sugar_g: 100, sodium_mg: 40000, satfat_g: 100, fiber_g: 100 }
+// D4-a 세부 영양소(D4-c부터 9가지): 100g당 상한(g 키 100, 콜레스테롤 5000mg, 나트륨 40000mg, 칼륨 10000mg), 출처는 db·ai_estimate. 키는 모두 선택(4가지로 저장된 기록도 통과)
+const DETAIL_MAX: Record<string, number> = {
+  sugar_g: 100, fiber_g: 100, satfat_g: 100, transfat_g: 100, polyunsat_g: 100, monounsat_g: 100, cholesterol_mg: 5000, sodium_mg: 40000, potassium_mg: 10000,
+}
 const DETAIL_KEYS = Object.keys(DETAIL_MAX)
 const DETAIL_SOURCES = ['db', 'ai_estimate']
 

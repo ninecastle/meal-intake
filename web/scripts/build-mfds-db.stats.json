@@ -155,15 +155,20 @@
     "foods": 11381,
     "with_value": {
       "sugar_g": 11284,
-      "sodium_mg": 11351,
+      "fiber_g": 2052,
       "satfat_g": 11082,
-      "fiber_g": 2052
+      "transfat_g": 2279,
+      "polyunsat_g": 0,
+      "monounsat_g": 0,
+      "cholesterol_mg": 3396,
+      "sodium_mg": 11351,
+      "potassium_mg": 2063
     },
     "rows_unparsable": 0,
     "rows_out_of_range": 6,
-    "file_bytes": 475648,
-    "gzip_bytes": 101820,
-    "brotli_bytes": 83785
+    "file_bytes": 753724,
+    "gzip_bytes": 125634,
+    "brotli_bytes": 103267
   },
   "excluded_total": 2184
 }

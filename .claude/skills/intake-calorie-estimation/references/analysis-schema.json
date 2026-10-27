@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "MealIntakeAnalysis v2",
-  "description": "먹기 전·후 사진 분석으로 계산한 한 끼 섭취 결과. Firestore meals/{id}.analysis에 그대로 저장한다. 프런트·분석 모듈·QA가 공유하는 계약(타입: web/src/types/analysis.ts, 검증: scripts/validate_analysis.mjs, web/src/analysis/validate.ts). 사진 관련 필드는 두지 않는다. v2(스펙 3.3절): db_name, db_match, per_100g_fill, db_ml_converted, db_reference 추가. 공개 중량(스펙 4.5.5): grams_source, published_g, unit_count 추가(세 필드는 함께, before_grams ≈ published_g × unit_count ±1g은 검증 스크립트가 검사). b3(2026-10-27): ratio_assumed(not_visible, remaining_ratio=0일 때만) 추가. D4-a(2026-10-28): 세부 영양소(당류·나트륨·포화지방·식이섬유) detail_per_100g·detail_source·detail_consumed(세 필드는 함께, 같은 키)와 totals.detail 추가. 계산식 검사(섭취 중량·섭취 값·세부 영양소·합계, 허용 오차 2% 또는 1)는 JSON Schema로 표현할 수 없어 검증 스크립트가 한다.",
+  "description": "먹기 전·후 사진 분석으로 계산한 한 끼 섭취 결과. Firestore meals/{id}.analysis에 그대로 저장한다. 프런트·분석 모듈·QA가 공유하는 계약(타입: web/src/types/analysis.ts, 검증: scripts/validate_analysis.mjs, web/src/analysis/validate.ts). 사진 관련 필드는 두지 않는다. v2(스펙 3.3절): db_name, db_match, per_100g_fill, db_ml_converted, db_reference 추가. 공개 중량(스펙 4.5.5): grams_source, published_g, unit_count 추가(세 필드는 함께, before_grams ≈ published_g × unit_count ±1g은 검증 스크립트가 검사). b3(2026-10-27): ratio_assumed(not_visible, remaining_ratio=0일 때만) 추가. D4-a(2026-10-28): 세부 영양소(D4-c부터 9가지: 당류·식이섬유·포화지방·트랜스지방·다불포화지방·단일불포화지방·콜레스테롤·나트륨·칼륨) detail_per_100g·detail_source·detail_consumed(세 필드는 함께, 같은 키)와 totals.detail 추가. 계산식 검사(섭취 중량·섭취 값·세부 영양소·합계, 허용 오차 2% 또는 1)는 JSON Schema로 표현할 수 없어 검증 스크립트가 한다.",
   "type": "object",
   "required": ["items", "totals", "warnings"],
   "additionalProperties": false,
@@ -20,16 +20,16 @@
     "fillSource": {"enum": ["ai_estimate", "missing"], "description": "ai_estimate: DB 빈 값을 AI 추정으로 채움, missing: 값 없음(per_100g·consumed 값은 0, 화면은 –)"},
     "detailPer100g": {
       "type": "object",
-      "description": "D4-a. 세부 영양소 100g당 값(sugar_g·satfat_g·fiber_g는 g, sodium_mg는 mg). 값이 있는 키만",
+      "description": "D4-a. 세부 영양소 100g당 값(_g 키는 g, _mg 키는 mg). 값이 있는 키만. D4-c(2026-10-28)부터 9가지, 키는 모두 선택(4가지로 저장된 기록도 맞다). 다불포화·단일불포화는 식약처 원본에 없어 출처가 늘 ai_estimate",
       "additionalProperties": false,
       "minProperties": 1,
-      "properties": {"sugar_g": {"type": "number", "minimum": 0, "maximum": 100}, "sodium_mg": {"type": "number", "minimum": 0, "maximum": 40000}, "satfat_g": {"type": "number", "minimum": 0, "maximum": 100}, "fiber_g": {"type": "number", "minimum": 0, "maximum": 100}}
+      "properties": {"sugar_g": {"type": "number", "minimum": 0, "maximum": 100}, "fiber_g": {"type": "number", "minimum": 0, "maximum": 100}, "satfat_g": {"type": "number", "minimum": 0, "maximum": 100}, "transfat_g": {"type": "number", "minimum": 0, "maximum": 100}, "polyunsat_g": {"type": "number", "minimum": 0, "maximum": 100}, "monounsat_g": {"type": "number", "minimum": 0, "maximum": 100}, "cholesterol_mg": {"type": "number", "minimum": 0, "maximum": 5000}, "sodium_mg": {"type": "number", "minimum": 0, "maximum": 40000}, "potassium_mg": {"type": "number", "minimum": 0, "maximum": 10000}}
     },
     "detailAmount": {
       "type": "object",
-      "description": "D4-a. 먹은 양 기준 세부 영양소 = detail_per_100g × consumed_grams ÷ 100. g은 소수 첫째 자리, sodium_mg는 정수",
+      "description": "D4-a. 먹은 양 기준 세부 영양소 = detail_per_100g × consumed_grams ÷ 100. g 키는 소수 첫째 자리, mg 키는 정수",
       "additionalProperties": false,
-      "properties": {"sugar_g": {"type": "number", "minimum": 0}, "sodium_mg": {"type": "number", "minimum": 0}, "satfat_g": {"type": "number", "minimum": 0}, "fiber_g": {"type": "number", "minimum": 0}}
+      "properties": {"sugar_g": {"type": "number", "minimum": 0}, "fiber_g": {"type": "number", "minimum": 0}, "satfat_g": {"type": "number", "minimum": 0}, "transfat_g": {"type": "number", "minimum": 0}, "polyunsat_g": {"type": "number", "minimum": 0}, "monounsat_g": {"type": "number", "minimum": 0}, "cholesterol_mg": {"type": "number", "minimum": 0}, "sodium_mg": {"type": "number", "minimum": 0}, "potassium_mg": {"type": "number", "minimum": 0}}
     },
     "detailSource": {"enum": ["db", "ai_estimate"], "description": "db: 식약처 DB 값, ai_estimate: 먹기 전 분석(호출 A)이 함께 준 100g당 추정(화면 \"추정\" 배지)"},
     "detailTotal": {
@@ -94,7 +94,7 @@
           "detail_source": {
             "type": "object",
             "additionalProperties": false,
-            "properties": {"sugar_g": {"$ref": "#/$defs/detailSource"}, "sodium_mg": {"$ref": "#/$defs/detailSource"}, "satfat_g": {"$ref": "#/$defs/detailSource"}, "fiber_g": {"$ref": "#/$defs/detailSource"}},
+            "properties": {"sugar_g": {"$ref": "#/$defs/detailSource"}, "fiber_g": {"$ref": "#/$defs/detailSource"}, "satfat_g": {"$ref": "#/$defs/detailSource"}, "transfat_g": {"$ref": "#/$defs/detailSource"}, "polyunsat_g": {"$ref": "#/$defs/detailSource"}, "monounsat_g": {"$ref": "#/$defs/detailSource"}, "cholesterol_mg": {"$ref": "#/$defs/detailSource"}, "sodium_mg": {"$ref": "#/$defs/detailSource"}, "potassium_mg": {"$ref": "#/$defs/detailSource"}},
             "description": "D4-a. detail_per_100g와 같은 키마다 그 값의 출처(키가 같은지는 검증 스크립트가 검사)"
           },
           "detail_consumed": {"$ref": "#/$defs/detailAmount", "description": "D4-a. detail_per_100g와 같은 키. kcal_overridden과 상관없이 공식대로"}
@@ -144,7 +144,7 @@
           "type": "object",
           "description": "D4-a. 영양소마다 값이 있는 음식만 더한 합(value, 반올림 전 값의 합을 한 번 반올림)과 그 음식 수(count). 값 있는 음식이 0개인 키는 뺀다",
           "additionalProperties": false,
-          "properties": {"sugar_g": {"$ref": "#/$defs/detailTotal"}, "sodium_mg": {"$ref": "#/$defs/detailTotal"}, "satfat_g": {"$ref": "#/$defs/detailTotal"}, "fiber_g": {"$ref": "#/$defs/detailTotal"}}
+          "properties": {"sugar_g": {"$ref": "#/$defs/detailTotal"}, "fiber_g": {"$ref": "#/$defs/detailTotal"}, "satfat_g": {"$ref": "#/$defs/detailTotal"}, "transfat_g": {"$ref": "#/$defs/detailTotal"}, "polyunsat_g": {"$ref": "#/$defs/detailTotal"}, "monounsat_g": {"$ref": "#/$defs/detailTotal"}, "cholesterol_mg": {"$ref": "#/$defs/detailTotal"}, "sodium_mg": {"$ref": "#/$defs/detailTotal"}, "potassium_mg": {"$ref": "#/$defs/detailTotal"}}
         }
       }
     },

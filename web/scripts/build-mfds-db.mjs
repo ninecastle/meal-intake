@@ -16,14 +16,20 @@ const STATS_OUT = path.join(HERE, 'build-mfds-db.stats.json')
 const SRC_LABEL = '식품의약품안전처 전국통합식품영양성분정보(음식)표준데이터(15100070)'
 const DETAIL_OUT = path.join(HERE, '../public/data/mfds-detail-20261006.json')
 
-// D4-a 세부 영양소(당류·나트륨·포화지방·식이섬유만, 2026-10-27 사용자 결정): [앱 키, 원본 열, 100g당 상한].
+// D4-a 세부 영양소(D4-c부터 9가지, 2026-10-28 사용자 결정): [앱 키, 원본 열, 100g당 상한]. 순서는 화면 순서(compute.ts DETAIL_KEYS)와 같다.
+// 다불포화·단일불포화지방은 원본에 열이 없어(원본 열 null) 늘 빈 값이다(앱은 호출 A 추정만 쓴다).
 // 값은 원본 기준량(100g·100ml)당 그대로다. 100ml 행은 앱 DB처럼 1ml=1g으로 본다. 범위를 벗어나거나 읽을 수 없으면 빈 값(null).
 // 앱 DB 행 선택(pick)에는 쓰지 않는다(앱 DB 파일은 그대로).
 const DETAIL_COLS = [
   ['sugar_g', '당류(g)', 100],
-  ['sodium_mg', '나트륨(mg)', 40000],
-  ['satfat_g', '포화지방산(g)', 100],
   ['fiber_g', '식이섬유(g)', 100],
+  ['satfat_g', '포화지방산(g)', 100],
+  ['transfat_g', '트랜스지방산(g)', 100],
+  ['polyunsat_g', null, 100],
+  ['monounsat_g', null, 100],
+  ['cholesterol_mg', '콜레스테롤(mg)', 5000],
+  ['sodium_mg', '나트륨(mg)', 40000],
+  ['potassium_mg', '칼륨(mg)', 10000],
 ]
 const detailBad = { unparsable: 0, out_of_range: 0 }
 function detailNum(v, max) {
@@ -196,7 +202,7 @@ for (const rec of records) {
     origin: originRank(rec['식품기원명']),
     date: rec['데이터기준일자'] ?? '',
     key,
-    dt: DETAIL_COLS.map(([, col, max]) => detailNum(rec[col], max)),
+    dt: DETAIL_COLS.map(([, col, max]) => (col ? detailNum(rec[col], max) : null)),
   })
 }
 
@@ -254,7 +260,7 @@ const text = JSON.stringify({ v: VERSION, src: SRC_LABEL, foods, groups, d })
 fs.mkdirSync(path.dirname(OUT), { recursive: true })
 fs.writeFileSync(OUT, text)
 
-// ── 세부 영양소 파일(D4-a): 앱 DB와 같은 행(reps)의 식품코드마다 [당, 나트륨, 포화, 섬유]. 네 값이 모두 빈 행은 넣지 않는다 ──
+// ── 세부 영양소 파일(D4-a): 앱 DB와 같은 행(reps)의 식품코드마다 keys 순서의 값 배열. 값이 모두 빈 행은 넣지 않는다 ──
 const detailFoods = {}
 for (const r of reps) if (r.dt.some((x) => x != null)) detailFoods[r.c] = r.dt
 const detailText = JSON.stringify({ version: VERSION, source: SRC_LABEL, keys: DETAIL_COLS.map(([k]) => k), foods: detailFoods })

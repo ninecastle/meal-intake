@@ -1,4 +1,4 @@
-// 식약처 세부 영양소(당류·나트륨·포화지방·식이섬유) 100g당 값(D4-a). 앱 DB(db.ts)와 따로 두고 처음 쓸 때만 받는다.
+// 식약처 세부 영양소 100g당 값(D4-a, D4-c부터 9가지 키. 다불포화·단일불포화는 원본에 없어 늘 null). 앱 DB(db.ts)와 따로 두고 처음 쓸 때만 받는다.
 // 파일: web/public/data/mfds-detail-20261006.json(web/scripts/build-mfds-db.mjs가 앱 DB와 같은 행 선택으로 만든다).
 // 상대 import에 .ts 확장자를 붙인다: Node 시험 스크립트가 이 파일을 그대로 불러오기 때문이다.
 import { DETAIL_KEYS, DETAIL_MAX_PER_100G } from '../compute.ts'
@@ -7,9 +7,9 @@ import type { DetailKey, DetailNutrients } from '../../types/analysis.ts'
 export interface MfdsDetailDb {
   version: string
   source: string
-  /** foods 배열 자리의 키 순서(지금은 sugar_g·sodium_mg·satfat_g·fiber_g) */
+  /** foods 배열 자리의 키 순서. 로더는 이 배열로 매핑하므로 순서가 바뀌거나 모르는 키가 있어도 맞게 읽는다 */
   keys: string[]
-  /** 식품코드 → keys 순서의 100g당 값, 빈 값은 null. 네 값이 모두 빈 음식은 없다 */
+  /** 식품코드 → keys 순서의 100g당 값, 빈 값은 null. 값이 모두 빈 음식은 없다 */
   foods: Record<string, (number | null)[]>
 }
 

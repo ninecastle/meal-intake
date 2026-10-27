@@ -1,4 +1,5 @@
-// D4-a 세부 영양소(당류·나트륨·포화지방·식이섬유) 데이터·계산 층 시험. 실제 AI 호출 없음.
+// D4-a 세부 영양소 데이터·계산 층 시험(D4-c부터 9가지 키). 실제 AI 호출 없음.
+// 4가지로 저장된 예전 기록(D4-a)이 검사·sumDetail에서 그대로 통과하는지도 본다.
 // compute.ts(공식·반올림·합계 count·toStoredItem·applyDetail), validate.ts·validate_analysis.mjs(범위·키 짝·계산값·합계),
 // nutrition/detail.ts(detailFor, 받기 실패 → 빈 표), 세부 JSON ↔ 앱 DB ↔ 식약처 원본 대조.
 // 실행: node spike/tests/detail_test.mjs
@@ -12,6 +13,10 @@ const C = await import(u('web/src/analysis/compute.ts'))
 const V = await import(u('web/src/analysis/validate.ts'))
 const M = await import(u('.claude/skills/intake-calorie-estimation/scripts/validate_analysis.mjs'))
 const D = await import(u('web/src/analysis/nutrition/detail.ts'))
+const SUM = await import(u('web/src/data/summary.ts'))
+const KEYS9 = ['sugar_g', 'fiber_g', 'satfat_g', 'transfat_g', 'polyunsat_g', 'monounsat_g', 'cholesterol_mg', 'sodium_mg', 'potassium_mg']
+assert.deepEqual([...C.DETAIL_KEYS], KEYS9)
+assert.deepEqual({ ...C.DETAIL_MAX_PER_100G }, { sugar_g: 100, fiber_g: 100, satfat_g: 100, transfat_g: 100, polyunsat_g: 100, monounsat_g: 100, cholesterol_mg: 5000, sodium_mg: 40000, potassium_mg: 10000 })
 let n = 0
 const ok = (label) => { n++; console.log('ok', label) }
 const near = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps
@@ -51,13 +56,21 @@ ok('kcal_overridden은 세부 영양소와 상관없음')
 
 // 짝 맞추기: 출처 없는 키·범위 밖·모르는 키·출처만 있는 키는 뺀다. 하나도 없으면 세 필드 삭제
 const pr = C.recomputeItem(base('i3', {
-  detail_per_100g: { sugar_g: 150, sodium_mg: 40000, satfat_g: 2, fiber_g: -1, potassium_mg: 10 },
-  detail_source: { sodium_mg: 'db', sugar_g: 'db', fiber_g: 'db', potassium_mg: 'db', satfat_g: 'guess' },
+  detail_per_100g: { sugar_g: 150, sodium_mg: 40000, satfat_g: 2, fiber_g: -1, calcium_mg: 10, cholesterol_mg: 5001, potassium_mg: 10000, transfat_g: 0.05, monounsat_g: 100.1 },
+  detail_source: { sodium_mg: 'db', sugar_g: 'db', fiber_g: 'db', calcium_mg: 'db', satfat_g: 'guess', cholesterol_mg: 'db', potassium_mg: 'db', transfat_g: 'ai_estimate', monounsat_g: 'ai_estimate' },
 }))
-assert.deepEqual(pr.detail_per_100g, { sodium_mg: 40000 }); assert.deepEqual(pr.detail_source, { sodium_mg: 'db' })
+assert.deepEqual(pr.detail_per_100g, { sodium_mg: 40000, potassium_mg: 10000, transfat_g: 0.05 })
+assert.deepEqual(pr.detail_source, { sodium_mg: 'db', potassium_mg: 'db', transfat_g: 'ai_estimate' })
 const none = C.recomputeItem(base('i4', { detail_per_100g: { sugar_g: 1 }, detail_source: {}, detail_consumed: { sugar_g: 3 } }))
 for (const k of ['detail_per_100g', 'detail_source', 'detail_consumed']) assert.ok(!(k in none), 'left ' + k)
-ok('100g당 값·출처 짝 맞추기, 범위(g 0~100, 나트륨 0~40000) 밖은 뺌')
+ok('100g당 값·출처 짝 맞추기, 범위(g 0~100, 콜레스테롤 0~5000, 나트륨 0~40000, 칼륨 0~10000) 밖·모르는 키는 뺌')
+
+// mg 키는 정수, g 키는 소수 첫째 자리(저장·합계)
+const r9 = C.buildAnalysis([C.recomputeItem(base('r9', { before_grams: 100, detail_per_100g: { cholesterol_mg: 12.6, potassium_mg: 245.5, transfat_g: 0.26, monounsat_g: 1.04, polyunsat_g: 0 }, detail_source: { cholesterol_mg: 'db', potassium_mg: 'db', transfat_g: 'db', monounsat_g: 'ai_estimate', polyunsat_g: 'ai_estimate' } }))], [])
+assert.deepEqual(r9.items[0].detail_consumed, { cholesterol_mg: 13, potassium_mg: 246, transfat_g: 0.3, monounsat_g: 1, polyunsat_g: 0 })
+assert.deepEqual(r9.totals.detail.potassium_mg, { value: 246, count: 1 }); assert.deepEqual(r9.totals.detail.transfat_g, { value: 0.3, count: 1 })
+assert.deepEqual(V.checkAnalysis(r9).errors, []); assert.deepEqual(M.checkAnalysis(r9).errors, [])
+ok('반올림: mg 키(콜레스테롤·칼륨) 정수, g 키(트랜스·단일불포화) 0.1, 0도 유지')
 
 // applyDetail: 영양소마다 DB → 추정 → 없음. applyNutrition은 이전 음식의 세부 값을 지운다
 const ad = C.applyDetail(base('i5'), { sugar_g: 3, sodium_mg: null, fiber_g: 101 }, { sodium_mg: 500, satfat_g: 0, fiber_g: 4, sugar_g: 9 })
@@ -112,24 +125,40 @@ bad('출처 키 남음', (x) => { x.items[0].detail_source.fiber_g = 'db' }, /de
 bad('출처 값', (x) => { x.items[0].detail_source.sugar_g = 'search' }, /detail_source\.sugar_g 값 오류/)
 bad('먹은 양 누락', (x) => { delete x.items[0].detail_consumed }, /함께 넣는다/)
 bad('먹은 양 계산', (x) => { x.items[0].detail_consumed.sodium_mg = 500 }, /detail_consumed\.sodium_mg 500 ≠ 계산값/)
-bad('모르는 키', (x) => { x.items[0].detail_per_100g.potassium_mg = 1 }, /potassium_mg는 허용되지 않는 키/)
+bad('모르는 키', (x) => { x.items[0].detail_per_100g.calcium_mg = 1 }, /calcium_mg는 허용되지 않는 키/)
+bad('콜레스테롤 범위', (x) => { x.items[0].detail_per_100g.cholesterol_mg = 5001 }, /cholesterol_mg 범위\(0~5000\)/)
+bad('칼륨 범위', (x) => { x.items[0].detail_per_100g.potassium_mg = 10001 }, /potassium_mg 범위\(0~10000\)/)
 bad('빈 객체', (x) => { x.items[3].detail_per_100g = {}; x.items[3].detail_source = {}; x.items[3].detail_consumed = {} }, /비었다/)
 bad('합계 count', (x) => { x.totals.detail.sugar_g.count = 3 }, /totals\.detail\.sugar_g\.count 3/)
 bad('합계 값', (x) => { x.totals.detail.fiber_g.value = 30 }, /totals\.detail\.fiber_g\.value 30/)
 bad('합계 누락', (x) => { delete x.totals.detail.satfat_g }, /totals\.detail\.satfat_g 누락/)
 bad('0개 키', (x) => { x.totals.detail = { sugar_g: { value: 0, count: 0 } }; x.items.forEach((it) => { delete it.detail_per_100g; delete it.detail_source; delete it.detail_consumed }) }, /키를 뺀다/)
-ok('검사 실패 14가지(범위·키 짝·계산값·합계), 두 검사기 오류 목록 같음')
+ok('검사 실패 16가지(범위·키 짝·계산값·합계), 두 검사기 오류 목록 같음')
+
+// 4가지 키로 저장된 예전 기록(D4-a): 새 키는 선택이라 검사 통과, sumDetail도 그 4가지만 더한다
+const old = JSON.parse(JSON.stringify(built))
+assert.ok(old.items.every((it) => !it.detail_per_100g || Object.keys(it.detail_per_100g).every((k) => ['sugar_g', 'sodium_mg', 'satfat_g', 'fiber_g'].includes(k))))
+assert.deepEqual(both(old), [])
+const sd = SUM.sumDetail([old, plain])
+assert.deepEqual(Object.keys(sd.totals).sort(), Object.keys(old.totals.detail).sort())
+for (const [k, t] of Object.entries(old.totals.detail)) {
+  assert.equal(sd.totals[k].count, t.count, k)
+  assert.ok(Math.abs(sd.totals[k].value - t.value) <= 1, k)
+}
+assert.equal(sd.items, old.items.length + plain.items.length)
+ok('4가지 키 예전 기록: validate.ts·mjs 통과, sumDetail 합계·count가 totals.detail과 같음')
 
 // 5. 세부 JSON ↔ 앱 DB ↔ 원본, detailFor
 const detailJson = JSON.parse(readFileSync(ROOT + 'web/public/data/mfds-detail-20261006.json', 'utf8'))
 const appFoods = JSON.parse(readFileSync(ROOT + 'web/public/data/mfds-foods-20261006.json', 'utf8')).foods
 const raw = JSON.parse(readFileSync(ROOT + '_workspace/00_input/mfds/mfds_food_std_raw.json', 'utf8')).records
-assert.deepEqual(detailJson.keys, ['sugar_g', 'sodium_mg', 'satfat_g', 'fiber_g'])
+assert.deepEqual(detailJson.keys, KEYS9)
+assert.ok(Object.values(detailJson.foods).every((row) => row.length === 9 && row[4] === null && row[5] === null), '다불포화·단일불포화는 늘 null')
 const appCodes = new Set(appFoods.map((f) => f.c))
 const codes = Object.keys(detailJson.foods)
 assert.ok(codes.every((c) => appCodes.has(c)), '앱 DB에 없는 식품코드'); assert.ok(codes.length > appFoods.length * 0.9)
 const rawBy = new Map(raw.map((r) => [r['식품코드'], r]))
-const cols = ['당류(g)', '나트륨(mg)', '포화지방산(g)', '식이섬유(g)']
+const colOf = { sugar_g: '당류(g)', fiber_g: '식이섬유(g)', satfat_g: '포화지방산(g)', transfat_g: '트랜스지방산(g)', polyunsat_g: null, monounsat_g: null, cholesterol_mg: '콜레스테롤(mg)', sodium_mg: '나트륨(mg)', potassium_mg: '칼륨(mg)' }
 const pnum = (v) => { const s = String(v ?? '').trim().replace(/,/g, ''); return s === '' || s === '-' ? null : Number(s) }
 await D.loadDetailDb(async () => detailJson)
 const picks = ['비빔밥', '김치찌개', '도넛', '제육볶음', '닭튀김', '(100ml 행)']
@@ -139,7 +168,7 @@ for (const name of picks) {
   const got = await D.detailFor(row.c)
   const r = rawBy.get(row.c)
   const exp = {}
-  detailJson.keys.forEach((k, i) => { const v = pnum(r[cols[i]]); if (v != null) exp[k] = v })
+  detailJson.keys.forEach((k) => { const v = colOf[k] ? pnum(r[colOf[k]]) : null; if (v != null) exp[k] = v })
   assert.deepEqual(got, Object.keys(exp).length ? exp : null, row.n)
   console.log('   ', row.n, row.ml ? '(100ml)' : '', JSON.stringify(got))
 }
@@ -156,5 +185,11 @@ let refetched = false
 await D2.loadDetailDb(async () => { refetched = true; return detailJson })
 assert.ok(refetched); assert.ok((await D2.detailFor(codes[0])) !== null)
 ok('받기 실패 → 빈 표(던지지 않음), 다음 호출에서 다시 받음')
+
+// 로더는 파일의 keys 배열로 매핑한다: 순서가 바뀌거나 모르는 키가 있어도 맞게 읽는다(별도 모듈 인스턴스)
+const D3 = await import(u('web/src/analysis/nutrition/detail.ts') + '?order')
+await D3.loadDetailDb(async () => ({ version: 't', source: 't', keys: ['potassium_mg', 'calcium_mg', 'sugar_g', 'cholesterol_mg'], foods: { X: [300, 99, 5, 6000] } }))
+assert.deepEqual(await D3.detailFor('X'), { potassium_mg: 300, sugar_g: 5 })
+ok('로더: keys 배열 순서대로 매핑, 모르는 키·범위 밖(콜레스테롤 6000) 무시')
 
 console.log(`detail_test: ${n}개 통과`)

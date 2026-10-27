@@ -172,3 +172,9 @@
 - 조립(`assembleAnalysis`): `applyNutrition` 뒤 `applyDetail(item, 출처 db이면 detailFor(db_food_code), detail_guess)`. 영양소마다 DB 값 → 없으면 추정("추정" 배지). 종류별 차이가 큰 음식(ai_estimate + db_reference)은 DB 대표값의 세부 값을 쓰지 않고 추정만(리더 결정). 취소된 signal이면 DB 세부 조회 없이 추정만.
 - 호출 D(d1)는 그대로(숫자 4개만). 이름을 바꾼 음식(결과 수정 화면)은 DB 세부 값만 채워지고, DB에 없는 이름은 "–". 호출 D에 세부 4가지를 붙이려면 NutritionResult·캐시 값 모양·resolve.ts까지 바뀌어 이번에는 하지 않았다.
 - 시험: `spike/tests/detail_test.mjs`(10개), `spike/tests/detail_guess_test.mjs`(8개) 통과, 기존 시험 모두 통과. 실제 응답 확인은 리더가 앱에서 1~2회: 모델이 detail_guess를 100g당으로 주는지(1인분 값을 주면 나트륨이 수천 mg으로 커진다), 나트륨을 mg로 주는지(g로 주면 0.x), null을 쓰는지, 출력이 잘리지 않는지(maxOutputTokens 4096).
+
+## 세부 영양소 9가지·프롬프트 a6 (2026-10-28, 디자인 조각 D4-c, 사용자 결정 f708492)
+- 키(화면 순서): sugar_g, fiber_g, satfat_g, transfat_g, polyunsat_g, monounsat_g, cholesterol_mg, sodium_mg, potassium_mg. 범위: g 키 0~100, 콜레스테롤 0~5000mg, 나트륨 0~40000mg, 칼륨 0~10000mg. 반올림: g 0.1, mg 정수. 대체감미료는 넣지 않는다. 키는 모두 선택이라 4가지로 저장된 D4-a·a5 기록·캐시도 그대로 통과한다(시험).
+- 세부 JSON 9키: 753,724 B(gzip 125,634, brotli 103,267). 값 있는 음식 / 11,381: 당류 11,284 · 식이섬유 2,052 · 포화지방 11,082 · 트랜스지방 2,279 · 다불포화 0 · 단일불포화 0(원본에 열 없음, 호출 A 추정만) · 콜레스테롤 3,396 · 나트륨 11,351 · 칼륨 2,063. 앱 DB 파일은 그대로다.
+- a6(호출 A): 지시 8번을 9가지로, 응답 스키마 detail_guess 9키(모두 필수, nullable). maxOutputTokens 4096 → 8192: a5 실제 호출에서 음식 6개 출력 1,134토큰(음식당 약 190). 9가지면 음식당 약 260으로 보고 30개면 8천 가까이 된다. 잘리면 형식 오류 → 재시도로 한도를 두 번 쓰므로 넉넉히 뒀다. a5 캐시는 다시 분석한다.
+- 실제 응답 확인(리더 1회): 다불포화·단일불포화·트랜스지방에 값을 주는지 null을 주는지, 콜레스테롤·칼륨을 mg로 주는지, 음식당 출력 토큰 수.

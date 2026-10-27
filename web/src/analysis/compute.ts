@@ -1,7 +1,7 @@
 // 섭취량 계산 순수 함수(스펙 4.3·4.6절). 프런트 결과 수정 화면도 이 함수만 쓴다.
 // 공식(CLAUDE.md): 섭취량 = 100g당 값 × 중량 ÷ 100 × (1 − 남긴 비율) ÷ 같이 먹은 인원수
 // 계산은 원래 정밀도로 하고, 저장용 결과를 만드는 buildAnalysis(와 computeTotals)에서만 소수 첫째 자리로 반올림한다.
-// 세부 영양소(D4-a, 당류·나트륨·포화지방·식이섬유)도 같은 공식이다. 나트륨(mg)만 정수로 반올림한다.
+// 세부 영양소(D4-a, D4-c부터 9가지)도 같은 공식이다. mg 키(콜레스테롤·나트륨·칼륨)만 정수로 반올림한다.
 import type {
   DbReference,
   DetailKey,
@@ -18,10 +18,30 @@ export const LOW_CONFIDENCE = 0.6
 export const MAX_EATERS = 20
 /** 사용자가 추가한 음식의 중량 기본값(g) */
 export const DEFAULT_USER_GRAMS = 100
-/** 세부 영양소 키(D4-a). 화면 순서: 당류·나트륨·포화지방·식이섬유 */
-export const DETAIL_KEYS: readonly DetailKey[] = ['sugar_g', 'sodium_mg', 'satfat_g', 'fiber_g']
-/** 세부 영양소 100g당 상한(검사 범위 0~상한): g은 100g, 나트륨은 40000mg */
-export const DETAIL_MAX_PER_100G: Readonly<Record<DetailKey, number>> = { sugar_g: 100, sodium_mg: 40000, satfat_g: 100, fiber_g: 100 }
+/** 세부 영양소 키(D4-c 9가지). 화면 순서(시안 표): 당류·식이섬유·포화지방·트랜스지방·다불포화지방·단일불포화지방·콜레스테롤·나트륨·칼륨 */
+export const DETAIL_KEYS: readonly DetailKey[] = [
+  'sugar_g',
+  'fiber_g',
+  'satfat_g',
+  'transfat_g',
+  'polyunsat_g',
+  'monounsat_g',
+  'cholesterol_mg',
+  'sodium_mg',
+  'potassium_mg',
+]
+/** 세부 영양소 100g당 상한(검사 범위 0~상한): g 키는 100g, 콜레스테롤 5000mg, 나트륨 40000mg, 칼륨 10000mg */
+export const DETAIL_MAX_PER_100G: Readonly<Record<DetailKey, number>> = {
+  sugar_g: 100,
+  fiber_g: 100,
+  satfat_g: 100,
+  transfat_g: 100,
+  polyunsat_g: 100,
+  monounsat_g: 100,
+  cholesterol_mg: 5000,
+  sodium_mg: 40000,
+  potassium_mg: 10000,
+}
 
 const zero = (): Nutrients => ({ kcal: 0, carbs_g: 0, protein_g: 0, fat_g: 0 })
 const num = (v: unknown, d: number): number => (typeof v === 'number' && Number.isFinite(v) ? v : d)
@@ -33,9 +53,9 @@ export function round1(v: number): number {
   return r === 0 ? 0 : r
 }
 
-/** 세부 영양소 저장 반올림: g은 소수 첫째 자리, 나트륨(mg)은 정수(-0은 0으로) */
+/** 세부 영양소 저장 반올림: g 키는 소수 첫째 자리, mg 키(콜레스테롤·나트륨·칼륨)는 정수(-0은 0으로) */
 export function roundDetail(k: DetailKey, v: number): number {
-  if (k !== 'sodium_mg') return round1(v)
+  if (!k.endsWith('_mg')) return round1(v)
   const r = Math.round(num(v, 0))
   return r === 0 ? 0 : r
 }

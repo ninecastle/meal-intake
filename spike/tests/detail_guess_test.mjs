@@ -32,14 +32,17 @@ let n = 0
 const ok = (label) => { n++; console.log('ok', label) }
 
 // 1. 버전·지시·응답 스키마
-assert.equal(A.PROMPT_VERSION_A, 'a5')
+assert.equal(A.PROMPT_VERSION_A, 'a6')
+assert.equal(A.GENERATION_CONFIG_A.maxOutputTokens, 8192)
 assert.ok(/detail_guess/.test(A.SYSTEM_INSTRUCTION_A) && /100g당 값이다/.test(A.SYSTEM_INSTRUCTION_A) && /null로 적는다/.test(A.SYSTEM_INSTRUCTION_A))
 const schemaText = JSON.stringify(A.RESPONSE_SCHEMA_A.toJSON())
-assert.ok(['detail_guess', 'sugar_g', 'sodium_mg', 'satfat_g', 'fiber_g'].every((k) => schemaText.includes(`"${k}"`)))
+const KEYS9 = ['sugar_g', 'fiber_g', 'satfat_g', 'transfat_g', 'polyunsat_g', 'monounsat_g', 'cholesterol_mg', 'sodium_mg', 'potassium_mg']
+assert.ok(['detail_guess', ...KEYS9].every((k) => schemaText.includes(`"${k}"`)))
+assert.ok(['트랜스지방', '다불포화지방', '단일불포화지방', '콜레스테롤(mg)', '칼륨(mg)'].every((w) => A.SYSTEM_INSTRUCTION_A.includes(w)))
 const detailJson = A.DETAIL_SCHEMA.toJSON()
-assert.deepEqual(Object.keys(detailJson.properties), ['sugar_g', 'sodium_mg', 'satfat_g', 'fiber_g'])
+assert.deepEqual(Object.keys(detailJson.properties), KEYS9)
 assert.ok(Object.values(detailJson.properties).every((p) => p.nullable === true && p.type === 'number'))
-ok('a5, 지시 8번(100g당·모르면 null), 응답 스키마 detail_guess 4키 nullable')
+ok('a6, 지시 8번 9가지(100g당·모르면 null), 응답 스키마 detail_guess 9키 nullable, maxOutputTokens 8192')
 
 // 2. 정리: 범위 밖·숫자 아님·모르는 키는 빼고 반올림(g 0.1, 나트륨 정수), 하나도 없으면 null
 const item = (dg, extra = {}) => ({ id: 'x', name: '비빔밥', location: '가운데', before_grams: 400, confidence: 0.8,
@@ -48,11 +51,13 @@ const parse = (...its) => A.parseBeforeText(JSON.stringify({ items: its, warning
 const r1 = parse(
   item({ sugar_g: 4.26, sodium_mg: 333.6, satfat_g: 0.84, fiber_g: 1.5 }),
   item({ sugar_g: null, sodium_mg: 300, satfat_g: null, fiber_g: null }),
-  item({ sugar_g: 150, sodium_mg: -5, satfat_g: '3', fiber_g: 2, potassium_mg: 400 }),
+  item({ sugar_g: 150, sodium_mg: -5, satfat_g: '3', fiber_g: 2, calcium_mg: 400 }),
   item({ sugar_g: 101, sodium_mg: 40001, satfat_g: null, fiber_g: 'x' }),
   item(undefined),
   item([1, 2]),
   item({ sugar_g: 0, sodium_mg: 40000, satfat_g: 100, fiber_g: 0 }),
+  item({ transfat_g: 0.04, polyunsat_g: 2.36, monounsat_g: null, cholesterol_mg: 210.6, potassium_mg: 10000, sodium_mg: 520 }),
+  item({ cholesterol_mg: 5001, potassium_mg: 10001, transfat_g: 100.5, polyunsat_g: '1' }),
 )
 assert.ok(r1.ok)
 const g = r1.items.map((x) => x.detail_guess)
@@ -61,7 +66,9 @@ assert.deepEqual(g[1], { sodium_mg: 300 })
 assert.deepEqual(g[2], { fiber_g: 2 })
 assert.equal(g[3], null); assert.equal(g[4], null); assert.equal(g[5], null)
 assert.deepEqual(g[6], { sugar_g: 0, sodium_mg: 40000, satfat_g: 100, fiber_g: 0 })
-ok('정리: 반올림, null·범위 밖(g 0~100, 나트륨 0~40000)·문자열·모르는 키 빼기, 없음·배열 → null, 경계값 유지')
+assert.deepEqual(g[7], { transfat_g: 0, polyunsat_g: 2.4, cholesterol_mg: 211, potassium_mg: 10000, sodium_mg: 520 })
+assert.equal(g[8], null)
+ok('정리: 반올림(g 0.1·mg 정수), null·범위 밖(g 0~100, 콜레스테롤 0~5000, 나트륨 0~40000, 칼륨 0~10000)·문자열·모르는 키 빼기, 없음·배열 → null, 경계값 유지, 4키만 있는 a5 응답도 그대로')
 
 // 3. 캐시 다시 읽기: 정리 결과를 다시 정리해도 같다. a4 형태(detail_guess 없음)도 깨지지 않는다
 const again = A.normalizeBeforeResponse({ items: r1.items, warnings: r1.warnings })
@@ -149,7 +156,9 @@ ok('기본 detailFor(세부 JSON)로 식약처 값 사용')
 // 8. 목업 픽스처(VITE_AI_MOCK=1): 정리 뒤 모든 음식에 detail_guess, 빈 값은 키가 빠진다
 const fx = A.parseBeforeText(readFileSync(W + 'src/analysis/__fixtures__/before-bibimbap.json', 'utf8'))
 assert.ok(fx.ok && fx.items.every((x) => x.detail_guess && Object.keys(x.detail_guess).length > 0))
-assert.ok(!('fiber_g' in fx.items[2].detail_guess)); assert.deepEqual(Object.keys(fx.items[5].detail_guess), ['sugar_g', 'sodium_mg'])
-ok('목업 픽스처 detail_guess(6개 음식, null 키 빠짐)')
+assert.deepEqual(Object.keys(fx.items[0].detail_guess), KEYS9)
+assert.ok(!('fiber_g' in fx.items[2].detail_guess) && !('polyunsat_g' in fx.items[2].detail_guess))
+assert.deepEqual(Object.keys(fx.items[5].detail_guess).sort(), ['cholesterol_mg', 'sodium_mg', 'sugar_g'])
+ok('목업 픽스처 detail_guess(6개 음식, 9키, null 키 빠짐)')
 
 console.log(`detail_guess_test: ${n}개 통과`)

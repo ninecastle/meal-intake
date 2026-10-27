@@ -3,7 +3,7 @@
 // MealItem.db_reference, NutritionResult ai_estimate 분기의 reference: 종류별 차이가 큰 음식이 DB 대표값·일반 이름에만
 // 맞았을 때 값은 AI 추정을 쓰고, 그 DB 값은 화면에 참고로만 보인다(2026-10-26 사용자 결정).
 // MealItem.grams_source·published_g·unit_count, BeforeItem.whole_count, NutritionResult db 분기의 published_g: 공개 중량(스펙 4.5.5).
-// D4-a 세부 영양소(당류·나트륨·포화지방·식이섬유만, 2026-10-27 사용자 결정): MealItem.detail_per_100g·detail_source·detail_consumed,
+// D4-a 세부 영양소(D4-c부터 9가지: 당류·식이섬유·포화지방·트랜스지방·다불포화지방·단일불포화지방·콜레스테롤·나트륨·칼륨, 2026-10-28 사용자 결정): MealItem.detail_per_100g·detail_source·detail_consumed,
 // BeforeItem.detail_guess, totals.detail. 영양소마다 식약처 DB 값 → 없으면 호출 A의 100g당 추정("추정" 배지) → 없으면 키를 뺀다(화면 "–").
 
 export type Nutrients = { kcal: number; carbs_g: number; protein_g: number; fat_g: number }
@@ -11,8 +11,18 @@ export type Nutrients = { kcal: number; carbs_g: number; protein_g: number; fat_
 export type NutritionSource = 'db' | 'search' | 'ai_estimate' | 'user_input'
 export type FillSource = 'ai_estimate' | 'missing'
 export type DbMatch = 'name' | 'group' | 'partial'
-/** 세부 영양소 키. 단위: sugar_g·satfat_g·fiber_g는 g, sodium_mg는 mg */
-export type DetailKey = 'sugar_g' | 'sodium_mg' | 'satfat_g' | 'fiber_g'
+/** 세부 영양소 키. 단위: _g는 g, _mg는 mg. 다불포화·단일불포화는 식약처 원본에 열이 없어 호출 A 추정만 있다.
+ *  D4-a(4가지)로 저장된 기록·캐시도 그대로 맞는다(키는 모두 선택) */
+export type DetailKey =
+  | 'sugar_g'
+  | 'fiber_g'
+  | 'satfat_g'
+  | 'transfat_g'
+  | 'polyunsat_g'
+  | 'monounsat_g'
+  | 'cholesterol_mg'
+  | 'sodium_mg'
+  | 'potassium_mg'
 /** 100g당 값 또는 먹은 양. 값이 없는 키는 뺀다 */
 export type DetailNutrients = Partial<Record<DetailKey, number>>
 /** 화면: db → 출처 없음(DB), ai_estimate → "추정" 배지 */
@@ -72,7 +82,7 @@ export interface MealItem {
   detail_per_100g?: DetailNutrients
   /** D4-a. detail_per_100g와 같은 키마다 그 값의 출처 */
   detail_source?: Partial<Record<DetailKey, DetailSource>>
-  /** D4-a. 먹은 양 기준 = detail_per_100g × consumed_grams ÷ 100(탄단지와 같은 공식). g은 소수 첫째 자리, sodium_mg는 정수로 저장 */
+  /** D4-a. 먹은 양 기준 = detail_per_100g × consumed_grams ÷ 100(탄단지와 같은 공식). g 키는 소수 첫째 자리, mg 키는 정수로 저장 */
   detail_consumed?: DetailNutrients
 }
 

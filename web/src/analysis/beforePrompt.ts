@@ -7,13 +7,15 @@
 //   응답 정리에서도 모델 warnings를 koreanWarnings로 거른다(한국어가 아니면 일반 안내 한 줄). a3 캐시는 다시 분석한다.
 // a5(2026-10-28, 디자인 조각 D4-b): a4 + detail_guess(음식별 100g당 당류·나트륨·포화지방·식이섬유 추정, 모르는 값 null).
 //   같은 호출 안에서 받는다(호출 수 그대로). 정리에서 범위 밖·숫자 아닌 키는 빼고, 하나도 없으면 null. a4 캐시는 다시 분석한다.
+// a6(2026-10-28, 디자인 조각 D4-c): a5 + detail_guess를 9가지로(트랜스지방·다불포화지방·단일불포화지방·콜레스테롤·칼륨 추가, 사용자 결정).
+//   응답이 길어져 maxOutputTokens를 8192로 올렸다. a5 캐시는 다시 분석한다(a5·a4 결과도 정리 함수는 그대로 읽는다).
 // 이 파일은 import.meta.env를 쓰지 않는다(Node 시험 스크립트에서도 그대로 불러 쓴다).
 import { Schema, ThinkingLevel, type GenerationConfig } from 'firebase/ai'
 import type { BeforeItem, DetailNutrients, Nutrients } from '../types/analysis'
 import { DETAIL_KEYS, DETAIL_MAX_PER_100G, roundDetail } from './compute.ts'
 import { koreanWarnings } from './koreanText.ts'
 
-export const PROMPT_VERSION_A = 'a5'
+export const PROMPT_VERSION_A = 'a6'
 
 export const SYSTEM_INSTRUCTION_A = `당신은 식사 사진을 분석하는 영양 보조 도구다. 먹기 전 식탁 사진 한 장이 주어진다.
 
@@ -26,7 +28,7 @@ export const SYSTEM_INSTRUCTION_A = `당신은 식사 사진을 분석하는 영
 5. 국·찌개는 건더기와 국물을 별도 항목으로 나눈다.
 6. per_100g_guess에 100g당 kcal, 탄수화물·단백질·지방(g) 추정값을 적는다. 일반적인 값을 그대로 쓰지 말고 보이는 구성(패티 수, 치즈·소스·토핑, 튀김옷, 크림·시럽 등)을 따져 그 음식에 맞게 추정한다. DB에 없거나, 종류 차이가 큰 음식이 DB 대표값에만 맞을 때 쓰인다.
 7. whole_count: 버거, 피자 한 판, 치킨 한 마리, 도시락, 컵 음료처럼 한 개·한 마리·한 판·1인분이 손대지 않은 모양 그대로 통째로 보이면 그 개수를 정수(1~10)로 적는다. 일부만 덜어 왔거나, 잘라 놓은 조각(피자 몇 조각 등)이거나, 여러 그릇에 나눠 담겼거나, 반찬·나물·국물처럼 정해진 크기가 없는 음식이면 null로 적는다. 판단이 어려우면 null. before_grams는 whole_count와 상관없이 그대로 추정한다.
-8. detail_guess에 그 음식 100g당 당류(g), 나트륨(mg), 포화지방(g), 식이섬유(g) 추정값을 적는다. 1인분이나 그릇 전체 값이 아니라 100g당 값이다. 한국에서 흔히 먹는 조리 기준으로 보이는 구성을 따져 추정하고, 짐작할 수 없는 값은 null로 적는다.
+8. detail_guess에 그 음식 100g당 당류(g), 식이섬유(g), 포화지방(g), 트랜스지방(g), 다불포화지방(g), 단일불포화지방(g), 콜레스테롤(mg), 나트륨(mg), 칼륨(mg) 추정값을 적는다. 1인분이나 그릇 전체 값이 아니라 100g당 값이다. 한국에서 흔히 먹는 조리 기준으로 보이는 구성을 따져 추정하고, 짐작할 수 없는 값은 null로 적는다.
 
 규칙:
 - 섭취량이나 총 칼로리를 계산하지 않는다.
@@ -46,13 +48,18 @@ export const PER100_SCHEMA = Schema.object({
     fat_g: Schema.number(),
   },
 })
-/** a5 세부 영양소 100g당 추정. 키는 모두 필수, 모르는 값은 null */
+/** a6 세부 영양소 100g당 추정(9가지, 순서는 compute.ts DETAIL_KEYS). 키는 모두 필수, 모르는 값은 null */
 export const DETAIL_SCHEMA = Schema.object({
   properties: {
     sugar_g: Schema.number({ nullable: true }),
-    sodium_mg: Schema.number({ nullable: true }),
-    satfat_g: Schema.number({ nullable: true }),
     fiber_g: Schema.number({ nullable: true }),
+    satfat_g: Schema.number({ nullable: true }),
+    transfat_g: Schema.number({ nullable: true }),
+    polyunsat_g: Schema.number({ nullable: true }),
+    monounsat_g: Schema.number({ nullable: true }),
+    cholesterol_mg: Schema.number({ nullable: true }),
+    sodium_mg: Schema.number({ nullable: true }),
+    potassium_mg: Schema.number({ nullable: true }),
   },
 })
 export const RESPONSE_SCHEMA_A = Schema.object({
@@ -80,7 +87,10 @@ export const GENERATION_CONFIG_A: GenerationConfig = {
   responseSchema: RESPONSE_SCHEMA_A,
   // 가장 낮은 수준. 0단계 스파이크에서 3.5 Flash-Lite가 LOW를 받았다(3.8 Flash는 MINIMAL 불가).
   thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-  maxOutputTokens: 4096,
+  // a6: 4096 → 8192. a5 실제 호출에서 음식 6개 출력이 1,134토큰(음식당 약 190, 세부 4가지)이었다. 세부가 9가지가 되면 음식당 약 260토큰으로 보고,
+  // 30개(MAX_ITEMS)면 8천 토큰 가까이 된다. 상한에 걸리면 JSON이 잘려 형식 오류 → 재시도로 한도를 두 번 쓰므로 넉넉히 둔다.
+  // 상한은 실제로 나온 만큼만 세므로 짧은 응답의 비용은 그대로다.
+  maxOutputTokens: 8192,
 }
 
 // ── 응답 정리(형식 검증) ──
@@ -119,7 +129,7 @@ export function checkPer100(v: unknown): Nutrients | null {
   return { kcal: round1(kcal), carbs_g: round1(carbs), protein_g: round1(protein), fat_g: round1(fat) }
 }
 
-/** a5 detail_guess 정리: 허용 키 중 0~상한(g 100, 나트륨 40000mg) 수만 남기고 반올림(g 0.1, 나트륨 정수). 하나도 없으면 null */
+/** detail_guess 정리(a5·a6): 허용 키 중 0~상한(g 100, 콜레스테롤 5000·나트륨 40000·칼륨 10000mg) 수만 남기고 반올림(g 0.1, mg 정수). 하나도 없으면 null */
 export function checkDetail(v: unknown): DetailNutrients | null {
   if (!isObj(v)) return null
   const out: DetailNutrients = {}
