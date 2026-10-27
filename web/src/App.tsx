@@ -18,6 +18,9 @@ const ReviewPage = lazy(() => import('./pages/ReviewPage'))
 const MealIdRedirect = lazy(() => import('./pages/MealRedirects').then((m) => ({ default: m.MealIdRedirect })))
 const CaptureBeforeRedirect = lazy(() => import('./pages/MealRedirects').then((m) => ({ default: m.CaptureBeforeRedirect })))
 const GoalPage = lazy(() => import('./pages/GoalPage'))
+// 한눈에·영양소 상세(디자인 조각 D5)
+const GlancePage = lazy(() => import('./pages/GlancePage'))
+const NutritionDetailPage = lazy(() => import('./pages/NutritionDetailPage'))
 const CalendarPage = lazy(() => import('./pages/CalendarPage'))
 // 개발 빌드에서만 등록한다. 배포 빌드에서는 import.meta.env.DEV가 false로 바뀌어 이 import가 번들에서 빠진다.
 const DevPage = import.meta.env.DEV ? lazy(() => import('./pages/DevPage')) : null
@@ -74,6 +77,8 @@ const MealRoute = () => <MealPage uid={useUser().uid} />
 const MealIdRoute = () => <MealIdRedirect uid={useUser().uid} />
 const MealAfterRoute = () => <MealIdRedirect uid={useUser().uid} after />
 const GoalRoute = () => <GoalPage uid={useUser().uid} />
+const GlanceRoute = () => <GlancePage uid={useUser().uid} />
+const DetailRoute = () => <NutritionDetailPage uid={useUser().uid} />
 const CalendarRoute = () => <CalendarPage uid={useUser().uid} />
 
 const userRoutes: RouteObject[] = [
@@ -89,6 +94,9 @@ const userRoutes: RouteObject[] = [
   { path: '/meal/:mealId', element: <MealIdRoute /> },
   // S6 목표 설정(3단계 조각 2). 홈에서는 push(state.fromHome)로 들어온다
   { path: '/goal', element: <GoalRoute /> },
+  // 한눈에·영양소 상세(D5, ?date=YYYY-MM-DD). 홈 나의 하루 [한눈에]·[자세히]에서 push(state.fromHome)
+  { path: '/glance', element: <GlanceRoute /> },
+  { path: '/detail', element: <DetailRoute /> },
   // S10 달력(3단계 조각 3-1). 홈에서는 push(state.fromHome)로 들어온다. ?month=YYYY-MM
   { path: '/calendar', element: <CalendarRoute /> },
   ...(DevPage ? [{ path: '/dev', element: <DevPage /> }] : []),

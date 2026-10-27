@@ -17,7 +17,8 @@ function dedupeWords(s: string): string {
  * "덮밥_돼지고기(제육)" → "돼지고기(제육) 덮밥", "샌드위치_햄_달걀" → "햄 달걀 샌드위치". 밑줄이 없으면 빈칸만 정리한다.
  */
 export function foodName(raw: string): string {
-  const s = (raw ?? '').replace(/\s+/g, ' ').trim()
+  // 자동완성 "대표값" 후보 꼬리표(" · 대표값")는 이름이 아니다(예전에 그대로 저장된 이름도 화면에서 뺀다)
+  const s = (raw ?? '').replace(/\s*·\s*대표값\s*$/, '').replace(/\s+/g, ' ').trim()
   const parts = s
     .split('_')
     .map((p) => p.trim())

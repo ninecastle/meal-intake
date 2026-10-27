@@ -20,6 +20,8 @@ const cases = [
   ['  된장국  건더기 ', '된장국 건더기'],
   ['버거 버거', '버거'],
   ['', ''],
+  ['콩나물무침 · 대표값', '콩나물무침'],
+  ['치킨 · 대표값', '치킨'],
 ]
 for (const [raw, want] of cases) assert.equal(foodName(raw), want, raw)
 // DB 전체: 밑줄이 남지 않고, 빈 이름이 생기지 않는다

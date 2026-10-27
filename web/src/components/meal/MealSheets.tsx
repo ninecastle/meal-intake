@@ -6,14 +6,12 @@
 import { useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import type { MealType } from '../../data/meals'
 import type { DetailSummary } from '../../data/summary'
-import type { DetailKey } from '../../types/analysis'
 import type { ErrorView } from '../capture/captureText'
 import { CameraHelp } from '../capture/CaptureControls'
 import type { CaptureSource } from '../capture/useCaptureSource'
-import { formatDetail, MEAL_TYPE_LABEL } from '../mealText'
+import { MEAL_TYPE_LABEL } from '../mealText'
+import { NutrientTable } from '../nutrition/NutrientTable'
 import { BottomSheet, Icon } from '../ui'
-
-const r1 = (n: number) => Math.round(n * 10) / 10
 
 export type MealTotals = { kcal: number; carbs_g: number; protein_g: number; fat_g: number }
 
@@ -210,59 +208,6 @@ function TimeForm({ meal, value, onSave }: { meal: MealType; value: string; onSa
         저장
       </button>
     </>
-  )
-}
-
-/** 세부 영양소 한 줄(D4): 값이 있는 음식만 더한 합, 일부 음식만 값이 있으면 "음식 ○개 중 ○개 기준". "추정" 배지는 붙이지 않는다(2026-10-28 사용자 결정) */
-function DetailRow({ label, k, detail, sub }: { label: string; k: DetailKey; detail: DetailSummary; sub: boolean }) {
-  const t = detail.totals[k]
-  return (
-    <div className={sub ? 'nrow sub' : 'nrow'}>
-      <span>
-        {label}
-        {t && t.count < detail.items && (
-          <small style={{ marginLeft: 6, fontSize: 13, color: 'var(--ink-3)' }}>{`음식 ${detail.items}개 중 ${t.count}개 기준`}</small>
-        )}
-      </span>
-      {t ? (
-        <span className="num">{formatDetail(k, t.value, true)}</span>
-      ) : (
-        <span className="num">–</span>
-      )}
-    </div>
-  )
-}
-
-/** 시안 nutrientTable(t, true)의 행 순서 그대로, 대체감미료만 뺀다(2026-10-28 사용자 결정). 세부 아홉 가지는 D4 합계(값 있는 음식만, 없으면 "–") */
-function NutrientTable({ t, detail }: { t: MealTotals; detail: DetailSummary }) {
-  return (
-    <div className="ntable">
-      <div className="nrow total">
-        <span>총 열량</span>
-        <span className="num">{`${Math.round(t.kcal)} kcal`}</span>
-      </div>
-      <div className="nrow">
-        <span>탄수화물</span>
-        <span className="num">{`${r1(t.carbs_g)} g`}</span>
-      </div>
-      <DetailRow label="당류" k="sugar_g" detail={detail} sub />
-      <DetailRow label="식이섬유" k="fiber_g" detail={detail} sub />
-      <div className="nrow">
-        <span>단백질</span>
-        <span className="num">{`${r1(t.protein_g)} g`}</span>
-      </div>
-      <div className="nrow">
-        <span>지방</span>
-        <span className="num">{`${r1(t.fat_g)} g`}</span>
-      </div>
-      <DetailRow label="포화지방" k="satfat_g" detail={detail} sub />
-      <DetailRow label="트랜스지방" k="transfat_g" detail={detail} sub />
-      <DetailRow label="다불포화지방" k="polyunsat_g" detail={detail} sub />
-      <DetailRow label="단일불포화지방" k="monounsat_g" detail={detail} sub />
-      <DetailRow label="콜레스테롤" k="cholesterol_mg" detail={detail} sub={false} />
-      <DetailRow label="나트륨" k="sodium_mg" detail={detail} sub={false} />
-      <DetailRow label="칼륨" k="potassium_mg" detail={detail} sub={false} />
-    </div>
   )
 }
 

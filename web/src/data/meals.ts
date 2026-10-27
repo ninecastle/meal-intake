@@ -362,6 +362,27 @@ function validRange(startKey: string, endKey: string): boolean {
 }
 
 /**
+ * 한눈에·영양소 상세(디자인 조각 D5): 그날 done 기록 문서들(음식별 값이 필요해 요약 대신 문서를 준다), createdAt 오름차순.
+ * subscribeDay와 같은 쿼리(등호 두 개, 단일 필드 인덱스)이고 합계는 화면이 summarizeDay·sumDetail로 낸다.
+ */
+export function subscribeDayMeals(
+  uid: string,
+  dateKey: string,
+  cb: (meals: MealWithId[]) => void,
+  onError?: (code: MealStoreErrorCode) => void,
+): () => void {
+  const q = query(mealsCol(uid), where('dateKey', '==', dateKey), where('status', '==', 'done'))
+  return onSnapshot(
+    q,
+    (snap) => cb(newestFirst(snap.docs.map(toMeal)).reverse()),
+    (e) => {
+      console.warn('[meals] subscribeDayMeals 오류', e)
+      onError?.('MEAL_STORE_UNAVAILABLE')
+    },
+  )
+}
+
+/**
  * 끼니 화면(디자인 조각 D3): 그 날짜·끼니의 모든 상태 기록(awaiting_after·needs_review·done)을 createdAt 오름차순으로 구독한다
  * (서버 시각이 아직 없는 방금 만든 기록은 맨 뒤). 등호 조건 두 개라 단일 필드 인덱스로 동작한다(orderBy 없음).
  */

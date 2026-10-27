@@ -4,7 +4,7 @@
 // 글자는 시안처럼 한 텍스트 노드로 만든다(노드가 나뉘면 글자 사이 간격이 미세하게 달라진다). 링 진행은 시안과 같이 화면에 보이는 정수 kcal / 목표로 계산한다(stroke-dasharray `${L*frac} ${L}`).
 // 세부 영양소(.minor)는 D4 전이라 "–"(가짜 숫자 금지). 계산은 analysis/goal.ts의 compareToGoal(AI 호출 없음).
 // 목표 없음·정하기 전·초과는 (d) GoalStates, 계속 보이는 알림은 (f) BandNotices(띠 맨 위 .callout, 2026-10-27 사용자 결정).
-// [한눈에]·[자세히]는 D5 화면이 생길 때까지 부르는 화면이 "준비 중이에요" 토스트를 띄운다(onSoon).
+// [한눈에]·[자세히]는 D5 화면(/glance·/detail)으로 간다(onGlance·onDetail, 부르는 화면이 그 날짜로 push).
 import { useLayoutEffect, useRef, useState } from 'react'
 import { compareToGoal, type GoalTargets } from '../../analysis/goal'
 import type { DaySummary, DetailSummary } from '../../data/summary'
@@ -29,7 +29,8 @@ type Props = {
   isToday: boolean
   goal: DayGoalView
   online: boolean
-  onSoon: () => void
+  onGlance: () => void
+  onDetail: () => void
 }
 
 const MACROS = [
@@ -190,7 +191,7 @@ function Minor({ detail }: { detail: DetailSummary }) {
   )
 }
 
-export default function DayBand({ summary, dayError, isToday, goal, online, onSoon }: Props) {
+export default function DayBand({ summary, dayError, isToday, goal, online, onGlance, onDetail }: Props) {
   const targets = goal.kind === 'targets' ? goal.targets : null
   const { ref: ratioRef, stacked } = useStackedRatio(summary ? MACROS.map(({ k }) => summary.totals[k]).join('|') : '')
   const notices = [
@@ -208,8 +209,8 @@ export default function DayBand({ summary, dayError, isToday, goal, online, onSo
       notice={<BandNotices items={notices} />}
       action={
         <div className="seg-mini">
-          <ChipButton onClick={onSoon}>한눈에</ChipButton>
-          <ChipButton dark onClick={onSoon}>
+          <ChipButton onClick={onGlance}>한눈에</ChipButton>
+          <ChipButton dark onClick={onDetail}>
             자세히
           </ChipButton>
         </div>
