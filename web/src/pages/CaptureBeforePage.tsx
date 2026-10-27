@@ -1,8 +1,9 @@
-// S2 먹기 전 촬영. 사진을 고르면: 끼니·dateKey(먹기 전 사진 시각: 카메라는 지금, 앨범은 EXIF 찍은 시각) → 압축 → newMealId → IndexedDB 임시 보관
+// S2 먹기 전 촬영. 사진을 고르면: dateKey·끼니(아래 날짜 규칙) → 압축 → newMealId → IndexedDB 임시 보관
 // → 먹기 전 분석(호출 A) → awaiting_after 기록(기다리지 않음) → S3. 사진 선택 1회 = 분석 1회, 자동 재호출 없음.
 // 사진을 얻는 방법은 useCaptureSource(M19). 처음은 선택 화면(조각 2-1, 2026-10-27 사용자 결정): 폰·태블릿 [카메라로 찍기]
 // (앱 안 카메라 화면, 이때만 연다)·[앨범에서 고르기]·[직접 입력], PC [사진 파일 고르기]·웹캠이 있으면 [카메라로 찍기]·[직접 입력].
-// 날짜: ?date=YYYY-MM-DD(홈에서 보던 날짜)는 선택 화면의 [직접 입력]에만 쓴다. 사진 기록은 먹기 전 사진 시각 날짜(앨범 사진은 찍은 날, 조각 3).
+// 날짜(2026-10-27 사용자 결정): 카메라로 찍은 사진은 오늘, 앨범 사진(PC 파일 포함)과 [직접 입력]은 ?date=YYYY-MM-DD(홈에서 보던
+// 날짜, 없으면 오늘). 끼니: 앨범 사진은 EXIF 찍은 시각(없거나 미래면 지금), 카메라는 지금. 사진 날짜는 쓰지 않는다.
 // 기록: 홈 → S2는 push 한 번. 카메라 화면은 같은 주소 칸을 하나 더 쌓아 열고(location.state 카메라 키, ?date= 유지),
 // 닫기 X·셔터·기기 뒤로 가기는 그 칸을 빼서 이 선택 화면으로 돌아온다(useCaptureSource). S2 → S3·S4는 replace.
 import { useEffect, useRef, useState } from 'react'
@@ -28,6 +29,9 @@ import { compressPhoto } from '../photos/compress'
 import { readTakenAt } from '../photos/exif'
 import type { AfterPageState } from './CaptureAfterPage'
 
+/** 기록 날짜와 끼니를 정할 시각 */
+type When = { dateKey: string; mealAt: Date }
+
 export default function CaptureBeforePage({ uid }: { uid: string }) {
   const navigate = useNavigate()
   const [params] = useSearchParams()
@@ -42,8 +46,8 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
   const abortRef = useRef<AbortController | null>(null)
   // 분당 한도 뒤 [다시 시도]용 압축본. 이 화면 메모리에만 둔다(누를 때만 다시 호출, 자동 재시도 없음).
   const lastPhoto = useRef<Blob | null>(null)
-  // 그 사진의 날짜·끼니 기준 시각. [다시 시도]와 분석 실패 뒤 [직접 입력] 날짜에 쓴다.
-  const lastShotAt = useRef<Date | null>(null)
+  // 그 사진의 기록 날짜와 끼니 기준 시각. [다시 시도]와 분석 실패 뒤 [직접 입력] 날짜에 쓴다.
+  const lastWhen = useRef<When | null>(null)
   const [busy, setBusy] = useState(false)
   const [showNotice, setShowNotice] = useState(false)
   const [error, setError] = useState<ErrorView | null>(null)
@@ -88,26 +92,28 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
     abortRef.current?.abort()
     navigate(`/meal/new/review?date=${dateKey}`, { replace: true })
   }
-  // 분석이 안 될 때의 [직접 입력]은 방금 고른 사진과 같은 날짜(카메라면 오늘, 앨범이면 찍은 날)
-  const goManualNow = () => goManual(toDateKey(lastShotAt.current ?? new Date()))
+  // 분석이 안 될 때의 [직접 입력]은 방금 고른 사진과 같은 날짜(카메라면 오늘, 앨범이면 홈에서 보던 날짜)
+  const goManualNow = () => goManual(lastWhen.current?.dateKey ?? toDateKey(new Date()))
 
-  // 앨범 사진(PC 파일 포함)은 EXIF 찍은 시각이 있으면 그 시각으로 날짜·끼니를 채운다. 없거나 미래면 지금(스펙 4.8절).
-  // 카메라·capture input 사진은 지금 시각. EXIF는 이 계산에만 쓰고 저장하지 않는다(압축본에는 EXIF가 없다).
+  // 앨범 사진(PC 파일 포함): 날짜는 [직접 입력]과 같은 manualDate, 끼니는 EXIF 찍은 시각(없거나 미래면 지금, 스펙 4.8절).
+  // 카메라·capture input 사진은 오늘·지금 시각. EXIF는 이 계산에만 쓰고 저장하지 않는다(압축본에는 EXIF가 없다).
   async function onPick(file: File, source: PickSource) {
-    await run(() => compressPhoto(file), source === 'album' ? () => readTakenAt(file) : undefined)
+    const getWhen =
+      source === 'album' ? async () => ({ dateKey: manualDate, mealAt: (await readTakenAt(file)) ?? new Date() }) : undefined
+    await run(() => compressPhoto(file), getWhen)
   }
 
   async function retryLast() {
     const photo = lastPhoto.current
-    const at = lastShotAt.current
+    const when = lastWhen.current
     if (!photo) {
       startCapture()
       return
     }
-    await run(async () => photo, async () => at)
+    await run(async () => photo, async () => when)
   }
 
-  async function run(getPhoto: () => Promise<Blob>, getTakenAt?: () => Promise<Date | null>) {
+  async function run(getPhoto: () => Promise<Blob>, getWhen?: () => Promise<When | null>) {
     if (busyRef.current) return
     busyRef.current = true
     setBusy(true)
@@ -116,11 +122,12 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
     abortRef.current = ac
     let id: string | null = null
     try {
-      // 끼니·dateKey는 먹기 전 사진 시각 기준(스펙 2.2절). readTakenAt은 예외 없이 null을 돌려준다.
-      const shotAt = (await getTakenAt?.()) ?? new Date()
-      lastShotAt.current = shotAt
-      const dateKey = toDateKey(shotAt)
-      const mealType = guessMealType(shotAt)
+      // 없으면 카메라 사진: 오늘·지금 시각(스펙 2.2절). readTakenAt은 예외 없이 null을 돌려준다.
+      const now = new Date()
+      const when = (await getWhen?.()) ?? { dateKey: toDateKey(now), mealAt: now }
+      lastWhen.current = when
+      const { dateKey } = when
+      const mealType = guessMealType(when.mealAt)
       const photo = await getPhoto()
       lastPhoto.current = photo
       id = newMealId(uid)
@@ -132,7 +139,7 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
       )
       abortRef.current = null
       lastPhoto.current = null
-      lastShotAt.current = null
+      lastWhen.current = null
       const state: AfterPageState = { beforeAnalysis, dateKey, mealType }
       navigate(`/meal/${id}/after`, { replace: true, state })
     } catch (e) {
@@ -224,7 +231,9 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
             />
             {manualDate !== today && (
               <p className="mt-2 text-center text-xs text-gray-500">
-                직접 입력은 {dateKeyLabel(manualDate)} 기록으로, 사진은 찍은 날로 들어가요
+                {cap.mode === 'pc' && !cap.hasWebcam
+                  ? `고른 사진과 직접 입력은 ${dateKeyLabel(manualDate)} 기록으로 들어가요`
+                  : `${cap.mode === 'pc' ? '고른 사진' : '앨범 사진'}과 직접 입력은 ${dateKeyLabel(manualDate)}, 카메라로 찍은 사진은 오늘 기록으로 들어가요`}
               </p>
             )}
           </>
