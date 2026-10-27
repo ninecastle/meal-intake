@@ -29,6 +29,7 @@ import { validateAnalysis } from '../analysis/validate'
 import ReviewEditor from '../components/review/ReviewEditor'
 import { deleteMeal, getMeal, MealStoreError, newMealId, saveMeal, type MealStoreErrorCode, type MealType } from '../data/meals'
 import { fillMealTime } from '../data/mealTimes'
+import { subscribePrefs } from '../data/prefs'
 import { useAuthUser } from '../lib/auth'
 import { APP_TIMEZONE, guessMealType, toDateKey } from '../lib/time'
 import { setFlash } from '../lib/flash'
@@ -135,6 +136,9 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
   const [editorBusy, setEditorBusy] = useState(false)
   const [slow, setSlow] = useState(false)
   const [saveError, setSaveError] = useState<SaveError | null>(null)
+  // 설정 "같이 먹은 사람 고르기"(기본 꺼짐, 계정에 저장)
+  const [shareEaters, setShareEaters] = useState(false)
+  useEffect(() => (uid ? subscribePrefs(uid, (p) => setShareEaters(p.shareEaters)) : undefined), [uid])
 
   const alive = useRef(true)
   const allowLeave = useRef(false)
@@ -467,6 +471,7 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
                 onBusyChange={setEditorBusy}
                 mode={mode}
                 notice={notice}
+                showEaters={shareEaters}
               />
             </fieldset>
 

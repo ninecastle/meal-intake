@@ -30,6 +30,8 @@ export interface ReviewEditorProps {
   mode?: 'review' | 'edit'
   /** 합계와 음식 카드 사이에 둘 안내(확인할 점) */
   notice?: ReactNode
+  /** 설정 "같이 먹은 사람 고르기"(기본 꺼짐, 2026-10-27 사용자가 고른 변경) */
+  showEaters?: boolean
 }
 
 const UNDO_MS = 3000
@@ -52,7 +54,7 @@ function omit<T>(rec: Record<string, T>, key: string): Record<string, T> {
 type Ask = { id: string; name: string; dbCode?: string }
 type Undo = { item: MealItem; index: number }
 
-export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 'review', notice }: ReviewEditorProps) {
+export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 'review', notice, showEaters = false }: ReviewEditorProps) {
   // 비동기 조회가 끝났을 때 최신 분석 위에 고치도록 ref로 들고 있는다
   const latest = useRef(analysis)
   const onChangeRef = useRef(onChange)
@@ -273,6 +275,7 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
                 focusKcal={focusKcalId === it.id}
                 ratioHint={ratioHint}
                 suggestionHtml={suggestions[it.id] ?? null}
+                showEaters={showEaters}
                 onStartEdit={() => setEditingId(it.id)}
                 onCancelEdit={() => cancelEdit(it.id)}
                 onConfirmName={(name, dbCode) => confirmName(it.id, name, dbCode)}

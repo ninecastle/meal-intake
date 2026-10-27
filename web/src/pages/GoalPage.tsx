@@ -5,6 +5,7 @@
 // 처음 열 때 subscribeGoal의 첫 값으로만 폼을 채운다(그 뒤 스냅샷은 편집 중인 폼을 덮지 않는다).
 // 방문 기록: 홈에서 push(state.fromHome)로 들어왔으면 저장·‹ 모두 navigate(-1)로 한 칸 돌아가고(같은 화면이 두 번 쌓이지 않게),
 // 주소로 바로 열었으면 홈으로 replace. 저장 안내는 lib/flash로 넘긴다(키 'goal:saved'·'goal:pending'은 HomePage와 같다).
+// 설정 화면(D8)이 생길 때까지 맨 아래(로그아웃 위)에 설정 줄을 둔다: "같이 먹은 사람 고르기"(2026-10-27 사용자가 고른 변경, 기본 꺼짐, 계정에 저장).
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import {
@@ -22,6 +23,7 @@ import {
 } from '../analysis/goal'
 import { formatKcal } from '../components/mealText'
 import { GoalStoreError, saveGoal, subscribeGoal, type GoalStoreErrorCode, type StoredGoal } from '../data/goals'
+import { setShareEaters, subscribePrefs, type Prefs } from '../data/prefs'
 import { signOutAndClear } from '../lib/auth'
 import { setFlash } from '../lib/flash'
 import { Button, IconButton, TopBar } from '../components/ui'
@@ -438,6 +440,7 @@ export default function GoalPage({ uid }: { uid: string }) {
               </section>
             </fieldset>
 
+            <SettingsRows uid={uid} />
             <p className="text-xs leading-relaxed text-ink-2">{DISCLAIMER}</p>
             <AccountRow />
           </main>
@@ -472,6 +475,35 @@ export default function GoalPage({ uid }: { uid: string }) {
 }
 
 /** 맨 아래 로그아웃(·개발) 줄. 설정 화면(D8)이 생길 때까지 홈에서 옮겨 둔다(2026-10-27 사용자 결정). 동작·오류 처리는 예전 홈 그대로. */
+/** 설정 화면(D8)이 생길 때까지 목표 화면에 두는 설정 줄. 시안 설정 화면의 .slist·.sgroup·.srow·.toggle 모양 그대로 */
+function SettingsRows({ uid }: { uid: string }) {
+  const [prefs, setPrefs] = useState<Prefs | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  useEffect(() => subscribePrefs(uid, setPrefs), [uid])
+  const on = prefs?.shareEaters === true
+  function toggle() {
+    if (!prefs) return
+    setError(null)
+    // 기다리지 않는다(오프라인이면 끝나지 않는다). 구독은 로컬 캐시로 바로 바뀐다.
+    setShareEaters(uid, !on).catch(() => setError('설정을 저장하지 못했어요. 잠시 뒤 다시 해 주세요.'))
+  }
+  return (
+    <div className="slist">
+      <div className="sgroup">기록</div>
+      <button type="button" className="srow" onClick={toggle} disabled={!prefs}>
+        <span>같이 먹은 사람 고르기</span>
+        <span className={on ? 'toggle' : 'toggle off'} role="switch" aria-checked={on} aria-label="같이 먹은 사람 고르기"></span>
+      </button>
+      <p className="mt-1 text-xs text-ink-3">반찬을 나눠 먹을 때 켜요. 결과 화면에서 음식마다 몇 명이 먹었는지 고를 수 있어요.</p>
+      {error && (
+        <p role="alert" className="mt-1 text-xs text-peach-deep">
+          {error}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function AccountRow() {
   const [loggingOut, setLoggingOut] = useState(false)
   const [error, setError] = useState<string | null>(null)

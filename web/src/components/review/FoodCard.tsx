@@ -72,6 +72,8 @@ export interface FoodCardProps {
   ratioHint: RatioHint
   /** 검색 기반일 때 Gemini 검색 추천 HTML(저장하지 않음) */
   suggestionHtml: string | null
+  /** 설정 "같이 먹은 사람 고르기"(기본 꺼짐). 꺼져 있어도 이미 2명 이상인 음식은 보인다(값이 숨은 채 나뉘지 않게) */
+  showEaters: boolean
   onStartEdit: () => void
   onCancelEdit: () => void
   onConfirmName: (name: string, dbCode?: string) => void
@@ -254,29 +256,33 @@ export default function FoodCard(p: FoodCardProps) {
           </div>
         )}
 
-        <div style={LABEL}>같이 먹은 사람</div>
-        <Segment
-          items={EATER_PICKS}
-          sel={item.eaters >= 5 ? 4 : item.eaters - 1}
-          label={`${shownName || '음식'} 같이 먹은 사람`}
-          onPick={(i) => {
-            if (i < 4) p.onEaters(i + 1)
-            else if (item.eaters < 5) p.onEaters(5)
-          }}
-        />
-        {item.eaters >= 5 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
-            <NumField
-              live={false}
-              value={item.eaters}
-              min={5}
-              max={MAX_EATERS}
-              onCommit={(n) => p.onEaters(Math.round(n))}
-              label={`같이 먹은 사람(5~${MAX_EATERS}명)`}
-              style={{ width: 110, minHeight: 52, borderRadius: 14, border: '1px solid var(--line)', padding: '0 14px', font: '600 20px var(--f-num)' }}
+        {(p.showEaters || item.eaters > 1) && (
+          <>
+            <div style={LABEL}>같이 먹은 사람</div>
+            <Segment
+              items={EATER_PICKS}
+              sel={item.eaters >= 5 ? 4 : item.eaters - 1}
+              label={`${shownName || '음식'} 같이 먹은 사람`}
+              onPick={(i) => {
+                if (i < 4) p.onEaters(i + 1)
+                else if (item.eaters < 5) p.onEaters(5)
+              }}
             />
-            <span style={UNIT}>명</span>
-          </div>
+            {item.eaters >= 5 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                <NumField
+                  live={false}
+                  value={item.eaters}
+                  min={5}
+                  max={MAX_EATERS}
+                  onCommit={(n) => p.onEaters(Math.round(n))}
+                  label={`같이 먹은 사람(5~${MAX_EATERS}명)`}
+                  style={{ width: 110, minHeight: 52, borderRadius: 14, border: '1px solid var(--line)', padding: '0 14px', font: '600 20px var(--f-num)' }}
+                />
+                <span style={UNIT}>명</span>
+              </div>
+            )}
+          </>
         )}
 
         <p style={{ margin: '14px 0 0', fontSize: 13, color: 'var(--ink-2)' }}>
