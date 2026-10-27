@@ -16,6 +16,7 @@ const CaptureAfterPage = lazy(() => import('./pages/CaptureAfterPage'))
 const ReviewPage = lazy(() => import('./pages/ReviewPage'))
 const MealDetailPage = lazy(() => import('./pages/MealDetailPage'))
 const GoalPage = lazy(() => import('./pages/GoalPage'))
+const CalendarPage = lazy(() => import('./pages/CalendarPage'))
 // 개발 빌드에서만 등록한다. 배포 빌드에서는 import.meta.env.DEV가 false로 바뀌어 이 import가 번들에서 빠진다.
 const DevPage = import.meta.env.DEV ? lazy(() => import('./pages/DevPage')) : null
 
@@ -60,6 +61,7 @@ const CaptureBeforeRoute = () => <CaptureBeforePage uid={useUser().uid} />
 const CaptureAfterRoute = () => <CaptureAfterPage uid={useUser().uid} />
 const MealDetailRoute = () => <MealDetailPage uid={useUser().uid} />
 const GoalRoute = () => <GoalPage uid={useUser().uid} />
+const CalendarRoute = () => <CalendarPage uid={useUser().uid} />
 
 const userRoutes: RouteObject[] = [
   { path: '/', element: <HomeRoute /> },
@@ -72,6 +74,8 @@ const userRoutes: RouteObject[] = [
   { path: '/meal/:mealId', element: <MealDetailRoute /> },
   // S6 목표 설정(3단계 조각 2). 홈에서는 push(state.fromHome)로 들어온다
   { path: '/goal', element: <GoalRoute /> },
+  // S10 달력(3단계 조각 3-1). 홈에서는 push(state.fromHome)로 들어온다. ?month=YYYY-MM
+  { path: '/calendar', element: <CalendarRoute /> },
   ...(DevPage ? [{ path: '/dev', element: <DevPage /> }] : []),
   { path: '*', element: <Navigate to="/" replace /> },
 ]

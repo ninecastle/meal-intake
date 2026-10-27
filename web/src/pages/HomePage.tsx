@@ -5,6 +5,7 @@
 // "하루 목표|이 날 목표 ○○kcal" + [목표 수정] + GoalBars(먹은 양/목표 막대·남은 양) + 고지. 그날 기록이 없으면
 // 현재 목표도 없을 때 "목표 설정하기" 카드, 현재 목표는 있으면 "이 날은 목표를 정하기 전이라 합계만 보여요".
 // 링크는 모두 /goal(push + state.fromHome). 그날 목표와 합계의 첫 값 전에는 비운다(깜빡임 방지).
+// 달력(3단계 조각 3-1): 날짜 글자와 옆 달력 아이콘을 누르면 그 날짜가 든 달의 S10 /calendar?month=YYYY-MM(push + state.fromHome).
 import { useEffect, useState } from 'react'
 import type { User } from 'firebase/auth'
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router'
@@ -270,6 +271,30 @@ export default function HomePage({ user }: { user: User }) {
     beforePhotoStore.remove(m.id).catch((e: unknown) => console.warn('[home] 먹기 전 사진 삭제 실패', e))
   }
 
+  const calendarHref = `/calendar?month=${dateKey.slice(0, 7)}`
+  const calendarIcon = (
+    <Link
+      to={calendarHref}
+      state={{ fromHome: true }}
+      aria-label="달력"
+      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-600"
+    >
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        className="h-5 w-5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <rect x="3" y="5" width="18" height="16" rx="2" />
+        <path d="M3 10h18M8 3v4M16 3v4" />
+      </svg>
+    </Link>
+  )
+
   async function logout() {
     if (loggingOut) return
     setLoggingOut(true)
@@ -307,17 +332,25 @@ export default function HomePage({ user }: { user: User }) {
           ◀ 전날
         </Link>
         <div className="min-w-0 text-center">
-          <h1 className="text-xl font-bold">{isToday ? '오늘' : dateKeyLabel(dateKey)}</h1>
-          {isToday ? (
-            <p className="text-xs text-gray-500">{dateKeyLabel(dateKey)}</p>
-          ) : (
-            <Link
-              to={homeHref(today, today)}
-              replace
-              className="mt-0.5 inline-flex min-h-11 items-center rounded-full border border-gray-300 px-3 text-xs font-medium text-gray-700"
-            >
-              오늘로
+          {/* 날짜 글자·달력 아이콘 = 그 날짜가 든 달의 S10 달력(push + state.fromHome). 아이콘은 오늘이면 날짜 옆, 지난 날이면 [오늘로] 옆 */}
+          <div className="flex items-center justify-center">
+            <Link to={calendarHref} state={{ fromHome: true }} className="min-w-0 rounded-lg px-1">
+              <h1 className="text-xl font-bold">{isToday ? '오늘' : dateKeyLabel(dateKey)}</h1>
+              {isToday && <p className="text-xs text-gray-500">{dateKeyLabel(dateKey)}</p>}
             </Link>
+            {isToday && calendarIcon}
+          </div>
+          {!isToday && (
+            <div className="mt-0.5 flex items-center justify-center gap-1">
+              <Link
+                to={homeHref(today, today)}
+                replace
+                className="inline-flex min-h-11 items-center rounded-full border border-gray-300 px-3 text-xs font-medium text-gray-700"
+              >
+                오늘로
+              </Link>
+              {calendarIcon}
+            </div>
           )}
         </div>
         {isToday ? (
