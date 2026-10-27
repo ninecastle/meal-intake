@@ -5,6 +5,7 @@
 // 세부 영양소(.minor)는 D4 전이라 "–"(가짜 숫자 금지). 계산은 analysis/goal.ts의 compareToGoal(AI 호출 없음).
 // 목표 없음·정하기 전·초과는 (d) GoalStates, 계속 보이는 알림은 (f) BandNotices(띠 맨 위 .callout, 2026-10-27 사용자 결정).
 // [한눈에]·[자세히]는 D5 화면이 생길 때까지 부르는 화면이 "준비 중이에요" 토스트를 띄운다(onSoon).
+import { useLayoutEffect, useRef, useState } from 'react'
 import { compareToGoal, type GoalTargets } from '../../analysis/goal'
 import type { DaySummary } from '../../data/summary'
 import { formatKcal } from '../mealText'
@@ -123,6 +124,49 @@ function Remain({ summary, targets }: { summary: DaySummary; targets: GoalTarget
   )
 }
 
+/** 글자 폭(px). Range로 재므로 줄바꿈·flex 늘림과 상관없이 내용 폭이다 */
+function textWidth(n: Node): number {
+  const r = document.createRange()
+  r.selectNodeContents(n)
+  return r.getBoundingClientRect().width
+}
+
+/**
+ * 사용자가 고른 변경 (8): .ratio 세 줄(점·이름·숫자) 가운데 하나라도 한 줄에 안 들어가면 true.
+ * 그때는 세 줄 모두 숫자를 아래 줄 오른쪽에 둔다(index.css .ratio.stacked). 폭이 바뀌거나 글꼴(Jua)이 늦게 들어와도 다시 잰다.
+ */
+function useStackedRatio(dep: string) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [stacked, setStacked] = useState(false)
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const check = () => {
+      const need = [...el.children].some((row) => {
+        const dot = row.querySelector('.dot')
+        const num = row.querySelector('.num')
+        const label = [...row.childNodes].find((n) => n.nodeType === Node.TEXT_NODE)
+        if (!dot || !num || !label) return false
+        const gap = parseFloat(getComputedStyle(row).columnGap) || 0
+        const total = dot.getBoundingClientRect().width + gap + textWidth(label) + gap + textWidth(num)
+        // 줄(div)은 한 줄 글자 폭만큼 늘어날 수 있으므로 바깥 칸(.ratio) 폭과 비교한다
+        return total > el.clientWidth + 0.5
+      })
+      setStacked(need)
+    }
+    check()
+    const ro = new ResizeObserver(check)
+    ro.observe(el)
+    let alive = true
+    document.fonts?.ready.then(() => alive && check())
+    return () => {
+      alive = false
+      ro.disconnect()
+    }
+  }, [dep])
+  return { ref, stacked }
+}
+
 /** 시안 .minor(당류·식이섬유·나트륨). 값은 D4(식약처 실제 값)에서 들어온다. 그전에는 "–"(가짜 숫자 금지) */
 function Minor() {
   return (
@@ -138,6 +182,7 @@ function Minor() {
 
 export default function DayBand({ summary, dayError, isToday, goal, online, onSoon }: Props) {
   const targets = goal.kind === 'targets' ? goal.targets : null
+  const { ref: ratioRef, stacked } = useStackedRatio(summary ? MACROS.map(({ k }) => summary.totals[k]).join('|') : '')
   const notices = [
     !online && '오프라인이에요. 기록은 연결되면 저장돼요.',
     dayError && '요약을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.',
@@ -164,7 +209,7 @@ export default function DayBand({ summary, dayError, isToday, goal, online, onSo
         <>
           <div className="summary">
             <Ring kcal={summary.totals.kcal} target={targets ? targets.target_kcal : null} />
-            <div className="ratio">
+            <div ref={ratioRef} className={stacked ? 'ratio stacked' : 'ratio'}>
               {MACROS.map(({ k, label, color }) => (
                 <div key={k}>
                   <span className="dot" style={{ background: color }}></span>
