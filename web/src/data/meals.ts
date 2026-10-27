@@ -300,6 +300,26 @@ export function subscribeDay(
   )
 }
 
+/**
+ * 달력(S10)·주간 추이(S9): startKey~endKey(둘 다 포함) done 식사를 날짜별로 summarizeDay해 구독한다(스펙 4.7절 "달력").
+ * dateKey 범위 쿼리 하나(단일 필드 인덱스), done은 클라이언트에서 거른다. 기록이 있는 날만 Map에 넣는다.
+ * 리더가 시그니처만 둔 자리표시(3단계 조각 3-1). 구현은 firebase-engineer.
+ */
+export function subscribeDaysInRange(
+  uid: string,
+  startKey: string,
+  endKey: string,
+  cb: (days: Map<string, DaySummary>) => void,
+  onError?: (code: MealStoreErrorCode) => void,
+): () => void {
+  void uid
+  void startKey
+  void endKey
+  void cb
+  void onError
+  return () => {}
+}
+
 /** 기록 상세(S7): 문서 하나를 구독한다. 없거나 지워지면 null(화면은 S1로 이동). */
 export function subscribeMeal(
   uid: string,
