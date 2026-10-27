@@ -133,11 +133,26 @@ const HM_BOX: CSSProperties = {
   font: '600 36px var(--f-num)',
 }
 const pad2 = (n: number) => String(n).padStart(2, '0')
-const digits = (s: string) => s.replace(/\D/g, '').slice(0, 2)
+
+/** 칸을 누르면 글자를 선택하지 않고 커서만 끝에 둔다(모두 선택하면 폰에서 잘라내기·복사 메뉴가 뜬다, 2026-10-28 사용자 요청) */
+function caretToEnd(el: HTMLInputElement) {
+  requestAnimationFrame(() => {
+    const n = el.value.length
+    el.setSelectionRange(n, n)
+  })
+}
+
+/** 숫자만 두 자리까지. 이미 두 자리인 칸에 더 누르면 새로 누른 숫자로 바꾼다("12"에서 3 → "3", 지우지 않고 다시 쓰게) */
+function nextDigits(prev: string, raw: string): string {
+  const d = raw.replace(/\D/g, '')
+  if (d.length <= 2) return d
+  return d.slice(prev.length).slice(-2) || d.slice(-1)
+}
 
 /**
  * 먹은 시간 입력(사용자가 고른 변경 9, 2026-10-28): 기기 시간 입력 칸(input type=time) 대신 위에 [오전|오후](.segment),
  * 아래에 시(1~12)·분(00~59) 큰 숫자 칸 두 개. 시를 두 자리(또는 2~9 한 자리) 넣으면 분 칸으로 넘어간다. 저장은 24시간 "HH:MM".
+ * 칸을 눌러도 모두 선택하지 않는다(커서만 끝에, nextDigits로 두 자리 넘으면 새 숫자로).
  */
 function TimeForm({ meal, value, onSave }: { meal: MealType; value: string; onSave: (hm: string) => void }) {
   const [H0, M0] = value.split(':').map(Number)
@@ -167,9 +182,9 @@ function TimeForm({ meal, value, onSave }: { meal: MealType; value: string; onSa
           pattern="[0-9]*"
           autoComplete="off"
           value={h}
-          onFocus={(e) => e.currentTarget.select()}
+          onFocus={(e) => caretToEnd(e.currentTarget)}
           onChange={(e) => {
-            const v = digits(e.target.value)
+            const v = nextDigits(h, e.target.value)
             setH(v)
             if (v.length === 2 || /^[2-9]$/.test(v)) minRef.current?.focus()
           }}
@@ -185,8 +200,8 @@ function TimeForm({ meal, value, onSave }: { meal: MealType; value: string; onSa
           pattern="[0-9]*"
           autoComplete="off"
           value={m}
-          onFocus={(e) => e.currentTarget.select()}
-          onChange={(e) => setM(digits(e.target.value))}
+          onFocus={(e) => caretToEnd(e.currentTarget)}
+          onChange={(e) => setM(nextDigits(m, e.target.value))}
           onBlur={() => setM((v) => (v === '' ? v : pad2(Number(v))))}
           style={HM_BOX}
         />
