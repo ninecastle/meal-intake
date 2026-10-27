@@ -1,7 +1,9 @@
 // S10 기록 보기(3단계 조각 3-1, 스펙 4.7절 "기록 보기", 2026-10-27 사용자 결정으로 히트맵 달력). AI 호출 없음.
 // 주소 /calendar?month=YYYY-MM(없거나 틀리거나 이번 달보다 뒤면 이번 달, lib/calendar.ts parseMonth).
 // 상태는 페이지가 갖는다: 보고 있는 달(?month)과 고른 항목(metric, localStorage 'record-view-metric').
-// 위쪽 [◀ 10월 ▶] · [칼로리|탄|단|지]가 아래 섹션 모두에 같이 적용된다. 달력(RecordHeatmap) 아래 ① 주간 추이(WeeklyTrend).
+// 위쪽 줄 = [◀ 10월 ▶] · 월 요약(MonthSummary), 달력 아래 줄 = 진하기 범례 · [칼로리|탄|단|지](2026-10-27 사용자 요청으로 맞바꿈).
+// 달·항목은 아래 섹션 모두에 같이 적용된다. 달력(RecordHeatmap) 아래 ① 주간 추이(WeeklyTrend).
+// 달력 주 줄 끝 › = 그 주를 고르고(?week replace) ① 주간 추이로 부드럽게 스크롤(showWeek). 이미 고른 주면 스크롤만.
 // 고른 주 = ?week=월요일 dateKey(lib/week.ts parseWeek: 틀리거나 미래 주이거나 그달 격자 밖이면 그달 기본 주).
 // 주 이동은 ?month·?week를 replace(옮긴 주가 격자 밖이면 monthForWeek로 달도 따라감). 달 이동은 ?week를 빼서 기본 주로.
 // 고른 주는 항상 그달 격자 안이라 주간 추이도 아래 두 구독 값을 그대로 쓴다(새 구독 없음).
@@ -14,9 +16,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router'
 import { homeHref } from '../components/mealText'
-import MetricToggle from '../components/record/MetricToggle'
 import MonthNav from '../components/record/MonthNav'
-import RecordHeatmap from '../components/record/RecordHeatmap'
+import RecordHeatmap, { MonthSummary } from '../components/record/RecordHeatmap'
 import WeeklyTrend from '../components/record/WeeklyTrend'
 import { subscribeGoalsUpTo, type DatedGoal } from '../data/goals'
 import { subscribeDaysInRange } from '../data/meals'
@@ -58,6 +59,7 @@ export default function CalendarPage({ uid }: { uid: string }) {
   const { start, end } = gridRange(month)
   const fromHome = (location.state as { fromHome?: unknown } | null)?.fromHome === true
   const leaving = useRef(false)
+  const trendRef = useRef<HTMLDivElement>(null)
 
   const [metric, setMetric] = useState<Metric>(readMetric)
   const [days, setDays] = useState<Loaded<Map<string, Nutrients>> | null>(null)
@@ -115,6 +117,22 @@ export default function CalendarPage({ uid }: { uid: string }) {
     )
   }
 
+  /** 달력 주 줄 › : 그 주를 고르고 ① 주간 추이로 스크롤. 고른 주는 그달 격자 안이라 달은 그대로. 미래 주는 막는다 */
+  function showWeek(monday: string) {
+    if (monday > today) return
+    if (monday !== week) {
+      navigate({ pathname: '/calendar', search: `?month=${month}&week=${monday}` }, { replace: true, state: location.state })
+    }
+    let reduce = false
+    try {
+      reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    } catch {
+      // matchMedia가 없으면 부드럽게
+    }
+    // 섹션 자리는 고른 주와 상관없이 같아서 주소를 바꾼 직후 바로 스크롤해도 된다
+    trendRef.current?.scrollIntoView({ behavior: reduce ? 'instant' : 'smooth', block: 'start' })
+  }
+
   function goHome() {
     if (leaving.current) return
     leaving.current = true
@@ -149,10 +167,10 @@ export default function CalendarPage({ uid }: { uid: string }) {
         <h1 className="text-lg font-bold">기록 보기</h1>
       </header>
 
-      {/* 위쪽 조작: 왼쪽 월 이동, 오른쪽 항목 선택. 좁아서 한 줄에 못 들어가면 항목 선택이 다음 줄로(가로 스크롤 없음) */}
-      <div className="mt-1 flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
+      {/* 위쪽 줄: 왼쪽 월 이동, 오른쪽 월 요약(불러오기 전·기록 오류면 비움). 항목 선택은 달력 아래 줄 오른쪽(RecordHeatmap) */}
+      <div className="mt-1 flex items-center justify-between gap-x-2">
         <MonthNav month={month} today={today} onMove={moveMonth} />
-        <MetricToggle value={metric} onChange={chooseMetric} />
+        <MonthSummary month={month} metric={metric} days={dayTotals} />
       </div>
 
       <div className="mt-2">
@@ -165,21 +183,26 @@ export default function CalendarPage({ uid }: { uid: string }) {
           goals={goalList}
           weekStart={week}
           onOpenDay={(d) => void openDay(d)}
+          onShowWeek={showWeek}
+          onMetricChange={chooseMetric}
         />
       </div>
 
       {/* 아래 섹션 순서(같은 metric·month·week와 두 구독 값을 props로 받는다):
           ① 주간 추이 그래프(무료, 조각 4) → ② PREMIUM 주간 분석 리포트 → ③ PREMIUM 월간 그래프·요약 */}
-      <WeeklyTrend
-        weekStart={week}
-        today={today}
-        metric={metric}
-        ready={ready}
-        days={dayTotals}
-        goals={goalList}
-        onMoveWeek={moveWeek}
-        onOpenDay={(d) => void openDay(d)}
-      />
+      {/* 스크롤 대상(› 누르기). 섹션의 mt-6은 이 div 위로 겹쳐 나가서 스크롤하면 섹션 위 구분선이 화면 맨 위에 온다 */}
+      <div ref={trendRef}>
+        <WeeklyTrend
+          weekStart={week}
+          today={today}
+          metric={metric}
+          ready={ready}
+          days={dayTotals}
+          goals={goalList}
+          onMoveWeek={moveWeek}
+          onOpenDay={(d) => void openDay(d)}
+        />
+      </div>
       {/* ② PREMIUM 주간 분석 리포트: 프리미엄 단계에서 만든다(PREMIUM 배지·"프리미엄 기능(월 요금 예정)" 미리보기·[체험하기]) */}
       {/* ③ PREMIUM 월간 그래프·요약: 프리미엄 단계에서 만든다 */}
     </main>
