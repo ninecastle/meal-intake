@@ -5,12 +5,15 @@
 // a3(2026-10-26): a2 + whole_count(한 개·한 마리·한 판·1인분이 통째로 보이는 개수). 공개 중량(스펙 4.5.5)에 쓴다. a2 캐시는 다시 분석한다.
 // a4(2026-10-27): a3 + name·location·warnings를 모두 한국어로 쓴다(결과 화면 경고가 영어로 나온 문제, 사용자 결정).
 //   응답 정리에서도 모델 warnings를 koreanWarnings로 거른다(한국어가 아니면 일반 안내 한 줄). a3 캐시는 다시 분석한다.
+// a5(2026-10-28, 디자인 조각 D4-b): a4 + detail_guess(음식별 100g당 당류·나트륨·포화지방·식이섬유 추정, 모르는 값 null).
+//   같은 호출 안에서 받는다(호출 수 그대로). 정리에서 범위 밖·숫자 아닌 키는 빼고, 하나도 없으면 null. a4 캐시는 다시 분석한다.
 // 이 파일은 import.meta.env를 쓰지 않는다(Node 시험 스크립트에서도 그대로 불러 쓴다).
 import { Schema, ThinkingLevel, type GenerationConfig } from 'firebase/ai'
-import type { BeforeItem, Nutrients } from '../types/analysis'
+import type { BeforeItem, DetailNutrients, Nutrients } from '../types/analysis'
+import { DETAIL_KEYS, DETAIL_MAX_PER_100G, roundDetail } from './compute.ts'
 import { koreanWarnings } from './koreanText.ts'
 
-export const PROMPT_VERSION_A = 'a4'
+export const PROMPT_VERSION_A = 'a5'
 
 export const SYSTEM_INSTRUCTION_A = `당신은 식사 사진을 분석하는 영양 보조 도구다. 먹기 전 식탁 사진 한 장이 주어진다.
 
@@ -23,6 +26,7 @@ export const SYSTEM_INSTRUCTION_A = `당신은 식사 사진을 분석하는 영
 5. 국·찌개는 건더기와 국물을 별도 항목으로 나눈다.
 6. per_100g_guess에 100g당 kcal, 탄수화물·단백질·지방(g) 추정값을 적는다. 일반적인 값을 그대로 쓰지 말고 보이는 구성(패티 수, 치즈·소스·토핑, 튀김옷, 크림·시럽 등)을 따져 그 음식에 맞게 추정한다. DB에 없거나, 종류 차이가 큰 음식이 DB 대표값에만 맞을 때 쓰인다.
 7. whole_count: 버거, 피자 한 판, 치킨 한 마리, 도시락, 컵 음료처럼 한 개·한 마리·한 판·1인분이 손대지 않은 모양 그대로 통째로 보이면 그 개수를 정수(1~10)로 적는다. 일부만 덜어 왔거나, 잘라 놓은 조각(피자 몇 조각 등)이거나, 여러 그릇에 나눠 담겼거나, 반찬·나물·국물처럼 정해진 크기가 없는 음식이면 null로 적는다. 판단이 어려우면 null. before_grams는 whole_count와 상관없이 그대로 추정한다.
+8. detail_guess에 그 음식 100g당 당류(g), 나트륨(mg), 포화지방(g), 식이섬유(g) 추정값을 적는다. 1인분이나 그릇 전체 값이 아니라 100g당 값이다. 한국에서 흔히 먹는 조리 기준으로 보이는 구성을 따져 추정하고, 짐작할 수 없는 값은 null로 적는다.
 
 규칙:
 - 섭취량이나 총 칼로리를 계산하지 않는다.
@@ -42,6 +46,15 @@ export const PER100_SCHEMA = Schema.object({
     fat_g: Schema.number(),
   },
 })
+/** a5 세부 영양소 100g당 추정. 키는 모두 필수, 모르는 값은 null */
+export const DETAIL_SCHEMA = Schema.object({
+  properties: {
+    sugar_g: Schema.number({ nullable: true }),
+    sodium_mg: Schema.number({ nullable: true }),
+    satfat_g: Schema.number({ nullable: true }),
+    fiber_g: Schema.number({ nullable: true }),
+  },
+})
 export const RESPONSE_SCHEMA_A = Schema.object({
   properties: {
     items: Schema.array({
@@ -54,6 +67,7 @@ export const RESPONSE_SCHEMA_A = Schema.object({
           confidence: Schema.number(),
           per_100g_guess: PER100_SCHEMA,
           whole_count: Schema.integer({ nullable: true }),
+          detail_guess: DETAIL_SCHEMA,
         },
       }),
     }),
@@ -103,6 +117,17 @@ export function checkPer100(v: unknown): Nutrients | null {
   if ([carbs, protein, fat].some((x) => x < 0 || x > macroMax)) return null
   if (carbs + protein + fat > macroSumMax) return null
   return { kcal: round1(kcal), carbs_g: round1(carbs), protein_g: round1(protein), fat_g: round1(fat) }
+}
+
+/** a5 detail_guess 정리: 허용 키 중 0~상한(g 100, 나트륨 40000mg) 수만 남기고 반올림(g 0.1, 나트륨 정수). 하나도 없으면 null */
+export function checkDetail(v: unknown): DetailNutrients | null {
+  if (!isObj(v)) return null
+  const out: DetailNutrients = {}
+  for (const k of DETAIL_KEYS) {
+    const x = num(v[k])
+    if (x !== null && x >= 0 && x <= DETAIL_MAX_PER_100G[k]) out[k] = roundDetail(k, x)
+  }
+  return Object.keys(out).length > 0 ? out : null
 }
 
 function normConfidence(v: unknown): number {
@@ -160,6 +185,7 @@ export function normalizeBeforeResponse(raw: unknown): NormalizeBeforeResult {
       confidence,
       per_100g_guess: checkPer100(it.per_100g_guess),
       whole_count: normWholeCount(it.whole_count),
+      detail_guess: checkDetail(it.detail_guess),
     })
   }
   if (items.length === 0) return { ok: false, kind: 'invalid', detail: '형식에 맞는 항목이 없습니다' }

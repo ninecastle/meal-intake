@@ -42,7 +42,8 @@ const ok = (cond, msg) => {
 }
 
 // ── 프롬프트 버전·문구 ──
-ok(A.PROMPT_VERSION_A === 'a4' && B.PROMPT_VERSION_B === 'b3', `버전 a4·b3 (${A.PROMPT_VERSION_A}·${B.PROMPT_VERSION_B})`)
+// a5(D4-b)는 a4에 detail_guess만 더했다(한국어 규칙 그대로)
+ok(A.PROMPT_VERSION_A === 'a5' && B.PROMPT_VERSION_B === 'b3', `버전 a5·b3 (${A.PROMPT_VERSION_A}·${B.PROMPT_VERSION_B})`)
 ok(/한국어로 쓴다/.test(A.SYSTEM_INSTRUCTION_A) && /한국어로 쓴다/.test(B.SYSTEM_INSTRUCTION_B), 'A·B 지시에 한국어 규칙')
 ok(/다른 음식, 다른 그릇, 다른 식탁/.test(B.SYSTEM_INSTRUCTION_B) && /remaining_ratio=null/.test(B.SYSTEM_INSTRUCTION_B), 'B 지시에 다른 장면 → null 규칙')
 ok(!/안 보이면 remaining_ratio=0/.test(B.SYSTEM_INSTRUCTION_B), 'b1의 "그릇이 안 보이면 0" 규칙 없음')

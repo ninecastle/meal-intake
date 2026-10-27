@@ -4,14 +4,17 @@ import type {
   AfterItem,
   BeforeAnalysis,
   BeforeItem,
+  DetailNutrients,
   MealIntakeAnalysis,
   MealItem,
   Nutrients,
   NutritionResult,
 } from '../types/analysis.ts'
-import { applyNutrition, buildAnalysis } from './compute.ts'
+import { applyDetail, applyNutrition, buildAnalysis } from './compute.ts'
 import { normWholeCount } from './beforePrompt.ts'
 import { resolveNutrition } from './nutrition/index.ts'
+// index.ts가 아니라 detail.ts에서 직접: Node 시험은 index.ts를 빈 모듈로 바꾼다(detail.ts는 import.meta.env 없이도 동작)
+import { detailFor } from './nutrition/detail.ts'
 
 export type ResolveNutritionFn = (
   name: string,
@@ -22,6 +25,8 @@ export interface AssembleOptions {
   signal?: AbortSignal
   /** 시험용 주입. 기본값은 ./nutrition의 resolveNutrition */
   resolve?: ResolveNutritionFn
+  /** 시험용 주입. 기본값은 ./nutrition/detail.ts의 detailFor(식품코드 → 세부 영양소 100g당 DB 값) */
+  detail?: (code: string) => Promise<DetailNutrients | null>
 }
 
 /** 영양값 조회 동시 실행 상한 */
@@ -81,13 +86,16 @@ function joinVersion(a: string | undefined, b: string | undefined): string | und
  *  after가 null이면 remaining_ratio를 모두 null로 둔다(남긴 비율 직접 고르기 경로). 항목 confidence는 A·B 중 낮은 값.
  *  조회가 실패(예외·중단)하면 guess가 있으면 AI 추정, 없으면 직접 입력으로 둔다. eaters는 1. 오류를 던지지 않는다.
  *  AfterItem.ratio_assumed('not_visible', remaining_ratio=0일 때만)는 MealItem.ratio_assumed로 옮긴다(b3).
- *  공개 중량 조건(publishedGrams)을 모두 만족하면 before_grams = published_g × whole_count, grams_source·published_g·unit_count를 넣는다. */
+ *  공개 중량 조건(publishedGrams)을 모두 만족하면 before_grams = published_g × whole_count, grams_source·published_g·unit_count를 넣는다.
+ *  세부 영양소(D4-b): 영양소마다 출처가 db일 때만 그 행의 DB 값 → 없는 키는 호출 A의 detail_guess(applyDetail).
+ *  종류별 차이가 큰 음식(ai_estimate + db_reference)은 DB 대표값의 세부 값을 쓰지 않고 추정만 쓴다. */
 export async function assembleAnalysis(
   before: BeforeAnalysis,
   after: AfterAnalysis | null,
   opts?: AssembleOptions,
 ): Promise<MealIntakeAnalysis> {
   const resolve = opts?.resolve ?? resolveNutrition
+  const detailOf = opts?.detail ?? detailFor
   const signal = opts?.signal
   const warnings: string[] = [...(before?.warnings ?? []), ...(after?.warnings ?? [])]
   const meta = {
@@ -130,7 +138,16 @@ export async function assembleAnalysis(
       const draft = draftItem(b, ratio, confidence, assumed)
       const pub = publishedGrams(b, r)
       if (pub) Object.assign(draft, { before_grams: pub.published_g * pub.unit_count, grams_source: 'published' as const, ...pub })
-      return applyNutrition(draft, r)
+      const item = applyNutrition(draft, r)
+      let db: DetailNutrients | null = null
+      if (r.source === 'db' && !signal?.aborted) {
+        try {
+          db = await detailOf(r.db_food_code)
+        } catch {
+          db = null
+        }
+      }
+      return applyDetail(item, db, b.detail_guess ?? null)
     })
     return buildAnalysis(items, warnings, meta)
   } catch {

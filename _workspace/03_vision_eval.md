@@ -163,3 +163,11 @@
 - 목업 픽스처 `after-bibimbap.json`을 b3 형식으로 바꿨다: same_scene true, i4 배추김치 unclear → null, i5 콩나물무침 not_visible → 0 + 표시(목업 화면에서 노란 표시를 확인할 수 있다). `run-tests`·`piece4_integration`은 픽스처 원본을 정리 없이 넣으므로 i5가 null로 들어간다(출력만 바뀌고 검증은 통과).
 - 시험: `spike/tests/b3_test.mjs` 38개 통과(가짜 응답, 실제 호출 없음). 기존 시험 11개 모두 통과(`korean_unsure_test`는 버전 b3와 픽스처 기대값만 바꿈), `tsc -b` 통과. 실제 응답 확인은 10/29 측정 때 한다. 확인할 것: 모델이 same_scene을 먼저 판단하는지, 치운 그릇을 not_visible로 답하는지, 다른 사진에서 same_scene=false를 주는지.
 - 스킬 문서: `SKILL.md` 판단 기준의 b2 줄을 b3 규칙으로 바꾸고, `prompt-template.md` 호출 B를 b3 원문, 스키마, 정리 표로 바꿨다.
+
+## 세부 영양소·프롬프트 a5 (2026-10-28, 디자인 조각 D4-a·D4-b, 사용자 결정 "세부 영양소는 당류·나트륨·포화지방·식이섬유 네 가지만")
+- D4-a(`dd2b02c`): 식약처 원본의 당류·나트륨·포화지방산·식이섬유를 앱 DB와 같은 행 선택으로 `web/public/data/mfds-detail-20261006.json`(475,648 B, gzip 101,820 B)에 따로 냈다. 앱 DB 파일은 그대로다. 값 있는 음식: 당류 11,284 · 나트륨 11,351 · 포화지방 11,082 · 식이섬유 2,052 / 11,381(식이섬유는 원본에도 4,460행만 있다). 계산은 탄단지와 같은 공식(`compute.ts`), 저장 반올림은 g 0.1·나트륨 정수, 합계는 값 있는 음식만 + 음식 수.
+- a5(호출 A): a4 + 지시 8번 "detail_guess에 그 음식 100g당 당류(g), 나트륨(mg), 포화지방(g), 식이섬유(g) 추정값. 1인분·그릇 전체 값이 아니라 100g당. 한국에서 흔히 먹는 조리 기준으로 보이는 구성을 따져 추정, 짐작할 수 없는 값은 null". 응답 스키마 A 항목에 `detail_guess`(4키 모두 필수, 값은 `Schema.number({ nullable: true })`). 같은 호출이라 호출 수는 그대로, 출력 토큰은 음식당 수십 개 늘어난다.
+- 정리(`checkDetail`): 허용 키 중 0~상한(g 100, 나트륨 40000mg) 수만 남기고 반올림, 하나도 없으면 null. a4 캐시는 prompt_version이 달라 다시 분석하고, 예전 결과(Firestore의 먹기 전 결과 포함)에 detail_guess가 없으면 null로 본다.
+- 조립(`assembleAnalysis`): `applyNutrition` 뒤 `applyDetail(item, 출처 db이면 detailFor(db_food_code), detail_guess)`. 영양소마다 DB 값 → 없으면 추정("추정" 배지). 종류별 차이가 큰 음식(ai_estimate + db_reference)은 DB 대표값의 세부 값을 쓰지 않고 추정만(리더 결정). 취소된 signal이면 DB 세부 조회 없이 추정만.
+- 호출 D(d1)는 그대로(숫자 4개만). 이름을 바꾼 음식(결과 수정 화면)은 DB 세부 값만 채워지고, DB에 없는 이름은 "–". 호출 D에 세부 4가지를 붙이려면 NutritionResult·캐시 값 모양·resolve.ts까지 바뀌어 이번에는 하지 않았다.
+- 시험: `spike/tests/detail_test.mjs`(10개), `spike/tests/detail_guess_test.mjs`(8개) 통과, 기존 시험 모두 통과. 실제 응답 확인은 리더가 앱에서 1~2회: 모델이 detail_guess를 100g당으로 주는지(1인분 값을 주면 나트륨이 수천 mg으로 커진다), 나트륨을 mg로 주는지(g로 주면 0.x), null을 쓰는지, 출력이 잘리지 않는지(maxOutputTokens 4096).

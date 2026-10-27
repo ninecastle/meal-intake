@@ -22,6 +22,7 @@
 | `korean_unsure_test.mjs` | 프롬프트 a4·b2: 영어 경고 → 일반 안내, 확신 낮은 끝값(≥0.95·≤0.05) → null, 모델 null 유지, 분당 429 재시도 없음(가짜 모델로 `aiCall.ts`) | `node spike/tests/korean_unsure_test.mjs` |
 | `b3_test.mjs` | 프롬프트 b3: `same_scene`·`match` 규칙(같은 장면 + 안 보임 → 0과 `ratio_assumed`, 다른 그릇·판단 불가·다른 장면 → null, 같은 그릇 0개면 안 보임도 null, match 없음 → b2), 캐시 다시 읽기, assemble·compute 전달, `setRemainingRatio`, validate.ts·`validate_analysis.mjs`·스키마 | `node spike/tests/b3_test.mjs` |
 | `detail_test.mjs` | D4-a 세부 영양소(당류·나트륨·포화지방·식이섬유): 공식(탄단지와 같은 섭취 중량, 남긴 비율 null은 0, kcal 직접 입력과 무관)·저장 반올림(g 0.1, 나트륨 정수)·`totals.detail` 합(반올림 전 합을 한 번)·count, `applyDetail`(DB → 추정), `applyNutrition`이 지움, validate.ts·`validate_analysis.mjs` 범위·키 짝·계산값·합계 14가지, 세부 JSON ↔ 앱 DB ↔ 원본·`detailFor`·받기 실패 빈 표 | `node spike/tests/detail_test.mjs` |
+| `detail_guess_test.mjs` | D4-b 프롬프트 a5 `detail_guess`: 응답 스키마(4키 nullable)·정리(반올림, 범위 밖·문자열·모르는 키 빼기, 없으면 null)·캐시 다시 읽기(a4 형태 포함), `assembleAnalysis`(출처 db면 DB 값 우선 → 추정 채움, db_reference 음식은 추정만, 취소면 조회 없음), 먹은 후 결과 없음 경로(`assembleAnalysis(before, null)` → `setRemainingRatio`), 실제 세부 JSON, 목업 픽스처 | `node spike/tests/detail_guess_test.mjs` |
 
 `assemble.ts`처럼 앱용 `nutrition/index.ts`·`lib/ai`(import.meta.env)를 따라가는 모듈은 Node에서 바로 못 불러온다.
 `piece4_integration.mjs`는 `module.registerHooks`로 두 모듈을 빈 모듈로 바꿔 돌린다. 10/29 측정 스크립트도 이 방식을 쓴다.
