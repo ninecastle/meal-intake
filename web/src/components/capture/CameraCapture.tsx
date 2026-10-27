@@ -3,6 +3,8 @@
 // JPEG File로 넘긴다(EXIF 없음, 날짜·끼니는 지금 시각 그대로). 카메라는 셔터 직후·화면을 떠날 때·백그라운드일 때 끈다.
 // 조각 2(S3 겹쳐 보기): overlaySrc가 있으면 먹기 전 사진을 미리보기와 같은 자리(object-cover, 전체 화면)에 반투명하게
 // 겹친다. 겹친 사진은 화면에만 있고(탭을 막지 않음) 셔터 사진에는 들어가지 않는다(canvas는 video만 그린다).
+// 모양(디자인 조각 D3-2, 사용자 확인 d32_1·d32_2): 배치는 그대로, 글자·버튼만 시안 부품(제목 h1 17px Jua, [겹쳐 보기] .chipbtn lime,
+// 안내 알약 Jua 15px, 둥근 버튼 52px, 진하기 막대 Jua 14px).
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   classifyCameraError,
@@ -28,7 +30,7 @@ export type CameraCaptureProps = {
   overlaySrc?: string | null
 }
 
-const OVERLAY_HINT = '먹기 전 사진에 맞춰 같은 위치·각도로 찍어 주세요'
+const OVERLAY_HINT = '먹기 전 사진에 그릇을 맞춰 찍어 주세요'
 const OPACITY_KEY = 'overlay-opacity'
 const OPACITY_MIN = 10
 const OPACITY_MAX = 80
@@ -75,7 +77,7 @@ function waitForFrame(v: HTMLVideoElement, ms: number): Promise<boolean> {
 
 const SLOT = 'flex h-14 w-14 items-center justify-center'
 const ROUND =
-  'focus-ring flex h-12 w-12 items-center justify-center rounded-full bg-ink/58 text-white ring-1 ring-white/35 active:bg-ink disabled:opacity-40'
+  'focus-ring flex h-13 w-13 items-center justify-center rounded-full bg-ink/58 text-white ring-[1.5px] ring-white/35 active:bg-ink disabled:opacity-40'
 
 export default function CameraCapture({ title, hint, onShot, onAlbum, onClose, onFail, overlaySrc }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -247,26 +249,30 @@ export default function CameraCapture({ title, hint, onShot, onAlbum, onClose, o
               <path d="M6 6l12 12M18 6L6 18" />
             </svg>
           </button>
-          <p className="min-w-0 truncate text-base font-semibold">{title}</p>
+          <h1 className="min-w-0 truncate" style={{ margin: 0, fontSize: 17, color: '#fff' }}>
+            {title}
+          </h1>
           {hasOverlay && (
             <button
               type="button"
               onClick={() => setOverlayOn((o) => !o)}
               aria-label="먹기 전 사진 겹쳐 보기"
               aria-pressed={overlayOn}
-              className={`focus-ring ml-auto flex h-11 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-sm font-semibold ring-1 ${
-                overlayOn ? 'bg-lime text-ink ring-lime' : 'bg-ink/58 text-white ring-white/35 active:bg-ink'
-              }`}
+              className="chipbtn ml-auto shrink-0"
+              style={
+                overlayOn
+                  ? { background: 'var(--lime)', color: 'var(--ink)' }
+                  : { background: 'rgba(31,42,46,.58)', color: '#fff', boxShadow: 'inset 0 0 0 1.5px rgba(255,255,255,.35)' }
+              }
             >
-              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
-                <rect x="3.5" y="3.5" width="12" height="12" rx="2" />
-                <rect x="8.5" y="8.5" width="12" height="12" rx="2" />
-              </svg>
-              겹쳐 보기
+              {overlayOn ? '겹쳐 보기 켬' : '겹쳐 보기 끔'}
             </button>
           )}
         </div>
-        <p className="mx-auto mt-1 w-fit max-w-full rounded-full bg-ink/58 px-3 py-1 text-center text-sm font-medium">
+        <p
+          className="mx-auto w-fit max-w-full rounded-full bg-ink/58 text-center"
+          style={{ margin: '8px auto 0', padding: '5px 14px', fontFamily: 'var(--f-head)', fontSize: 15 }}
+        >
           {showOverlay ? OVERLAY_HINT : hint}
         </p>
         {/* 사진 전송 고지(스펙 7.1 U4)는 촬영 화면에 늘 보인다 */}
@@ -314,7 +320,10 @@ export default function CameraCapture({ title, hint, onShot, onAlbum, onClose, o
           셔터 줄 뒤에 두어 셔터 줄 위쪽 여백(그라데이션)과 겹쳐도 이 막대가 탭을 받는다. 버튼들과는 겹치지 않는다. */}
       {showOverlay && (
         <div className="pointer-events-none absolute right-0 bottom-[calc(max(1.5rem,env(safe-area-inset-bottom))_+_84px)] left-0 flex justify-center px-4 landscape:right-28 landscape:bottom-[max(1rem,env(safe-area-inset-bottom))] landscape:left-auto landscape:px-2">
-          <div className="pointer-events-auto flex h-11 w-full max-w-xs items-center gap-2 rounded-full bg-ink/58 pr-3 pl-4 text-xs font-medium ring-1 ring-white/35 landscape:w-64">
+          <div
+            className="pointer-events-auto flex h-11 w-full max-w-[350px] items-center gap-2 rounded-full bg-ink/58 pr-3 pl-4 ring-1 ring-white/35 landscape:w-64"
+            style={{ fontFamily: 'var(--f-head)', fontSize: 14 }}
+          >
             <span aria-hidden="true" className="shrink-0">
               진하기
             </span>

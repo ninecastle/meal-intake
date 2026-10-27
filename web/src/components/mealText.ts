@@ -33,6 +33,16 @@ export function formatGrams(n: number): string {
   return Math.round(n).toLocaleString('ko-KR')
 }
 
+/** 시안 pct(): 탄·단·지 에너지 비율(정수 %). 끼니 화면·결과 화면의 .stack 막대 */
+export function macroPct(carbs_g: number, protein_g: number, fat_g: number): { c: number; p: number; f: number } {
+  const kc = carbs_g * 4 + protein_g * 4 + fat_g * 9 || 1
+  return {
+    c: Math.round(((carbs_g * 4) / kc) * 100),
+    p: Math.round(((protein_g * 4) / kc) * 100),
+    f: Math.round(((fat_g * 9) / kc) * 100),
+  }
+}
+
 /** 탄·단·지 g: 10g 미만은 소수 한 자리 */
 export function formatMacro(n: number): string {
   return n < 10 ? String(Math.round(n * 10) / 10) : Math.round(n).toLocaleString('ko-KR')

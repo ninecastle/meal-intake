@@ -1,16 +1,45 @@
 // 결과 수정 화면(S4)의 음식 카드 한 장(스펙 2.3절). 계산은 하지 않고 바뀐 값만 상위(ReviewEditor)로 올린다.
 // 필드: 이름(자동완성·세부 종류), 중량, 남긴 비율, 같이 먹은 인원수, 섭취 kcal(직접 수정), 탄·단·지(읽기 전용), 출처 배지.
-import { useEffect, useRef, useState, type FormEvent, type Ref } from 'react'
+// 모양(디자인 조각 D3-2, 사용자 확인 2026-10-27 _workspace/design/mock/d32_4_review·d32_5_manual): 시안 부품으로만 그린다.
+// 카드(선 1px·모서리 r-lg, 확인할 음식은 butter 2px) → 이름 .fn + .srcb(+ 확인 필요) · X → 먹기 전 무게·먹은 kcal 칸(시안 먹은 시간 칸 모양)
+// → 남긴 양 .segment [다 먹음|반 남김|그대로|직접 %](밀어서 고르는 막대 대신) → 같이 먹은 사람 .segment [1명~5명+] → 먹은 양·탄단지 줄.
+// 이름 고치기·직접 입력은 FoodSearch(이름 칸 + DB 후보 .rec 줄 + [그대로 쓰기]).
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type Ref } from 'react'
 import { MAX_EATERS } from '../../analysis/compute'
 import { listFoodVariants, searchFoodNames, type FoodSuggestion } from '../../analysis/nutrition'
 import { foodName } from '../../lib/foodName'
 import type { MealItem } from '../../types/analysis'
-import SourceBadge from './SourceBadge'
+import { sourceLabel } from '../mealText'
+import { Icon, IconButton } from '../ui'
 
 const AUTOCOMPLETE_DEBOUNCE_MS = 200
 const VARIANT_LIMIT = 50
 const MAX_GRAMS = 5000
 const MAX_KCAL = 20000
+
+const LABEL: CSSProperties = { fontSize: 13, color: 'var(--ink-2)', marginTop: 14 }
+/** 시안 먹은 시간 칸(min-height 52·모서리 14·선 line) 모양의 입력 상자 */
+const BOX: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 6,
+  minHeight: 52,
+  borderRadius: 14,
+  border: '1px solid var(--line)',
+  padding: '0 14px',
+  marginTop: 6,
+}
+const NUM_INPUT: CSSProperties = {
+  flex: '1 1 0',
+  width: 0,
+  minWidth: 0,
+  border: 0,
+  background: 'none',
+  font: '600 20px var(--f-num)',
+  color: 'var(--ink)',
+  padding: 0,
+}
+const UNIT: CSSProperties = { color: 'var(--ink-2)' }
 
 const MATCH_NOTE = { name: null, group: '대표값', partial: '부분 일치' } as const
 
@@ -24,12 +53,10 @@ const RATIO_HINT: Record<RatioHint, string> = {
 }
 /** ratio_assumed === 'not_visible': 같은 장면인데 그릇이 안 보여 다 먹음(0)으로 미리 골라 둔 경우. 저장은 막지 않는다(2026-10-27). */
 const ASSUMED_HINT = '그릇이 안 보여서 다 드신 걸로 했어요. 아니면 바꿔 주세요'
-/** 빠른 선택: 남긴 비율 0(다 먹음)·0.5(반)·1(그대로 남김) */
-const QUICK_RATIOS = [
-  { r: 0, label: '다 먹음' },
-  { r: 0.5, label: '반 남김' },
-  { r: 1, label: '그대로' },
-] as const
+/** 남긴 양 빠른 선택: 다 먹음(0)·반 남김(0.5)·그대로(1), 그 밖은 직접 % */
+const RATIO_PICKS = ['다 먹음', '반 남김', '그대로', '직접 %'] as const
+const RATIO_VALUES = [0, 0.5, 1] as const
+const EATER_PICKS = ['1명', '2명', '3명', '4명', '5명+'] as const
 
 export interface FoodCardProps {
   item: MealItem
@@ -57,12 +84,26 @@ export interface FoodCardProps {
   onKcalFocused: () => void
 }
 
+/** 시안 .segment(role tablist·tab, aria-selected) */
+function Segment({ items, sel, label, onPick }: { items: readonly string[]; sel: number; label: string; onPick: (i: number) => void }) {
+  return (
+    <div className="segment" role="tablist" aria-label={label} style={{ marginTop: 6 }}>
+      {items.map((l, i) => (
+        <button key={l} type="button" role="tab" aria-selected={sel === i} onClick={() => onPick(i)}>
+          {l}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 export default function FoodCard(p: FoodCardProps) {
   const { item, focusKcal, onKcalFocused } = p
   const pending = p.pendingName !== null
   const kcalRef = useRef<HTMLInputElement>(null)
+  // [직접 %]를 눌렀으면 다른 빠른 선택을 누르기 전까지 숫자 칸을 연다(50을 적어도 [반 남김]으로 바뀌지 않게)
+  const [customPct, setCustomPct] = useState(false)
 
-  // 3단계 조회가 모두 실패(user_input)하면 kcal 입력란에 포커스
   useEffect(() => {
     if (!focusKcal || pending) return
     kcalRef.current?.focus()
@@ -70,46 +111,55 @@ export default function FoodCard(p: FoodCardProps) {
   }, [focusKcal, pending, onKcalFocused])
 
   const name = p.pendingName ?? item.name
-  const ratioPct = item.remaining_ratio == null ? 0 : Math.round(item.remaining_ratio * 100)
-  // 미리 고른 0%(다 먹음). 사용자가 슬라이더·빠른 선택으로 고르면(같은 0%라도) setRemainingRatio가 표시를 지운다.
-  const assumed = item.ratio_assumed === 'not_visible' && item.remaining_ratio !== null
-  const ratioOpen = item.remaining_ratio == null || assumed
+  const ratio = item.remaining_ratio
+  const ratioPct = ratio == null ? 0 : Math.round(ratio * 100)
+  // 미리 고른 0%(다 먹음). 사용자가 빠른 선택이나 직접 %로 고르면(같은 0%라도) setRemainingRatio가 표시를 지운다.
+  const assumed = item.ratio_assumed === 'not_visible' && ratio !== null
+  const ratioOpen = ratio == null || assumed
+  const quick = ratio == null ? -1 : RATIO_VALUES.indexOf(ratio as (typeof RATIO_VALUES)[number])
+  const ratioSel = customPct ? 3 : quick >= 0 ? quick : ratio == null ? -1 : 3
   const canAuto = item.kcal_overridden && item.per_100g !== null
   const dbNote = item.db_match ? MATCH_NOTE[item.db_match] : null
   const ref = item.db_reference
+  const shownName = foodName(name)
+  const sub = [
+    '눌러서 이름 고치기',
+    item.nutrition_source === 'db' && item.db_name ? `DB 이름: ${foodName(item.db_name)}${dbNote ? ` (${dbNote})` : ''}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
-    <li className={`rounded-card bg-surface p-4 ${p.flagged ? 'border-2 border-butter' : 'border border-line'}`}>
-      <fieldset disabled={pending} className="min-w-0 space-y-3">
-        <div className="flex items-start gap-2">
-          <button type="button" onClick={p.onStartEdit} className="focus-ring min-h-11 min-w-0 flex-1 text-left">
-            <span className="block break-words text-base font-semibold">
-              {foodName(name) || <span className="text-ink-3">이름을 입력하세요</span>}
-            </span>
-            <span className="text-xs text-ink-2">눌러서 이름·종류 고치기</span>
+    <li
+      style={{
+        listStyle: 'none',
+        border: p.flagged ? '2px solid var(--butter)' : '1px solid var(--line)',
+        borderRadius: 'var(--r-lg)',
+        padding: 16,
+      }}
+    >
+      <fieldset disabled={pending} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+          <button type="button" onClick={p.onStartEdit} style={{ flex: 1, minWidth: 0, minHeight: 44, padding: 0, textAlign: 'left' }}>
+            <div className="fn" style={{ fontFamily: 'var(--f-head)', fontSize: 17, overflowWrap: 'anywhere' }}>
+              {shownName || <span style={{ color: 'var(--ink-3)' }}>이름을 입력하세요</span>}
+              <span className="srcb">{sourceLabel(item)}</span>
+              {item.needs_review && (
+                <span
+                  className="state"
+                  style={{ marginLeft: 6, fontSize: 12, padding: '2px 9px', background: 'var(--butter-soft)', color: 'var(--ink)' }}
+                >
+                  확인 필요
+                </span>
+              )}
+              {pending && <span style={{ marginLeft: 6, fontSize: 13, color: 'var(--sky-deep)' }}>계산 중…</span>}
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--ink-3)' }}>{sub}</div>
           </button>
-          <button
-            type="button"
-            onClick={p.onDelete}
-            className="focus-ring min-h-11 min-w-11 rounded-full border border-line px-2 text-ink-2"
-          >
-            삭제
-          </button>
+          <IconButton icon="close" label={`${shownName || '이 음식'} 삭제`} onClick={p.onDelete} style={{ width: 36, height: 36 }} />
         </div>
-
-        <div className="flex flex-wrap items-center gap-1 text-xs">
-          <SourceBadge item={item} />
-          {item.needs_review && <span className="rounded-md border border-butter bg-butter-soft px-2 py-0.5 text-ink">확인 필요</span>}
-          {pending && <span className="font-medium text-sky-deep">계산 중…</span>}
-        </div>
-        {item.nutrition_source === 'db' && item.db_name && (
-          <p className="text-xs text-ink-2">
-            DB 이름: {foodName(item.db_name)}
-            {dbNote && ` (${dbNote})`}
-          </p>
-        )}
         {ref && (
-          <p className="text-xs text-ink-2">
+          <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--ink-3)' }}>
             참고 DB 대표값 {Math.round(ref.kcal_per_100g)}kcal/100g ({foodName(ref.db_name)}
             {ref.db_match === 'partial' ? ', 부분 일치' : ''}
             {ref.ml_converted ? ', 환산' : ''})
@@ -119,42 +169,37 @@ export default function FoodCard(p: FoodCardProps) {
         {p.editing && <NameEditor item={item} onConfirm={p.onConfirmName} onCancel={p.onCancelEdit} />}
 
         {p.askName !== null && (
-          <div className="rounded-tile border border-butter bg-butter-soft p-3">
-            <p>칼로리를 직접 고친 음식이에요. ‘{p.askName}’ 기준으로 다시 계산할까요?</p>
-            <div className="mt-2 flex gap-2">
-              <button
-                type="button"
-                onClick={() => p.onAnswerAsk(true)}
-                className="focus-ring min-h-11 flex-1 rounded-full bg-ink px-2 text-white"
-              >
+          <div className="callout" style={{ background: 'var(--butter-soft)' }}>
+            칼로리를 직접 고친 음식이에요. ‘{foodName(p.askName)}’ 기준으로 다시 계산할까요?
+            <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+              <button type="button" className="chipbtn dark" onClick={() => p.onAnswerAsk(true)}>
                 예, 다시 계산
               </button>
-              <button
-                type="button"
-                onClick={() => p.onAnswerAsk(false)}
-                className="focus-ring min-h-11 flex-1 rounded-full border border-ink-3 bg-surface px-2"
-              >
+              <button type="button" className="chipbtn" onClick={() => p.onAnswerAsk(false)}>
                 아니요, 이름만
               </button>
             </div>
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-3">
-          <label className="block">
-            <span className="text-xs text-ink-2">중량(g, 먹기 전)</span>
-            <NumField value={item.before_grams} min={0} max={MAX_GRAMS} onCommit={p.onGrams} label="중량(g)" />
-            {item.grams_source === 'published' && item.published_g != null && (
-              <span className="mt-0.5 block text-xs text-lime-deep">
-                공개 중량 {Math.round(item.published_g)}g × {item.unit_count ?? 1}
-              </span>
-            )}
-          </label>
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 10 }}>
           <div>
-            <label className="block">
-              <span className="text-xs text-ink-2">
-                섭취 kcal{canAuto && <span className="ml-1 font-medium text-peach-deep">직접 입력</span>}
-              </span>
+            <div style={LABEL}>먹기 전 무게</div>
+            <label className="fbox" style={BOX}>
+              <NumField value={item.before_grams} min={0} max={MAX_GRAMS} onCommit={p.onGrams} label="먹기 전 무게(g)" style={NUM_INPUT} />
+              <span style={UNIT}>g</span>
+            </label>
+            {item.grams_source === 'published' && item.published_g != null && (
+              <div style={{ fontSize: 12, color: 'var(--lime-deep)', marginTop: 4 }}>
+                공개 중량 {Math.round(item.published_g)}g × {item.unit_count ?? 1}
+              </div>
+            )}
+          </div>
+          <div>
+            <div style={LABEL}>
+              먹은 kcal{canAuto && <span style={{ marginLeft: 4, color: 'var(--peach-deep)' }}>직접 입력</span>}
+            </div>
+            <label className="fbox" style={BOX}>
               <NumField
                 inputRef={kcalRef}
                 live={false}
@@ -162,105 +207,81 @@ export default function FoodCard(p: FoodCardProps) {
                 min={0}
                 max={MAX_KCAL}
                 onCommit={(k) => p.onKcal(k)}
-                label="섭취 kcal"
+                label="먹은 kcal"
+                style={NUM_INPUT}
               />
+              <span style={UNIT}>kcal</span>
             </label>
             {canAuto && (
-              <button
-                type="button"
-                onClick={() => p.onKcal(null)}
-                className="focus-ring mt-1 min-h-11 w-full rounded-full border border-line text-xs"
-              >
-                자동 계산
+              <button type="button" className="link" onClick={() => p.onKcal(null)} style={{ marginTop: 4, padding: 0, fontSize: 13 }}>
+                자동 계산으로
               </button>
             )}
           </div>
         </div>
 
-        <div>
-          <div className="flex justify-between text-xs text-ink-2">
-            <span>남긴 비율</span>
-            <span className={`font-medium ${ratioOpen ? 'text-peach-deep' : 'text-ink'}`}>
-              {item.remaining_ratio == null ? '아직 안 고름' : `${ratioPct}%`}
-            </span>
+        <div style={LABEL}>남긴 양</div>
+        <Segment
+          items={RATIO_PICKS}
+          sel={ratioSel}
+          label={`${shownName || '음식'} 남긴 양`}
+          onPick={(i) => {
+            if (i === 3) {
+              setCustomPct(true)
+              return
+            }
+            setCustomPct(false)
+            p.onRatio(RATIO_VALUES[i])
+          }}
+        />
+        {ratioSel === 3 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+            <NumField
+              live={false}
+              value={ratioPct}
+              min={0}
+              max={100}
+              onCommit={(n) => p.onRatio(Math.round(n) / 100)}
+              label={`${shownName || '음식'} 남긴 비율(%)`}
+              style={{ width: 110, minHeight: 52, borderRadius: 14, border: '1px solid var(--line)', padding: '0 14px', font: '600 20px var(--f-num)' }}
+            />
+            <span style={UNIT}>% 남겼어요</span>
           </div>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={5}
-            value={ratioPct}
-            onChange={(e) => p.onRatio(Number(e.target.value) / 100)}
-            // 값이 그대로(0%)면 onChange가 없으므로, 미리 고른 상태에서 슬라이더를 누르고 떼도 확인한 것으로 본다
-            onPointerUp={(e) => {
-              if (assumed) p.onRatio(Number(e.currentTarget.value) / 100)
-            }}
-            aria-label="남긴 비율"
-            className="h-11 w-full accent-lime-deep"
-          />
-          {ratioOpen && (
-            <div role="status" className="rounded-tile border border-butter bg-butter-soft p-3 text-ink">
-              <p className="text-sm font-medium">{assumed ? ASSUMED_HINT : RATIO_HINT[p.ratioHint]}</p>
-              <div className="mt-2 grid grid-cols-3 gap-2">
-                {QUICK_RATIOS.map((q) => {
-                  const sel = assumed && q.r === item.remaining_ratio
-                  return (
-                    <button
-                      key={q.r}
-                      type="button"
-                      aria-pressed={sel}
-                      onClick={() => p.onRatio(q.r)}
-                      className={`focus-ring min-h-11 rounded-full border px-2 text-sm ${sel ? 'border-ink bg-butter text-ink' : 'border-butter bg-surface text-ink'}`}
-                    >
-                      {q.label}
-                    </button>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-
-        <div>
-          <p className="text-xs text-ink-2">같이 먹은 인원수</p>
-          <div className="mt-1 flex flex-wrap items-center gap-1">
-            {[1, 2, 3, 4, 5].map((n) => {
-              const sel = n < 5 ? item.eaters === n : item.eaters >= 5
-              return (
-                <button
-                  key={n}
-                  type="button"
-                  aria-pressed={sel}
-                  onClick={() => {
-                    if (n === 5 && item.eaters >= 5) return
-                    p.onEaters(n)
-                  }}
-                  className={`focus-ring min-h-11 min-w-11 rounded-full border px-2 ${sel ? 'border-ink bg-ink text-white' : 'border-line bg-surface'}`}
-                >
-                  {n === 5 ? '5+' : n}
-                </button>
-              )
-            })}
-            {item.eaters >= 5 && (
-              <label className="flex items-center gap-1">
-                <NumField
-                  live={false}
-                  value={item.eaters}
-                  min={5}
-                  max={MAX_EATERS}
-                  onCommit={(n) => p.onEaters(Math.round(n))}
-                  label={`같이 먹은 인원수(5~${MAX_EATERS})`}
-                  className="min-h-11 w-16 rounded-tile border border-line bg-surface px-2 text-base"
-                />
-                명
-              </label>
-            )}
+        )}
+        {ratioOpen && (
+          <div role="status" className="callout" style={{ background: 'var(--butter-soft)' }}>
+            {assumed ? ASSUMED_HINT : RATIO_HINT[p.ratioHint]}
           </div>
-        </div>
+        )}
 
-        <p className="text-xs text-ink">
-          섭취 {item.consumed_grams.toFixed(0)}g · 탄 <Macro item={item} k="carbs_g" /> · 단 <Macro item={item} k="protein_g" /> · 지{' '}
-          <Macro item={item} k="fat_g" />
+        <div style={LABEL}>같이 먹은 사람</div>
+        <Segment
+          items={EATER_PICKS}
+          sel={item.eaters >= 5 ? 4 : item.eaters - 1}
+          label={`${shownName || '음식'} 같이 먹은 사람`}
+          onPick={(i) => {
+            if (i < 4) p.onEaters(i + 1)
+            else if (item.eaters < 5) p.onEaters(5)
+          }}
+        />
+        {item.eaters >= 5 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+            <NumField
+              live={false}
+              value={item.eaters}
+              min={5}
+              max={MAX_EATERS}
+              onCommit={(n) => p.onEaters(Math.round(n))}
+              label={`같이 먹은 사람(5~${MAX_EATERS}명)`}
+              style={{ width: 110, minHeight: 52, borderRadius: 14, border: '1px solid var(--line)', padding: '0 14px', font: '600 20px var(--f-num)' }}
+            />
+            <span style={UNIT}>명</span>
+          </div>
+        )}
+
+        <p style={{ margin: '14px 0 0', fontSize: 13, color: 'var(--ink-2)' }}>
+          먹은 양 <b className="num">{`${item.consumed_grams.toFixed(0)}g`}</b> · 탄 <Macro item={item} k="carbs_g" /> · 단{' '}
+          <Macro item={item} k="protein_g" /> · 지 <Macro item={item} k="fat_g" />
         </p>
 
         {item.nutrition_source === 'search' && p.suggestionHtml && <SearchSuggestion html={p.suggestionHtml} />}
@@ -269,18 +290,21 @@ export default function FoodCard(p: FoodCardProps) {
   )
 }
 
-// 탄·단·지 숫자 색(디자인 시안 carb·prot·fat)
-const MACRO_TEXT = { carbs_g: 'text-carb', protein_g: 'text-prot', fat_g: 'text-fat' } as const
+const MACRO_COLOR = { carbs_g: 'var(--carb)', protein_g: 'var(--prot)', fat_g: 'var(--fat)' } as const
 
-// 탄·단·지(읽기 전용). 값이 없으면 –, DB에 없어 AI 추정으로 채웠으면 작은 표시
+// 탄·단·지(읽기 전용). 값이 없으면 –, DB에 없어 AI 추정으로 채웠으면 시안 "추정" 배지(.est)
 function Macro({ item, k }: { item: MealItem; k: 'carbs_g' | 'protein_g' | 'fat_g' }) {
   if (!item.per_100g) return <>–</>
   const fill = k === 'protein_g' ? undefined : item.per_100g_fill?.[k]
   if (fill === 'missing') return <>–</>
   return (
     <>
-      <span className={MACRO_TEXT[k]}>{item.consumed[k].toFixed(1)}g</span>
-      {fill === 'ai_estimate' && <span className="ml-0.5 rounded-sm bg-butter-soft px-0.5 text-[10px] text-ink">AI 추정</span>}
+      <b className="num" style={{ color: MACRO_COLOR[k] }}>{`${item.consumed[k].toFixed(1)}g`}</b>
+      {fill === 'ai_estimate' && (
+        <span className="est" style={{ marginLeft: 3, marginRight: 0 }}>
+          추정
+        </span>
+      )}
     </>
   )
 }
@@ -294,7 +318,7 @@ function NumField(props: {
   min?: number
   max?: number
   inputRef?: Ref<HTMLInputElement>
-  className?: string
+  style?: CSSProperties
 }) {
   const { value, onCommit, live = true, min = 0, max = Number.POSITIVE_INFINITY } = props
   const [draft, setDraft] = useState<string | null>(null)
@@ -333,21 +357,31 @@ function NumField(props: {
       onKeyDown={(e) => {
         if (e.key === 'Enter') e.currentTarget.blur()
       }}
-      className={props.className ?? 'mt-1 min-h-11 w-full rounded-tile border border-line bg-surface px-2 text-base'}
+      style={props.style}
     />
   )
 }
 
-// 이름 고치기: 입력 중 자동완성(searchFoodNames) + 같은 음식의 세부 종류 목록(listFoodVariants)과 걸러 보기
-function NameEditor(props: { item: MealItem; onConfirm: (name: string, dbCode?: string) => void; onCancel: () => void }) {
-  const { item, onConfirm, onCancel } = props
-  // 화면 이름으로 연다(DB 표기 "분류_세부"를 보이지 않는다). 그대로 [확인]하면 바뀐 것이 없으므로 닫기만 한다.
-  const [draft, setDraft] = useState(() => foodName(item.name))
+/**
+ * 음식 이름 찾기(디자인 조각 D3-2, 사용자 확인 모양 d32_5_manual): 이름 칸(연필) → 입력 중 DB 후보(.rec 줄: 화면 이름·kcal/100g)
+ * → [‘입력한 이름’ 그대로 쓰기]. 고르면 onConfirm(정리한 이름, DB 코드). 직접 입력(새 기록, 음식 없음)과 카드 이름 고치기가 함께 쓴다.
+ * baseName이 있으면(이름 고치기) 같은 음식의 세부 종류 목록(listFoodVariants)과 걸러 보기를 더 보인다.
+ */
+export function FoodSearch(props: {
+  initial: string
+  onConfirm: (name: string, dbCode?: string) => void
+  onCancel?: () => void
+  baseName?: string
+  baseCode?: string
+  autoFocus?: boolean
+  /** 목록에 없는 이름을 그대로 넣는 버튼 말: 직접 입력(새 음식)은 "추가", 카드 이름 고치기는 "쓰기" */
+  verb?: '추가' | '쓰기'
+}) {
+  const { initial, onConfirm, onCancel, baseName, baseCode, verb = '쓰기' } = props
+  const [draft, setDraft] = useState(initial)
   const [sugs, setSugs] = useState<FoodSuggestion[]>([])
   const [variants, setVariants] = useState<FoodSuggestion[] | null>(null)
   const [filter, setFilter] = useState('')
-  const baseName = item.name.trim()
-  const baseCode = item.db_food_code ?? item.db_reference?.db_food_code ?? undefined
 
   useEffect(() => {
     const q = draft.trim()
@@ -378,68 +412,78 @@ function NameEditor(props: { item: MealItem; onConfirm: (name: string, dbCode?: 
     }
   }, [baseName, baseCode])
 
-  function submit(e: FormEvent) {
-    e.preventDefault()
+  function submit(e?: FormEvent) {
+    e?.preventDefault()
     const nm = draft.trim()
-    if (nm && nm === foodName(item.name)) onCancel()
+    if (nm && nm === initial.trim() && onCancel) onCancel()
     else if (nm) onConfirm(nm)
   }
 
   const f = compact(filter)
   const shown = (variants ?? []).filter((v) => !f || compact(v.label).includes(f) || compact(v.dbName).includes(f))
+  const typed = draft.trim()
 
   return (
-    <div className="rounded-tile border border-line bg-ground p-2">
-      <form onSubmit={submit} className="flex gap-2">
-        <input
-          autoFocus
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="음식 이름"
-          enterKeyHint="done"
-          aria-label="음식 이름"
-          className="min-h-11 min-w-0 flex-1 rounded-tile border border-line bg-surface px-2 text-base"
-        />
-        <button type="submit" disabled={!draft.trim()} className="focus-ring min-h-11 rounded-full bg-ink px-3 text-white disabled:opacity-40">
-          확인
-        </button>
-        <button type="button" onClick={onCancel} className="focus-ring min-h-11 rounded-full border border-ink-3 bg-surface px-3">
-          취소
-        </button>
+    <div style={{ marginTop: 12 }}>
+      <form onSubmit={submit}>
+        <label className="fbox" style={{ ...BOX, gap: 10, marginTop: 0 }}>
+          <Icon name="pen" size={22} className="text-ink-3" />
+          <input
+            autoFocus={props.autoFocus ?? true}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="음식 이름"
+            enterKeyHint="done"
+            aria-label="음식 이름"
+            style={{ ...NUM_INPUT, font: '20px var(--f-body)' }}
+          />
+        </label>
       </form>
 
       {sugs.length > 0 && (
-        <ul className="mt-1 divide-y divide-line rounded-tile border border-line bg-surface">
+        <div style={{ marginTop: 4 }}>
           {sugs.map((s, i) => (
-            <li key={`${s.dbCode}-${i}`}>
-              <SuggestionButton s={s} onPick={() => onConfirm(foodName(s.label), s.dbCode)} />
-            </li>
+            <SuggestionRow key={`${s.dbCode}-${i}`} s={s} onPick={() => onConfirm(foodName(s.label), s.dbCode)} />
           ))}
-        </ul>
+        </div>
       )}
 
+      {typed && (
+        <button type="button" className="btn ghost" style={{ width: '100%', marginTop: 14 }} onClick={() => submit()}>
+          {`'${typed}' 그대로 ${verb}`}
+        </button>
+      )}
+      <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: '10px 0 0' }}>
+        {`목록에 없으면 그대로 ${verb === '추가' ? '추가하고' : '쓰고'} 칼로리를 직접 넣어요.`}
+        {onCancel && (
+          <button type="button" className="link" onClick={onCancel} style={{ marginLeft: 8, padding: 0, fontSize: 13 }}>
+            취소
+          </button>
+        )}
+      </p>
+
       {baseName && (
-        <div className="mt-3">
-          <p className="text-xs text-ink-2">‘{foodName(baseName)}’ 세부 종류</p>
-          <input
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="걸러 보기 (예: 양념, 순살)"
-            aria-label="세부 종류 걸러 보기"
-            className="mt-1 min-h-11 w-full rounded-tile border border-line bg-surface px-2 text-base"
-          />
+        <div style={{ marginTop: 14 }}>
+          <div style={{ fontSize: 13, color: 'var(--ink-2)' }}>‘{foodName(baseName)}’ 세부 종류</div>
+          <label className="fbox" style={BOX}>
+            <input
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              placeholder="걸러 보기 (예: 양념, 순살)"
+              aria-label="세부 종류 걸러 보기"
+              style={{ ...NUM_INPUT, font: '16px var(--f-body)' }}
+            />
+          </label>
           {variants === null ? (
-            <p className="mt-1 text-xs text-ink-2">불러오는 중…</p>
+            <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: '8px 0 0' }}>불러오는 중…</p>
           ) : shown.length === 0 ? (
-            <p className="mt-1 text-xs text-ink-2">맞는 종류가 없어요. 이름을 직접 쓰고 확인을 누르세요.</p>
+            <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: '8px 0 0' }}>맞는 종류가 없어요. 위에 이름을 쓰고 [그대로 {verb}]를 눌러 주세요.</p>
           ) : (
-            <ul className="mt-1 max-h-60 divide-y divide-line overflow-y-auto rounded-tile border border-line bg-surface">
+            <div style={{ maxHeight: 240, overflowY: 'auto', marginTop: 4 }}>
               {shown.map((s, i) => (
-                <li key={`${s.dbCode}-${i}`}>
-                  <SuggestionButton s={s} onPick={() => onConfirm(foodName(s.label), s.dbCode)} />
-                </li>
+                <SuggestionRow key={`${s.dbCode}-${i}`} s={s} onPick={() => onConfirm(foodName(s.label), s.dbCode)} />
               ))}
-            </ul>
+            </div>
           )}
         </div>
       )}
@@ -447,15 +491,37 @@ function NameEditor(props: { item: MealItem; onConfirm: (name: string, dbCode?: 
   )
 }
 
-function SuggestionButton({ s, onPick }: { s: FoodSuggestion; onPick: () => void }) {
+// 카드 안 이름 고치기: 화면 이름으로 열고(DB 표기 "분류_세부"를 보이지 않는다), 그대로 [그대로 쓰기]하면 바뀐 것이 없으므로 닫기만 한다.
+function NameEditor(props: { item: MealItem; onConfirm: (name: string, dbCode?: string) => void; onCancel: () => void }) {
+  const { item, onConfirm, onCancel } = props
+  const baseName = item.name.trim()
   return (
-    <button type="button" onClick={onPick} className="focus-ring flex min-h-11 w-full items-center justify-between gap-2 px-2 text-left">
-      <span className="min-w-0 break-words">
-        {foodName(s.label)}
-        {s.kind === 'group' && <span className="ml-1 text-xs text-ink-2">대표값</span>}
-        {s.mlConverted && <span className="ml-1 text-xs text-ink-2">환산</span>}
+    <FoodSearch
+      initial={foodName(item.name)}
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+      baseName={baseName || undefined}
+      baseCode={item.db_food_code ?? item.db_reference?.db_food_code ?? undefined}
+    />
+  )
+}
+
+/** DB 후보 한 줄(시안 .rec 줄 모양): 화면 이름(대표값·환산 작은 글자) · kcal/100g */
+function SuggestionRow({ s, onPick }: { s: FoodSuggestion; onPick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="rec"
+      onClick={onPick}
+      style={{ width: '100%', textAlign: 'left', gridTemplateColumns: '1fr auto', padding: '14px 0' }}
+    >
+      <span>
+        <b style={{ fontFamily: 'var(--f-head)' }}>{foodName(s.label)}</b>
+        {(s.kind === 'group' || s.mlConverted) && (
+          <small>{[s.kind === 'group' && '대표값', s.mlConverted && '환산'].filter(Boolean).join(' · ')}</small>
+        )}
       </span>
-      <span className="shrink-0 text-xs text-ink-2">{Math.round(s.kcalPer100g)}kcal/100g</span>
+      <span className="num" style={{ fontSize: 14, color: 'var(--ink-2)' }}>{`${Math.round(s.kcalPer100g)}kcal/100g`}</span>
     </button>
   )
 }

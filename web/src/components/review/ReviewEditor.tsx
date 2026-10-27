@@ -1,8 +1,11 @@
 // 결과 확인·수정 화면(S4) 편집기. 제어형: 바뀔 때마다 buildAnalysis로 만든 새 분석을 onChange로 올린다.
 // 계산은 모두 analysis/compute.ts 함수로 한다(화면에서 공식을 다시 구현하지 않는다). 사진은 다시 분석하지 않는다.
 // 규칙: 스펙 2.3절 표, CLAUDE.md "결과 수정 규칙".
+// 모양(디자인 조각 D3-2, 사용자 확인 d32_4_review·d32_5_manual): 시안 .mtotal(총 kcal · 먹기 전 kcal) → .stack·.legend 탄단지 →
+// notice(확인할 점, 부르는 화면이 줌) → 음식 카드 → [+ 음식 추가](.btn ghost) → 출처 한 줄. 음식이 없으면 "어떤 음식을 먹었나요?" + 이름 찾기.
+// 지운 음식 되돌리기는 시안 토스트 모양(.toast) 알약에 [되돌리기].
 import { foodName } from '../../lib/foodName'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { WARN_NO_AFTER } from '../../analysis/assemble'
 import {
   applyNutrition,
@@ -15,7 +18,8 @@ import {
 } from '../../analysis/compute'
 import { resolveNutrition } from '../../analysis/nutrition'
 import type { MealIntakeAnalysis, MealItem, NutritionResult } from '../../types/analysis'
-import FoodCard, { type RatioHint } from './FoodCard'
+import { macroPct } from '../mealText'
+import FoodCard, { FoodSearch, type RatioHint } from './FoodCard'
 
 export interface ReviewEditorProps {
   analysis: MealIntakeAnalysis
@@ -24,6 +28,8 @@ export interface ReviewEditorProps {
   onBusyChange?: (busy: boolean) => void
   /** 수정 모드(S8)면 남긴 비율을 모르는 음식에 "직접 골라 주세요"만 보인다(사진 비교 안내 없음) */
   mode?: 'review' | 'edit'
+  /** 합계와 음식 카드 사이에 둘 안내(확인할 점) */
+  notice?: ReactNode
 }
 
 const UNDO_MS = 3000
@@ -46,7 +52,7 @@ function omit<T>(rec: Record<string, T>, key: string): Record<string, T> {
 type Ask = { id: string; name: string; dbCode?: string }
 type Undo = { item: MealItem; index: number }
 
-export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 'review' }: ReviewEditorProps) {
+export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 'review', notice }: ReviewEditorProps) {
   // 비동기 조회가 끝났을 때 최신 분석 위에 고치도록 ref로 들고 있는다
   const latest = useRef(analysis)
   const onChangeRef = useRef(onChange)
@@ -175,6 +181,14 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
     emit(items)
   }
 
+  /** 음식이 없을 때 이름 찾기에서 고른 이름으로 바로 새 항목을 만든다(직접 입력) */
+  function addNamed(name: string, dbCode?: string) {
+    const items = latest.current.items
+    const it = newUserItem(undo ? [...items, undo.item] : items)
+    emit([...items, it])
+    confirmName(it.id, name, dbCode)
+  }
+
   function add() {
     const items = latest.current.items
     // 되돌리기 대기 중인 항목의 id와 겹치지 않게 함께 넘긴다
@@ -196,67 +210,102 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
   const t = analysis.totals
   // 먹은 후 분석이 있었는데 비율을 모르면 사진이 달라 보인 경우. 직접 고르기 경로(WARN_NO_AFTER)·수정 모드는 고르기만 안내.
   const ratioHint: RatioHint = mode === 'edit' || analysis.warnings.includes(WARN_NO_AFTER) ? 'manual' : 'mismatch'
-  const unpicked = analysis.items.filter((it) => it.remaining_ratio === null).length
+
+  const pct = macroPct(t.consumed.carbs_g, t.consumed.protein_g, t.consumed.fat_g)
 
   return (
-    <div className="space-y-3 text-sm">
-      <div className="rounded-card bg-ink p-4 text-white">
-        <p className="text-xs text-white/70">섭취 합계 (먹기 전 {Math.round(t.before_kcal)} kcal)</p>
-        <p className="num text-3xl">{Math.round(t.consumed.kcal)} kcal</p>
-        <p>
-          탄 <span className="num text-carb">{t.consumed.carbs_g.toFixed(1)}g</span> · 단{' '}
-          <span className="num text-prot">{t.consumed.protein_g.toFixed(1)}g</span> · 지{' '}
-          <span className="num text-fat">{t.consumed.fat_g.toFixed(1)}g</span>
-        </p>
-        {unpicked > 0 && <p className="mt-1 text-xs text-butter">남긴 양을 고르면 합계가 바뀌어요({unpicked}개 남음)</p>}
-      </div>
+    <>
+      {shown.length > 0 && (
+        <>
+          <div className="mtotal" style={{ marginTop: 22 }}>
+            <span>
+              {'총 '}
+              <span className="num">{`${Math.round(t.consumed.kcal)}kcal`}</span>
+            </span>
+            <span style={{ fontSize: 14, color: 'var(--ink-2)' }}>
+              {'먹기 전 '}
+              <span className="num">{`${Math.round(t.before_kcal)}kcal`}</span>
+            </span>
+          </div>
+          <div className="stack">
+            <div style={{ flex: pct.c, background: 'var(--carb)' }} className="num">{`${pct.c}%`}</div>
+            <div style={{ flex: pct.p, background: 'var(--prot)' }} className="num">{`${pct.p}%`}</div>
+            <div style={{ flex: pct.f, background: 'var(--fat)' }} className="num">{`${pct.f}%`}</div>
+          </div>
+          <div className="legend">
+            <span>
+              <i className="dot" style={{ background: 'var(--carb)' }}></i>
+              {'탄수화물 '}
+              <b className="num">{`${t.consumed.carbs_g.toFixed(1)}g`}</b>
+            </span>
+            <span>
+              <i className="dot" style={{ background: 'var(--prot)' }}></i>
+              {'단백질 '}
+              <b className="num">{`${t.consumed.protein_g.toFixed(1)}g`}</b>
+            </span>
+            <span>
+              <i className="dot" style={{ background: 'var(--fat)' }}></i>
+              {'지방 '}
+              <b className="num">{`${t.consumed.fat_g.toFixed(1)}g`}</b>
+            </span>
+          </div>
+        </>
+      )}
 
-      {shown.length === 0 && <p className="text-ink-2">음식이 없어요. 아래 버튼으로 추가하세요.</p>}
+      {notice}
 
-      <ul className="space-y-3">
-        {shown.map((it) => (
-          <FoodCard
-            key={it.id}
-            item={it}
-            flagged={isFlagged(it)}
-            pendingName={pending[it.id] ?? null}
-            editing={editingId === it.id}
-            askName={ask?.id === it.id ? ask.name : null}
-            focusKcal={focusKcalId === it.id}
-            ratioHint={ratioHint}
-            suggestionHtml={suggestions[it.id] ?? null}
-            onStartEdit={() => setEditingId(it.id)}
-            onCancelEdit={() => cancelEdit(it.id)}
-            onConfirmName={(name, dbCode) => confirmName(it.id, name, dbCode)}
-            onAnswerAsk={answer}
-            onGrams={(g) => update(it.id, (x) => setBeforeGrams({ ...x, user_edited: true }, g))}
-            onRatio={(r) => update(it.id, (x) => setRemainingRatio(x, r))}
-            onEaters={(n) => update(it.id, (x) => recomputeItem({ ...x, eaters: n }))}
-            onKcal={(k) => update(it.id, (x) => setKcalOverride(x, k))}
-            onDelete={() => remove(it.id)}
-            onKcalFocused={onKcalFocused}
-          />
-        ))}
-      </ul>
-
-      <button
-        type="button"
-        onClick={add}
-        className="focus-ring min-h-11 w-full rounded-tile border-2 border-dashed border-ink-3 bg-surface text-ink"
-      >
-        + 음식 추가
-      </button>
+      {shown.length === 0 ? (
+        <div style={{ marginTop: 22 }}>
+          <div style={{ fontFamily: 'var(--f-head)', fontSize: 16 }}>어떤 음식을 먹었나요?</div>
+          <FoodSearch initial="" onConfirm={addNamed} autoFocus={false} verb="추가" />
+        </div>
+      ) : (
+        <>
+          <ul style={{ display: 'grid', gap: 12, margin: '16px 0 0', padding: 0 }}>
+            {shown.map((it) => (
+              <FoodCard
+                key={it.id}
+                item={it}
+                flagged={isFlagged(it)}
+                pendingName={pending[it.id] ?? null}
+                editing={editingId === it.id}
+                askName={ask?.id === it.id ? ask.name : null}
+                focusKcal={focusKcalId === it.id}
+                ratioHint={ratioHint}
+                suggestionHtml={suggestions[it.id] ?? null}
+                onStartEdit={() => setEditingId(it.id)}
+                onCancelEdit={() => cancelEdit(it.id)}
+                onConfirmName={(name, dbCode) => confirmName(it.id, name, dbCode)}
+                onAnswerAsk={answer}
+                onGrams={(g) => update(it.id, (x) => setBeforeGrams({ ...x, user_edited: true }, g))}
+                onRatio={(r) => update(it.id, (x) => setRemainingRatio(x, r))}
+                onEaters={(n) => update(it.id, (x) => recomputeItem({ ...x, eaters: n }))}
+                onKcal={(k) => update(it.id, (x) => setKcalOverride(x, k))}
+                onDelete={() => remove(it.id)}
+                onKcalFocused={onKcalFocused}
+              />
+            ))}
+          </ul>
+          <button type="button" className="btn ghost" onClick={add} style={{ width: '100%', marginTop: 14 }}>
+            + 음식 추가
+          </button>
+        </>
+      )}
 
       {undo && (
-        <div className="sticky bottom-2 flex items-center justify-between gap-2 rounded-tile bg-ink px-3 py-1 text-white shadow-[0_1px_3px_rgba(31,42,46,.12)]">
-          <span className="min-w-0 truncate">‘{foodName(undo.item.name) || '이름 없음'}’ 삭제함</span>
-          <button type="button" onClick={restore} className="focus-ring min-h-11 shrink-0 px-2 font-semibold text-butter">
+        <div className="toast" role="status" style={{ display: 'flex', alignItems: 'center', gap: 12, maxWidth: 'calc(100% - 40px)' }}>
+          <span style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            ‘{foodName(undo.item.name) || '이름 없음'}’ 지웠어요
+          </span>
+          <button type="button" onClick={restore} style={{ flex: 'none', padding: 0, minHeight: 32, color: 'var(--butter)' }}>
             되돌리기
           </button>
         </div>
       )}
 
-      <p className="text-xs text-ink-2">영양 정보: 식품의약품안전처 식품영양성분 DB(2026-10-06 갱신본)</p>
-    </div>
+      {shown.length > 0 && (
+        <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: '14px 0 0' }}>영양 정보: 식품의약품안전처 식품영양성분 DB(2026-10-06 갱신본)</p>
+      )}
+    </>
   )
 }

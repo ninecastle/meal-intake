@@ -9,8 +9,11 @@
 // 먹은 시간(D3): 결과 확인·직접 입력을 저장할 때 그 끼니 시각이 비어 있으면 저장 시각으로 채운다(사진 기록은 먹기 전 단계에서 이미 채움).
 // 남긴 비율을 모르는(null) 음식이 하나라도 있으면 저장을 막는다(2026-10-27). S3이 state { retake: true }를 넘기면
 // (먹은 후 사진이 달라 보임, 문서는 awaiting_after 그대로) [먹은 후 사진 다시 찍기]를 보인다. state는 새로고침해도 남는다.
-import { Button, IconButton, TopBar } from '../components/ui'
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+// 모양(디자인 조각 D3-2, 사용자 확인 d32_4_review): 시안 .screen > .topbar.sticky(‹ 제목) → 날짜 줄 + [날짜 바꾸기](.chipbtn, 날짜 입력을 덮어 씀)
+// → [아침|점심|저녁|간식](.segment) → 편집기(합계·막대 → 확인할 점 .callout butter-soft → 음식 카드) → [기록 취소 ›] → .bottom([먹은 후 사진 다시 찍기]·[저장]).
+// 저장 상태 안내(연결이 느림·저장 실패·다시 계산 중·고칠 값)는 아래 막대 바로 위 .callout.
+import { IconButton } from '../components/ui'
+import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   UNSAFE_DataRouterContext,
   useBeforeUnload,
@@ -82,7 +85,7 @@ function readEntryState(s: unknown): Omit<Loaded, 'mealId' | 'isNew'> | null {
 function dateLabel(dateKey: string): string {
   const d = new Date(`${dateKey}T12:00:00+09:00`)
   const s = new Intl.DateTimeFormat('ko-KR', { timeZone: APP_TIMEZONE, month: 'long', day: 'numeric', weekday: 'short' }).format(d)
-  return dateKey === toDateKey(new Date()) ? `오늘 · ${s}` : s
+  return dateKey === toDateKey(new Date()) ? `${s} · 오늘` : s
 }
 
 /** 이 탭 방문 기록에서 지금 칸의 순서(react-router가 history.state.idx에 둔다). 주소로 바로 열었으면 0 */
@@ -325,109 +328,146 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
 
   const title = isEdit ? '기록 수정' : phase.kind === 'ready' && phase.initial.isNew ? '직접 입력' : '결과 확인'
   const exitLabel = isEdit ? '기록으로' : '홈으로'
+  const center: CSSProperties = { textAlign: 'center', color: 'var(--ink-2)', margin: 0, padding: '80px 0 0' }
 
-  return (
-    <div className="mx-auto flex h-dvh max-w-[430px] flex-col bg-surface text-ink">
-      {dataRouter && <LeaveGuard shouldBlock={shouldBlock} />}
-      <TopBar
-        className="shrink-0 border-b border-line bg-surface"
-        left={<IconButton icon="back" label={exitLabel} onClick={onBack} />}
-        title={title}
-      />
-
-      {(loading || phase.kind === 'loading') && (
-        <main className="flex flex-1 items-center justify-center text-ink-2">불러오는 중…</main>
+  // 확인할 점: Gemini 경고(한국어로 거른 것) + 남긴 양을 고르지 않은 음식 수
+  const notes = [
+    ...warnings,
+    unpicked > 0 ? `남긴 양을 고르지 않은 음식이 ${unpicked}개 있어요. 고르면 저장할 수 있어요.` : null,
+  ].filter((n): n is string => !!n)
+  const notice =
+    notes.length > 0 ? (
+      <div className="callout" role="status" style={{ background: 'var(--butter-soft)', marginTop: 18 }}>
+        <b>확인해 주세요</b>
+        {notes.map((n) => (
+          <div key={n}>{n}</div>
+        ))}
+      </div>
+    ) : null
+  // 아래 막대 바로 위에 보일 저장 상태 안내
+  const status = phase.kind === 'ready' && (
+    <>
+      {slow && (
+        <div className="callout" style={{ background: 'var(--sky-soft)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <span>연결이 느려요. 연결되면 자동으로 저장돼요.</span>
+          <button type="button" className="chipbtn" onClick={leaveWhilePending}>
+            {exitLabel}
+          </button>
+        </div>
       )}
+      {saveError && (
+        <div role="alert" className="callout" style={{ background: 'var(--peach-soft)', color: 'var(--peach-deep)' }}>
+          {SAVE_ERRORS[saveError.code]}
+          {saveError.code === 'MEAL_SAVE_REJECTED' && <div style={{ fontSize: 12 }}>{saveError.detail}</div>}
+        </div>
+      )}
+      {!saving && editorBusy && <div className="callout" style={{ background: 'var(--ground)' }}>음식 정보를 다시 계산하는 중이에요. 끝나면 저장할 수 있어요.</div>}
+      {!saving && isEdit && itemCount === 0 && (
+        <div className="callout" style={{ background: 'var(--ground)' }}>음식을 모두 지우려면 끼니 화면에서 X를 눌러 주세요.</div>
+      )}
+      {!saving && itemCount > 0 && unpicked === 0 && check && !check.ok && (
+        <div className="callout" style={{ background: 'var(--butter-soft)' }}>저장 전에 고칠 값이 있어요: {check.errors[0]}</div>
+      )}
+    </>
+  )
+
+  // 시안 render(): 화면이 바뀌면 .screen에 .enter(짧은 나타남)
+  return (
+    <main className="screen enter">
+      {dataRouter && <LeaveGuard shouldBlock={shouldBlock} />}
+      <div className="topbar sticky pad">
+        <div style={{ display: 'flex' }}>
+          <IconButton icon="back" label={exitLabel} onClick={onBack} />
+        </div>
+        <h1>{title}</h1>
+        <div style={{ display: 'flex', minWidth: 44, justifyContent: 'flex-end' }}></div>
+      </div>
+
+      {(loading || phase.kind === 'loading') && <p style={center}>불러오는 중…</p>}
 
       {phase.kind === 'awaiting' && (
-        <main className="flex flex-1 flex-col justify-center gap-3 px-4">
-          <p className="text-center">먹은 후 사진을 아직 안 찍었어요.</p>
-          <Button
-            full
-            type="button"
-            onClick={() => navigate(`/meal/${phase.mealId}/after`, { replace: true })}
-          >
-            남은 음식 찍기
-          </Button>
-          <button type="button" onClick={() => leave()} className="focus-ring min-h-11 text-ink-2">
+        <div className="pad" style={{ display: 'grid', gap: 12, justifyItems: 'center' }}>
+          <p style={center}>먹은 후 사진을 아직 안 찍었어요.</p>
+          <button type="button" className="btn ink" onClick={() => navigate(`/meal/${phase.mealId}/after`, { replace: true })}>
+            남은 음식 알려 주기
+          </button>
+          <button type="button" className="link" onClick={() => leave()}>
             홈으로
           </button>
-        </main>
+        </div>
       )}
 
       {phase.kind === 'load_error' && (
-        <main className="flex flex-1 flex-col justify-center gap-3 px-4">
-          <p className="text-center">기록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.</p>
-          <Button
-            variant="ink"
-            full
-            type="button"
-            onClick={() => setReloadSeq((n) => n + 1)}
-          >
+        <div className="pad" style={{ display: 'grid', gap: 12, justifyItems: 'center' }}>
+          <p style={center}>기록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.</p>
+          <button type="button" className="btn ink" onClick={() => setReloadSeq((n) => n + 1)}>
             다시 시도
-          </Button>
-          <button type="button" onClick={() => leave()} className="focus-ring min-h-11 text-ink-2">
+          </button>
+          <button type="button" className="link" onClick={() => leave()}>
             {exitLabel}
           </button>
-        </main>
+        </div>
       )}
 
       {!loading && phase.kind === 'ready' && draft && (
         <>
-          <main className="flex-1 space-y-4 overflow-y-auto px-4 py-3">
-            <section aria-label="날짜와 끼니" className="space-y-2">
-              {/* 날짜는 새 기록(사진 결과·직접 입력)과 수정 모두 바꿀 수 있다(앨범 사진의 찍은 시각으로 미리 채워진 날짜도 고치게).
-                  오늘과 지난 날짜만(max=오늘, 직접 타이핑한 미래 날짜도 받지 않는다) */}
-              <label className="flex items-center justify-between gap-2">
-                <span className="text-sm font-medium text-ink-2">{dateLabel(draft.dateKey)}</span>
+          <div className="pad">
+            {/* 날짜는 새 기록(사진 결과·직접 입력)과 수정 모두 바꿀 수 있다(오늘과 지난 날짜만, 직접 타이핑한 미래 날짜도 받지 않는다).
+                [날짜 바꾸기] 칩 위에 투명한 날짜 입력을 덮어, 누르면 기기 날짜 고르기가 열린다 */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 4 }}>
+              <span style={{ fontFamily: 'var(--f-head)', fontSize: 16 }}>{dateLabel(draft.dateKey)}</span>
+              {/* label은 button처럼 글자를 가운데 두지 않으므로 시안 button.chipbtn과 같게 가운데 맞춤을 더한다 */}
+              <label
+                className="chipbtn"
+                style={{ background: 'var(--sky-soft)', position: 'relative', overflow: 'hidden', cursor: 'pointer', display: 'inline-flex', alignItems: 'center' }}
+              >
+                날짜 바꾸기
                 <input
                   type="date"
                   required
+                  aria-label="날짜 바꾸기"
                   value={draft.dateKey}
                   max={today}
                   disabled={saving}
+                  onClick={(e) => {
+                    try {
+                      e.currentTarget.showPicker()
+                    } catch {
+                      // showPicker가 없는 브라우저는 입력 칸이 열린다
+                    }
+                  }}
                   onChange={(e) => {
                     const v = parseDateKey(e.target.value)
                     if (v && v <= today) setDraft((d) => (d ? { ...d, dateKey: v } : d))
                   }}
-                  className="min-h-11 rounded-tile border border-line bg-surface px-3 text-base"
+                  style={{ position: 'absolute', inset: 0, opacity: 0, cursor: 'pointer' }}
                 />
               </label>
-              <div className="grid grid-cols-4 gap-2">
-                {MEAL_TYPES.map((m) => {
-                  const on = draft.mealType === m.value
-                  return (
-                    <button
-                      key={m.value}
-                      type="button"
-                      aria-pressed={on}
-                      disabled={saving}
-                      onClick={() => setDraft((d) => (d ? { ...d, mealType: m.value } : d))}
-                      className={`focus-ring min-h-11 rounded-full border text-sm font-medium ${
-                        on ? 'border-ink bg-ink text-white' : 'border-line bg-surface text-ink'
-                      }`}
-                    >
-                      {m.label}
-                    </button>
-                  )
-                })}
-              </div>
-            </section>
-
-            {warnings.length > 0 && (
-              <section aria-label="확인할 점" className="rounded-tile border border-butter bg-butter-soft p-3 text-sm">
-                <p className="font-semibold text-ink">확인해 주세요</p>
-                <ul className="mt-1 list-disc space-y-1 pl-5 text-ink">
-                  {warnings.map((w) => (
-                    <li key={w}>{w}</li>
-                  ))}
-                </ul>
-              </section>
-            )}
+            </div>
+            <div className="segment" role="tablist" aria-label="끼니" style={{ marginTop: 6 }}>
+              {MEAL_TYPES.map((m) => (
+                <button
+                  key={m.value}
+                  type="button"
+                  role="tab"
+                  aria-selected={draft.mealType === m.value}
+                  disabled={saving}
+                  onClick={() => setDraft((d) => (d ? { ...d, mealType: m.value } : d))}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
 
             {/* 저장 중에는 편집을 잠근다(저장하는 값과 화면 값이 달라지지 않게) */}
-            <fieldset disabled={saving} className="min-w-0">
-              <ReviewEditor analysis={draft.analysis} onChange={onAnalysis} onBusyChange={setEditorBusy} mode={mode} />
+            <fieldset disabled={saving} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
+              <ReviewEditor
+                analysis={draft.analysis}
+                onChange={onAnalysis}
+                onBusyChange={setEditorBusy}
+                mode={mode}
+                notice={notice}
+              />
             </fieldset>
 
             {canCancel && (
@@ -438,59 +478,25 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
                 </button>
               </div>
             )}
-          </main>
+          </div>
 
-          <footer className="shrink-0 space-y-2 border-t border-line bg-surface px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-            {slow && (
-              <div className="flex items-center justify-between gap-2 rounded-tile bg-sky-soft p-2 text-sm text-ink">
-                <span>연결이 느려요. 연결되면 자동으로 저장돼요.</span>
-                <button type="button" onClick={leaveWhilePending} className="focus-ring min-h-11 shrink-0 px-2 font-semibold">
-                  {exitLabel}
+          <div className="bottom">
+            <div className="pad" style={{ maxWidth: 430, margin: '0 auto', pointerEvents: 'auto', display: 'grid', gap: 8 }}>
+              {status}
+            </div>
+            <div className="inner pad">
+              {canRetake && (
+                <button type="button" className="btn ghost narrow" onClick={onRetake} disabled={saving}>
+                  먹은 후 사진 다시 찍기
                 </button>
-              </div>
-            )}
-            {saveError && (
-              <div role="alert" className="text-sm text-peach-deep">
-                <p>{SAVE_ERRORS[saveError.code]}</p>
-                {saveError.code === 'MEAL_SAVE_REJECTED' && <p className="text-xs text-peach-deep">{saveError.detail}</p>}
-              </div>
-            )}
-            {!saving && editorBusy && <p className="text-sm text-ink-2">음식 정보를 다시 계산하는 중이에요. 끝나면 저장할 수 있어요.</p>}
-            {!saving && itemCount === 0 && (
-              <p className="text-sm text-ink-2">
-                {isEdit ? '음식을 모두 지우려면 끼니 화면에서 X를 눌러 주세요.' : '음식을 하나 이상 넣어 주세요.'}
-              </p>
-            )}
-            {!saving && unpicked > 0 && (
-              <p className="rounded-tile border border-butter bg-butter-soft px-3 py-2 text-sm text-ink">
-                남긴 양을 고르지 않은 음식이 {unpicked}개 있어요. 카드에서 남긴 양을 고르면 저장할 수 있어요.
-              </p>
-            )}
-            {canRetake && (
-              <Button
-                variant="ghost"
-                full
-                type="button"
-                onClick={onRetake}
-                disabled={saving}
-              >
-                먹은 후 사진 다시 찍기
-              </Button>
-            )}
-            {!saving && itemCount > 0 && unpicked === 0 && check && !check.ok && (
-              <p className="rounded-tile border border-butter bg-butter-soft px-3 py-2 text-sm text-ink">저장 전에 고칠 값이 있어요: {check.errors[0]}</p>
-            )}
-            <Button
-              full
-              type="button"
-              onClick={onSave}
-              disabled={!canSave}
-            >
-              {saving ? '저장 중…' : saveError ? '다시 시도' : isEdit ? '수정 저장' : '저장'}
-            </Button>
-          </footer>
+              )}
+              <button type="button" className="btn ink" onClick={onSave} disabled={!canSave}>
+                {saving ? '저장 중…' : saveError ? '다시 시도' : isEdit ? '수정 저장' : '저장'}
+              </button>
+            </div>
+          </div>
         </>
       )}
-    </div>
+    </main>
   )
 }

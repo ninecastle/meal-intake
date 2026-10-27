@@ -29,7 +29,7 @@ import {
 } from '../components/meal/MealSheets'
 import { afterTarget, useAfterFlow, type ReviewEntry } from '../components/meal/useAfterFlow'
 import { useBeforeFlow } from '../components/meal/useBeforeFlow'
-import { formatGrams, homeHref, isDateKey, MEAL_TYPE_LABEL, MEAL_TYPES, sourceLabel } from '../components/mealText'
+import { formatGrams, homeHref, isDateKey, macroPct, MEAL_TYPE_LABEL, MEAL_TYPES, sourceLabel } from '../components/mealText'
 import { foodName } from '../lib/foodName'
 import { Icon, IconButton, MealArt, Toast } from '../components/ui'
 import { deleteMeal, saveMeal, subscribeMealsFor, type MealType, type MealWithId } from '../data/meals'
@@ -100,15 +100,6 @@ function describeItem(it: MealItem, edited: boolean): string {
   return parts.join(' · ')
 }
 
-/** 시안 pct(): 탄·단·지 에너지 비율(정수 %) */
-function pct(t: MealTotals) {
-  const kc = t.carbs_g * 4 + t.protein_g * 4 + t.fat_g * 9 || 1
-  return {
-    c: Math.round(((t.carbs_g * 4) / kc) * 100),
-    p: Math.round(((t.protein_g * 4) / kc) * 100),
-    f: Math.round(((t.fat_g * 9) / kc) * 100),
-  }
-}
 
 export default function MealPage({ uid }: { uid: string }) {
   const { dateKey = '', mealType = '' } = useParams()
@@ -342,7 +333,7 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
 
   const label = MEAL_TYPE_LABEL[meal]
   const time = times[meal]
-  const p = pct(totals)
+  const p = macroPct(totals.carbs_g, totals.protein_g, totals.fat_g)
   const afterFoods = target_ ? target_.beforeAnalysis.items : []
   const afterSubtitle = `${label} · ${foodName(afterFoods[0]?.name ?? '')}${afterFoods.length > 1 ? ` 외 ${afterFoods.length - 1}개` : ''}`
   const closeSheet = () => setSheet(null)
