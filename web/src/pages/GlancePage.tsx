@@ -4,6 +4,8 @@
 // → 오늘 식단: 끼니마다 .tmeal(.thead 이름·kcal·큰 그림, .tcard 끼니 색 — 탄단지 g 배지·음식 이름과 먹은 양 g, 없으면 .tempty)
 // → .bottom [오늘 하루 공유하기]·[오늘 식단 공유하기](그 카드·목록을 PNG로, lib/share). 세부 영양소가 없으면 "–"(가짜 숫자 금지).
 // 지난 날짜면 탭·버튼의 "오늘"을 "이날"로. 홈에서 push(state.fromHome)로 들어오면 ‹는 뒤로 가기(보던 위치 그대로).
+// 사용자가 고른 변경(2026-10-28): 오늘 하루 탄·단·지는 작은 동그라미 배지 대신 흰 상자 세 개(이름·큰 %·g), 오늘 식단 머리 줄 글자는
+// 카드 위로 올려 kcal 숫자가 카드에 겹치지 않게(그림은 시안처럼 카드에 걸친다).
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { shortDateLabel, useDayData } from '../components/day/useDayData'
@@ -16,6 +18,20 @@ import { shareElementImage } from '../lib/share'
 /** 시안 meals[k].card(끼니 색) */
 const CARD_BG: Record<MealType, string> = { breakfast: 'var(--sky)', lunch: 'var(--lime)', dinner: 'var(--peach)', snack: 'var(--butter)' }
 const r1 = (n: number) => Math.round(n * 10) / 10
+
+/** 오늘 하루 탄·단·지 상자(사용자가 고른 변경): 흰 상자에 ● 이름, 큰 %, 그 아래 g */
+function MacroBox({ label, color, pct, grams }: { label: string; color: string; pct: number; grams: number }) {
+  return (
+    <div style={{ background: 'var(--surface)', borderRadius: 'var(--r-md)', padding: '12px 4px', display: 'grid', gap: 2, justifyItems: 'center' }}>
+      <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontFamily: 'var(--f-head)', fontSize: 15, color: 'var(--ink-2)', whiteSpace: 'nowrap' }}>
+        <i className="dot" style={{ background: color }}></i>
+        {label}
+      </span>
+      <span className="num" style={{ fontSize: 28, fontWeight: 600, lineHeight: 1.15 }}>{`${pct}%`}</span>
+      <span className="num" style={{ fontSize: 14, color: 'var(--ink-2)' }}>{`${grams}g`}</span>
+    </div>
+  )
+}
 
 /** 시안 tempty 말풍선 얼굴 */
 const SMILE = (
@@ -79,19 +95,10 @@ export default function GlancePage({ uid }: { uid: string }) {
       <div className="kc">
         <span className="num">{Math.round(t.kcal)}</span>kcal 먹었어요
       </div>
-      <div className="badges">
-        <span className="badge">
-          <i style={{ color: 'var(--carb)' }}>탄</i>
-          <span className="num">{`${p.c}%`}</span>
-        </span>
-        <span className="badge">
-          <i style={{ color: 'var(--prot)' }}>단</i>
-          <span className="num">{`${p.p}%`}</span>
-        </span>
-        <span className="badge">
-          <i style={{ color: 'var(--fat)' }}>지</i>
-          <span className="num">{`${p.f}%`}</span>
-        </span>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10, width: '100%' }}>
+        <MacroBox label="탄수화물" color="var(--carb)" pct={p.c} grams={r1(t.carbs_g)} />
+        <MacroBox label="단백질" color="var(--prot)" pct={p.p} grams={r1(t.protein_g)} />
+        <MacroBox label="지방" color="var(--fat)" pct={p.f} grams={r1(t.fat_g)} />
       </div>
       <div className="subline">
         {'당류 '}
@@ -123,7 +130,8 @@ export default function GlancePage({ uid }: { uid: string }) {
         return (
           <div key={meal} className="tmeal">
             <div className="thead">
-              <div>
+              {/* .thead는 카드 쪽으로 12px 내려와 그림이 카드에 걸친다. 글자는 그만큼 위로 띄워 카드에 겹치지 않게 */}
+              <div style={{ paddingBottom: 18 }}>
                 <h3>{MEAL_TYPE_LABEL[meal]}</h3>
                 <span className="num tk">{`${Math.round(mt.kcal)}kcal`}</span>
               </div>
