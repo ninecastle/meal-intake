@@ -2,16 +2,19 @@
 // 계산은 모두 analysis/compute.ts 함수로 한다(화면에서 공식을 다시 구현하지 않는다). 사진은 다시 분석하지 않는다.
 // 규칙: 스펙 2.3절 표, CLAUDE.md "결과 수정 규칙".
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { WARN_NO_AFTER } from '../../analysis/assemble'
 import { applyNutrition, buildAnalysis, newUserItem, recomputeItem, setBeforeGrams, setKcalOverride } from '../../analysis/compute'
 import { resolveNutrition } from '../../analysis/nutrition'
 import type { MealIntakeAnalysis, MealItem, NutritionResult } from '../../types/analysis'
-import FoodCard from './FoodCard'
+import FoodCard, { type RatioHint } from './FoodCard'
 
 export interface ReviewEditorProps {
   analysis: MealIntakeAnalysis
   onChange: (a: MealIntakeAnalysis) => void
   /** 이름을 바꾼 뒤 영양값을 다시 찾는 중이거나 "다시 계산할까요?"를 묻는 중이면 true. 그동안 저장을 잠근다. */
   onBusyChange?: (busy: boolean) => void
+  /** 수정 모드(S8)면 남긴 비율을 모르는 음식에 "직접 골라 주세요"만 보인다(사진 비교 안내 없음) */
+  mode?: 'review' | 'edit'
 }
 
 const UNDO_MS = 3000
@@ -33,7 +36,7 @@ function omit<T>(rec: Record<string, T>, key: string): Record<string, T> {
 type Ask = { id: string; name: string; dbCode?: string }
 type Undo = { item: MealItem; index: number }
 
-export default function ReviewEditor({ analysis, onChange, onBusyChange }: ReviewEditorProps) {
+export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 'review' }: ReviewEditorProps) {
   // 비동기 조회가 끝났을 때 최신 분석 위에 고치도록 ref로 들고 있는다
   const latest = useRef(analysis)
   const onChangeRef = useRef(onChange)
@@ -181,6 +184,9 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange }: Revie
   }
   const shown = [...analysis.items].sort((a, b) => (ord.get(a.id) ?? 0) - (ord.get(b.id) ?? 0))
   const t = analysis.totals
+  // 먹은 후 분석이 있었는데 비율을 모르면 사진이 달라 보인 경우. 직접 고르기 경로(WARN_NO_AFTER)·수정 모드는 고르기만 안내.
+  const ratioHint: RatioHint = mode === 'edit' || analysis.warnings.includes(WARN_NO_AFTER) ? 'manual' : 'mismatch'
+  const unpicked = analysis.items.filter((it) => it.remaining_ratio === null).length
 
   return (
     <div className="space-y-3 text-sm">
@@ -190,6 +196,7 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange }: Revie
         <p>
           탄 {t.consumed.carbs_g.toFixed(1)}g · 단 {t.consumed.protein_g.toFixed(1)}g · 지 {t.consumed.fat_g.toFixed(1)}g
         </p>
+        {unpicked > 0 && <p className="mt-1 text-xs text-amber-300">남긴 양을 고르면 합계가 바뀌어요({unpicked}개 남음)</p>}
       </div>
 
       {shown.length === 0 && <p className="text-gray-500">음식이 없어요. 아래 버튼으로 추가하세요.</p>}
@@ -204,6 +211,7 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange }: Revie
             editing={editingId === it.id}
             askName={ask?.id === it.id ? ask.name : null}
             focusKcal={focusKcalId === it.id}
+            ratioHint={ratioHint}
             suggestionHtml={suggestions[it.id] ?? null}
             onStartEdit={() => setEditingId(it.id)}
             onCancelEdit={() => cancelEdit(it.id)}

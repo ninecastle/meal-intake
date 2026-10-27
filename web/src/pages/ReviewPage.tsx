@@ -5,6 +5,8 @@
 // 끼니와 날짜(오늘과 지난 날짜만)도 바꿀 수 있다. 사진 재분석 없음. 저장 뒤·‹·브라우저 뒤로 가기는 상세(/meal/:mealId)로.
 // 상세에서 state { fromDetail: true }로 들어왔으면 방문 기록 한 칸 뒤(그 상세)로 돌아가 상세가 두 번 쌓이지 않게 하고,
 // 주소로 바로 열었으면 상세로 replace한다. 저장했으면 상세가 "수정했어요"를 보인다(flash 또는 state { edited: true }).
+// 남긴 비율을 모르는(null) 음식이 하나라도 있으면 저장을 막는다(2026-10-27). S3이 state { retake: true }를 넘기면
+// (먹은 후 사진이 달라 보임, 문서는 awaiting_after 그대로) [먹은 후 사진 다시 찍기]를 보인다. state는 새로고침해도 남는다.
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   UNSAFE_DataRouterContext,
@@ -16,6 +18,7 @@ import {
   useSearchParams,
 } from 'react-router'
 import { buildAnalysis } from '../analysis/compute'
+import { koreanWarnings } from '../analysis/koreanText'
 import { validateAnalysis } from '../analysis/validate'
 import ReviewEditor from '../components/review/ReviewEditor'
 import { getMeal, MealStoreError, newMealId, saveMeal, type MealStoreErrorCode, type MealType } from '../data/meals'
@@ -102,6 +105,7 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
 
   // 처음 들어올 때의 state·date만 쓴다(그 뒤 주소가 바뀌어도 편집 내용을 다시 덮지 않는다)
   const entryState = useRef<unknown>(location.state)
+  const entryRetake = (entryState.current as { retake?: unknown } | null)?.retake === true
   const entryDate = useRef(searchParams.get('date'))
   const navRef = useRef(navigate)
   useEffect(() => {
@@ -196,6 +200,9 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
   const analysis = draft?.analysis ?? null
   const analysisJson = useMemo(() => (analysis ? JSON.stringify(analysis) : ''), [analysis])
   const check = useMemo(() => (analysis ? validateAnalysis(analysis) : null), [analysis])
+  // Gemini 경고가 영어면 일반 안내로 바꾼다(예전에 저장·캐시된 분석도 여기서 걸러진다)
+  const warnings = useMemo(() => (analysis ? koreanWarnings(analysis.warnings) : []), [analysis])
+  const unpicked = analysis ? analysis.items.filter((it) => it.remaining_ratio === null).length : 0
   const dirty =
     phase.kind === 'ready' &&
     draft !== null &&
@@ -234,7 +241,17 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
   const today = toDateKey(new Date())
   const itemCount = analysis?.items.length ?? 0
   const dateOk = !!draft && draft.dateKey <= today
-  const canSave = !!uid && phase.kind === 'ready' && !!check?.ok && itemCount > 0 && dateOk && !saving && !editorBusy
+  const canSave =
+    !!uid && phase.kind === 'ready' && !!check?.ok && itemCount > 0 && unpicked === 0 && dateOk && !saving && !editorBusy
+  // 결과 확인에서 S3이 다시 찍기를 허락한 경우만(수정 모드·직접 입력·다시 불러온 needs_review는 아님)
+  const canRetake = !isEdit && entryRetake && routeId !== null && phase.kind === 'ready' && !phase.initial.isNew && unpicked > 0
+
+  function onRetake() {
+    if (!routeId || saving) return
+    if (dirty && !window.confirm(LEAVE_MSG)) return
+    allowLeave.current = true
+    navigate(`/meal/${routeId}/after`, { replace: true })
+  }
 
   async function onSave() {
     if (!canSave || !uid || phase.kind !== 'ready' || !draft) return
@@ -369,11 +386,11 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
               </div>
             </section>
 
-            {draft.analysis.warnings.length > 0 && (
+            {warnings.length > 0 && (
               <section aria-label="확인할 점" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm">
                 <p className="font-semibold text-amber-900">확인해 주세요</p>
                 <ul className="mt-1 list-disc space-y-1 pl-5 text-amber-900">
-                  {draft.analysis.warnings.map((w) => (
+                  {warnings.map((w) => (
                     <li key={w}>{w}</li>
                   ))}
                 </ul>
@@ -382,7 +399,7 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
 
             {/* 저장 중에는 편집을 잠근다(저장하는 값과 화면 값이 달라지지 않게) */}
             <fieldset disabled={saving} className="min-w-0">
-              <ReviewEditor analysis={draft.analysis} onChange={onAnalysis} onBusyChange={setEditorBusy} />
+              <ReviewEditor analysis={draft.analysis} onChange={onAnalysis} onBusyChange={setEditorBusy} mode={mode} />
             </fieldset>
           </main>
 
@@ -407,7 +424,22 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
                 {isEdit ? '음식을 모두 지웠다면 상세에서 기록을 삭제해 주세요.' : '음식을 하나 이상 넣어 주세요.'}
               </p>
             )}
-            {!saving && itemCount > 0 && check && !check.ok && (
+            {!saving && unpicked > 0 && (
+              <p className="text-sm text-amber-700">
+                남긴 양을 고르지 않은 음식이 {unpicked}개 있어요. 카드에서 남긴 양을 고르면 저장할 수 있어요.
+              </p>
+            )}
+            {canRetake && (
+              <button
+                type="button"
+                onClick={onRetake}
+                disabled={saving}
+                className="min-h-11 w-full rounded-xl border border-emerald-600 text-base font-semibold text-emerald-700 disabled:opacity-50"
+              >
+                먹은 후 사진 다시 찍기
+              </button>
+            )}
+            {!saving && itemCount > 0 && unpicked === 0 && check && !check.ok && (
               <p className="text-sm text-amber-700">저장 전에 고칠 값이 있어요: {check.errors[0]}</p>
             )}
             <button

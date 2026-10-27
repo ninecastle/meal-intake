@@ -15,6 +15,19 @@ const MATCH_NOTE = { name: null, group: '대표값', partial: '부분 일치' } 
 
 const compact = (s: string) => s.replace(/\s+/g, '').toLowerCase()
 
+/** 남긴 비율이 null(불확실)일 때 안내. 고르기 전에는 저장하지 않는다(2026-10-27). */
+export type RatioHint = 'mismatch' | 'manual'
+const RATIO_HINT: Record<RatioHint, string> = {
+  mismatch: '사진이 먹기 전과 달라 보여요. 다시 찍거나 남긴 양을 직접 골라 주세요',
+  manual: '남긴 양을 직접 골라 주세요',
+}
+/** 빠른 선택: 남긴 비율 0(다 먹음)·0.5(반)·1(그대로 남김) */
+const QUICK_RATIOS = [
+  { r: 0, label: '다 먹음' },
+  { r: 0.5, label: '반 남김' },
+  { r: 1, label: '그대로' },
+] as const
+
 export interface FoodCardProps {
   item: MealItem
   /** needs_review 또는 AI 추정: 노란 테두리 */
@@ -25,6 +38,8 @@ export interface FoodCardProps {
   /** "다시 계산할까요?"를 묻는 중이면 새 이름 */
   askName: string | null
   focusKcal: boolean
+  /** remaining_ratio가 null일 때 보일 안내(먹은 후 분석이 있었으면 mismatch, 직접 고르기·수정 모드면 manual) */
+  ratioHint: RatioHint
   /** 검색 기반일 때 Gemini 검색 추천 HTML(저장하지 않음) */
   suggestionHtml: string | null
   onStartEdit: () => void
@@ -159,7 +174,9 @@ export default function FoodCard(p: FoodCardProps) {
         <div>
           <div className="flex justify-between text-xs text-gray-600">
             <span>남긴 비율</span>
-            <span className="font-medium text-gray-900">{item.remaining_ratio == null ? '모름' : `${ratioPct}%`}</span>
+            <span className={`font-medium ${item.remaining_ratio == null ? 'text-amber-700' : 'text-gray-900'}`}>
+              {item.remaining_ratio == null ? '아직 안 고름' : `${ratioPct}%`}
+            </span>
           </div>
           <input
             type="range"
@@ -172,11 +189,20 @@ export default function FoodCard(p: FoodCardProps) {
             className="h-11 w-full accent-amber-500"
           />
           {item.remaining_ratio == null && (
-            <div className="flex items-center justify-between gap-2 text-xs text-amber-700">
-              <span>남긴 양 확인 필요(다 먹은 것으로 계산 중)</span>
-              <button type="button" onClick={() => p.onRatio(0)} className="min-h-11 rounded border border-amber-400 px-2">
-                다 먹음
-              </button>
+            <div role="status" className="rounded bg-amber-50 p-2 text-amber-900">
+              <p className="text-sm font-medium">{RATIO_HINT[p.ratioHint]}</p>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                {QUICK_RATIOS.map((q) => (
+                  <button
+                    key={q.r}
+                    type="button"
+                    onClick={() => p.onRatio(q.r)}
+                    className="min-h-11 rounded border border-amber-400 bg-white px-2 text-sm"
+                  >
+                    {q.label}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>

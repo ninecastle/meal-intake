@@ -218,6 +218,9 @@ export async function saveMeal(
   v: { dateKey: string; mealType: MealType; analysis: MealIntakeAnalysis },
 ): Promise<void> {
   checkKeys(v.dateKey, v.mealType)
+  // 남긴 비율을 모르는(null) 음식이 있으면 done으로 저장하지 않는다(2026-10-27, 사용자가 고른 뒤에만). saveReview는 null 허용.
+  const unpicked = v.analysis.items.filter((it) => it.remaining_ratio === null).map((it) => it.name || it.id)
+  if (unpicked.length > 0) reject(`남긴 비율을 고르지 않은 음식이 있습니다: ${unpicked.join(', ')}`)
   const a = checkedAnalysis(v.analysis)
   const ref = mealRef(uid, mealId)
   const fields = {

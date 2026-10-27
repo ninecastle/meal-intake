@@ -1,5 +1,7 @@
 // S3 먹은 후 촬영. 같은 사진 확인 → 먹은 후 분석(호출 B) → 성공하면 먹기 전 사진 삭제 → 영양값 조립
 // → needs_review 저장(기다리지 않음) → S4. 먹은 후 사진은 이 화면 메모리에만 둔다.
+// 남긴 비율이 불확실한(null) 음식이 있으면(먹은 후 사진이 달라 보임, 2026-10-27) 먹기 전 사진을 지우지 않고 저장도 하지 않는다
+// (문서는 awaiting_after 그대로). S4에 retake: true를 넘겨 [먹은 후 사진 다시 찍기]를 보이게 한다.
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { analyzeAfter, assembleAnalysis } from '../analysis/analyze'
@@ -14,7 +16,7 @@ import type { BeforeAnalysis, MealIntakeAnalysis } from '../types/analysis'
 /** S2 → S3 navigate state. 없으면(앱을 다시 연 경우) getMeal로 불러온다. */
 export type AfterPageState = { beforeAnalysis: BeforeAnalysis; dateKey: string; mealType: MealType }
 /** S3 → S4 navigate state(ReviewPage와의 계약) */
-type ReviewState = { analysis: MealIntakeAnalysis; dateKey: string; mealType: MealType }
+type ReviewState = { analysis: MealIntakeAnalysis; dateKey: string; mealType: MealType; retake?: boolean }
 
 function readState(s: unknown): AfterPageState | null {
   const v = s as Partial<AfterPageState> | null
@@ -40,6 +42,8 @@ export default function CaptureAfterPage({ uid }: { uid: string }) {
   const busyRef = useRef(false)
   const opRef = useRef(0)
   const abortRef = useRef<AbortController | null>(null)
+  // 분당 한도 뒤 [다시 시도]용. 압축본 두 장을 이 화면 메모리에만 둔다(어디에도 저장하지 않는다).
+  const lastShot = useRef<{ beforePhoto: Blob | null; afterPhoto: Blob } | null>(null)
 
   // state가 없으면 문서를 불러온다. 없거나 상태가 다르면 홈으로.
   useEffect(() => {
@@ -103,14 +107,21 @@ export default function CaptureAfterPage({ uid }: { uid: string }) {
     navigate(`/meal/${mealId}/review`, { replace: true, state })
   }
 
-  // 먹은 후 분석 → 성공하면 먹기 전 사진 삭제 → 영양값 조립 → needs_review 저장(기다리지 않음) → S4
+  // 먹은 후 분석 → 영양값 조립 → (불확실한 비율이 없으면) 먹기 전 사진 삭제 → needs_review 저장(기다리지 않음) → S4
   async function runAfter(m: AfterPageState, beforePhoto: Blob | null, afterPhoto: Blob) {
     const ac = new AbortController()
     abortRef.current = ac
+    lastShot.current = { beforePhoto, afterPhoto }
     const after = await analyzeAfter({ before: m.beforeAnalysis, beforePhoto, afterPhoto }, { signal: ac.signal })
+    const analysis = await assembleAnalysis(m.beforeAnalysis, after, { signal: ac.signal })
+    lastShot.current = null
+    if (analysis.items.some((it) => it.remaining_ratio === null)) {
+      // 다시 찍을 수 있게 먹기 전 사진과 awaiting_after 문서를 그대로 둔다. 저장하면 그때 S4가 사진을 지운다.
+      goReview({ analysis, dateKey: m.dateKey, mealType: m.mealType, retake: true })
+      return
+    }
     // 분석이 성공했을 때만 지운다(실패하면 다시 시도할 수 있게 남긴다).
     await beforePhotoStore.remove(mealId).catch((e: unknown) => console.warn('[S3] 먹기 전 사진 삭제 실패', e))
-    const analysis = await assembleAnalysis(m.beforeAnalysis, after, { signal: ac.signal })
     saveReview(uid, mealId, analysis).catch((e: unknown) => console.warn('[S3] needs_review 저장 실패', e))
     goReview({ analysis, dateKey: m.dateKey, mealType: m.mealType })
   }
@@ -142,6 +153,25 @@ export default function CaptureAfterPage({ uid }: { uid: string }) {
     setSamePending(null)
     try {
       await runAfter(meal, p.beforePhoto, p.afterPhoto)
+    } catch (e) {
+      if (!isAbortError(e) && opRef.current === op) setError(describeAnalysisError(e))
+    } finally {
+      end(op)
+    }
+  }
+
+  // 분당 한도 뒤 [다시 시도]: 같은 사진으로 한 번 더 보낸다(누를 때만 호출, 자동 재시도 없음).
+  async function retryLast() {
+    const shot = lastShot.current
+    if (!shot) {
+      inputRef.current?.click()
+      return
+    }
+    if (busyRef.current || !meal) return
+    const op = begin('after')
+    setSamePending(null)
+    try {
+      await runAfter(meal, shot.beforePhoto, shot.afterPhoto)
     } catch (e) {
       if (!isAbortError(e) && opRef.current === op) setError(describeAnalysisError(e))
     } finally {
@@ -267,7 +297,24 @@ export default function CaptureAfterPage({ uid }: { uid: string }) {
           <p className="mt-4 text-xs leading-relaxed text-gray-500">{PHOTO_NOTICE}</p>
 
           <div className="sticky bottom-0 -mx-4 bg-white/95 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
-            {error?.preferManual ? (
+            {error?.retry ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void retryLast()}
+                  disabled={busy != null}
+                  className={`${primary} bg-emerald-600 text-white disabled:opacity-50`}
+                >
+                  다시 시도
+                </button>
+                <button type="button" onClick={() => inputRef.current?.click()} disabled={busy != null} className={secondary}>
+                  다시 찍기
+                </button>
+                <button type="button" onClick={() => void chooseManually()} className={secondary}>
+                  남긴 양 직접 고르기
+                </button>
+              </>
+            ) : error?.preferManual ? (
               <>
                 <button type="button" onClick={() => void chooseManually()} className={`${primary} bg-emerald-600 text-white`}>
                   남긴 양 직접 고르기

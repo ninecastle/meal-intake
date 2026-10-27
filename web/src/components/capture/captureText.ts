@@ -34,6 +34,8 @@ export interface ErrorView {
   detail: string
   /** true면 [직접 입력]을 주 버튼으로 보인다(다시 찍어도 소용없는 경우). */
   preferManual: boolean
+  /** true면 같은 사진으로 [다시 시도]를 주 버튼으로 보인다(분당 한도: 사진은 화면 메모리에만 들고 있다). */
+  retry?: boolean
   /** 개발 빌드에서만 보이는 오류 코드 */
   devCode?: string
 }
@@ -70,7 +72,16 @@ export function describeAnalysisError(e: unknown): ErrorView {
             preferManual: true,
             devCode,
           }
-        : { title: '분석 요청이 잠시 몰렸어요', detail: '1분쯤 뒤에 다시 찍어 주세요.', preferManual: false, devCode }
+        : e.quotaScope === 'minute'
+          ? // 분당 한도: 자동 재시도 없이 바로 온다(2026-10-27). 같은 사진으로 [다시 시도]를 보인다.
+            {
+              title: '잠시 후 다시 시도해 주세요',
+              detail: 'AI 분석 요청이 잠깐 몰렸어요. 1분쯤 지나 [다시 시도]를 눌러 주세요.',
+              preferManual: false,
+              retry: true,
+              devCode,
+            }
+          : { title: '분석 요청이 잠시 몰렸어요', detail: '1분쯤 뒤에 다시 찍어 주세요.', preferManual: false, devCode }
     case 'network':
       return { title: '인터넷 연결을 확인해 주세요', detail: '연결된 뒤 다시 찍어 주세요.', preferManual: false, devCode }
     case 'timeout':

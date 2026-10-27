@@ -112,3 +112,24 @@
 - 홈 목표 영역의 고지 문구는 다음 조각(먹은 양/목표 막대)과 함께 넣는다.
 - `subscribeGoal`이 첫 값을 주지 않으면 S6은 "불러오는 중…"에 머문다(자리표시 상태일 때). 구현 뒤 브라우저 확인 필요.
 - 나가기 확인은 넣지 않았다(지시대로).
+
+## 2026-10-27 결과 화면 수정
+사용자가 결과 화면에서 찾은 문제 3개 중 화면 쪽. `ReviewPage`·`CaptureAfterPage`·`CaptureBeforePage`·`FoodCard`·`ReviewEditor`·`captureText.ts`·`data/meals.ts`. `tsc -b`·`npm run build` 통과, AI 호출 0회, 개발 서버 시험 안 함.
+
+### 바꾼 것
+- **영어 경고:** "확인해 주세요" 목록은 `koreanWarnings(analysis.warnings)`로 거른다(예전에 저장·캐시된 분석 포함). 화면에 보이는 Gemini 글은 이것뿐이다(`location`은 어느 화면에도 보이지 않음). 저장되는 `warnings`는 바꾸지 않는다.
+- **불확실한 남긴 비율(null):** 카드 안내를 "사진이 먹기 전과 달라 보여요. 다시 찍거나 남긴 양을 직접 골라 주세요"(먹은 후 분석이 있었음) / "남긴 양을 직접 골라 주세요"(`WARN_NO_AFTER` 또는 수정 모드)로. `ReviewEditor`가 `mode`와 `warnings`로 정해 `FoodCard`에 `ratioHint`로 넘긴다. 빠른 선택 [다 먹음 0%]·[반 남김 50%]·[그대로 100%] + 슬라이더. 비율 표시는 "아직 안 고름", 합계 상자에 "남긴 양을 고르면 합계가 바뀌어요(n개 남음)".
+- **저장 막기:** `ReviewPage.canSave`는 null 항목이 있으면 false, 바닥에 "남긴 양을 고르지 않은 음식이 n개 있어요…". `saveMeal`도 같은 조건이면 `MEAL_SAVE_REJECTED`. `saveReview`는 null 허용 그대로.
+- **다시 찍기:** `CaptureAfterPage.runAfter`는 분석 → 조립 뒤 null 항목이 있으면 먹기 전 사진을 지우지 않고 `saveReview`도 하지 않는다(문서 awaiting_after 그대로). S4에 state `retake: true`. S4는 `retake` + null 항목 + 결과 확인 모드면 [먹은 후 사진 다시 찍기](바뀐 값 있으면 "저장하지 않고 나갈까요?" 뒤 `/meal/:id/after`로 replace). 이 상태에서 저장하면 awaiting_after → done, 저장 뒤 `beforePhotoStore.remove`.
+- **분당 한도:** `describeAnalysisError`가 `quota`+`minute`이면 "잠시 후 다시 시도해 주세요" + `retry: true`. S2·S3은 이때 [다시 시도](같은 압축본을 화면 메모리에서 다시 보냄, 누를 때만)·[다시 찍기]·[직접 입력|남긴 양 직접 고르기]. 일일 한도 문구는 그대로.
+
+### 스펙과 다르게 정한 점
+1. 먹기 전 사진 삭제를 "먹은 후 분석 성공 직후"에서 "분석과 영양값 조립이 끝나고 null 항목이 없을 때"로 옮겼다. 조립이 실패·중단되면 사진이 남아 다시 시도할 수 있다.
+2. `quotaScope`가 없는 429는 예전 문구("분석 요청이 잠시 몰렸어요")와 [다시 찍기] 그대로 둔다.
+3. 빠른 선택 [반 남김]을 더했다(지시는 [다 먹음]·[그대로]).
+
+### 확인한 것·남은 이슈
+- 새로고침: react-router가 `location.state`를 history에 두므로 새로고침해도 `readEntryState`·`retake`가 그대로 읽힌다(awaiting 안내로 빠지지 않는다). state 없이 주소로 열면(새 탭 등) 문서가 awaiting_after라 "먹은 후 사진을 아직 안 찍었어요 → 남은 음식 찍기"가 나오고, 먹은 후 분석 결과는 저장되지 않았으니 다시 찍게 된다(의도한 회복 경로).
+- 예전 needs_review 문서에 null 항목이 있으면 "다시 찍거나…" 안내가 나오지만 [다시 찍기]는 없다(먹기 전 사진이 이미 지워졌고 needs_review → awaiting_after는 규칙에 없음). 고르면 저장된다.
+- 같은 먹은 후 사진을 다시 고르면 분석 결과 캐시가 같은 null 결과를 돌려줄 수 있다(분석 모듈 쪽 판단).
+- 브라우저 확인 필요: 빠른 선택 3개 버튼 폭(작은 폰), 다시 찍기 → S3 → 다시 S4 흐름, 분당 한도 [다시 시도].

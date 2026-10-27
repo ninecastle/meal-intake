@@ -24,6 +24,8 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const busyRef = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
+  // 분당 한도 뒤 [다시 시도]용 압축본. 이 화면 메모리에만 둔다(누를 때만 다시 호출, 자동 재시도 없음).
+  const lastPhoto = useRef<Blob | null>(null)
   const [busy, setBusy] = useState(false)
   const [showNotice, setShowNotice] = useState(false)
   const [error, setError] = useState<ErrorView | null>(null)
@@ -56,6 +58,19 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
   }
 
   async function onPick(file: File) {
+    await run(() => compressPhoto(file))
+  }
+
+  async function retryLast() {
+    const photo = lastPhoto.current
+    if (!photo) {
+      startCapture()
+      return
+    }
+    await run(async () => photo)
+  }
+
+  async function run(getPhoto: () => Promise<Blob>) {
     if (busyRef.current) return
     busyRef.current = true
     setBusy(true)
@@ -68,7 +83,8 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
     abortRef.current = ac
     let id: string | null = null
     try {
-      const photo = await compressPhoto(file)
+      const photo = await getPhoto()
+      lastPhoto.current = photo
       id = newMealId(uid)
       await beforePhotoStore.put(id, photo)
       const beforeAnalysis = await analyzeBefore(photo, { signal: ac.signal })
@@ -77,6 +93,7 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
         console.warn('[S2] awaiting_after 저장 실패', e),
       )
       abortRef.current = null
+      lastPhoto.current = null
       const state: AfterPageState = { beforeAnalysis, dateKey, mealType }
       navigate(`/meal/${id}/after`, { replace: true, state })
     } catch (e) {
@@ -116,7 +133,33 @@ export default function CaptureBeforePage({ uid }: { uid: string }) {
       <p className="mt-4 text-xs leading-relaxed text-gray-500">{PHOTO_NOTICE}</p>
 
       <div className="sticky bottom-0 -mx-4 bg-white/95 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
-        {error?.preferManual ? (
+        {error?.retry ? (
+          <>
+            <button
+              type="button"
+              onClick={() => void retryLast()}
+              disabled={busy}
+              className={`${primary} bg-emerald-600 text-white disabled:opacity-50`}
+            >
+              다시 시도
+            </button>
+            <button
+              type="button"
+              onClick={startCapture}
+              disabled={busy}
+              className="mt-1 flex min-h-11 w-full items-center justify-center text-sm text-gray-600 underline disabled:opacity-50"
+            >
+              다시 찍기
+            </button>
+            <button
+              type="button"
+              onClick={goManual}
+              className="flex min-h-11 w-full items-center justify-center text-sm text-gray-600 underline"
+            >
+              직접 입력
+            </button>
+          </>
+        ) : error?.preferManual ? (
           <>
             <button type="button" onClick={goManual} className={`${primary} bg-emerald-600 text-white`}>
               직접 입력
