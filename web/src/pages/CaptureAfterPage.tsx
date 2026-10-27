@@ -4,6 +4,8 @@
 // (문서는 awaiting_after 그대로). S4에 retake: true를 넘겨 [먹은 후 사진 다시 찍기]를 보이게 한다.
 // 사진을 얻는 방법은 useCaptureSource(M19): 폰·태블릿은 [남은 음식 찍기] → 앱 안 카메라 화면, PC는 파일 고르기.
 // 먹는 동안 카메라가 켜져 있지 않게 S3는 카메라를 바로 열지 않는다.
+// 기록: 카메라 화면은 같은 주소 칸을 하나 더 쌓아 연다(이 화면의 state에 카메라 키만 더함). 닫기 X·셔터·기기 뒤로 가기는
+// 그 칸을 빼서 이 화면(먹기 전 결과 그대로)으로 돌아오고, 분석 뒤 S3 → S4는 replace라 S4에서 뒤로 가면 홈이다.
 import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { analyzeAfter, assembleAnalysis } from '../analysis/analyze'

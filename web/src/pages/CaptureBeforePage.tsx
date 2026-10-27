@@ -3,7 +3,8 @@
 // 사진을 얻는 방법은 useCaptureSource(M19). 처음은 선택 화면(조각 2-1, 2026-10-27 사용자 결정): 폰·태블릿 [카메라로 찍기]
 // (앱 안 카메라 화면, 이때만 연다)·[앨범에서 고르기]·[직접 입력], PC [사진 파일 고르기]·웹캠이 있으면 [카메라로 찍기]·[직접 입력].
 // 날짜: ?date=YYYY-MM-DD(홈에서 보던 날짜)는 선택 화면의 [직접 입력]에만 쓴다. 사진 기록은 그대로 먹기 전 촬영 시각 날짜.
-// 기록: 홈 → S2는 push 한 번, 카메라 화면은 상태로만 열고 닫는다(닫기 X → 이 화면), S2 → S3·S4는 replace.
+// 기록: 홈 → S2는 push 한 번. 카메라 화면은 같은 주소 칸을 하나 더 쌓아 열고(location.state 카메라 키, ?date= 유지),
+// 닫기 X·셔터·기기 뒤로 가기는 그 칸을 빼서 이 선택 화면으로 돌아온다(useCaptureSource). S2 → S3·S4는 replace.
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { analyzeBefore } from '../analysis/analyze'

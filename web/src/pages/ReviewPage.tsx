@@ -345,26 +345,23 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
         <>
           <main className="flex-1 space-y-4 overflow-y-auto px-4 py-3">
             <section aria-label="날짜와 끼니" className="space-y-2">
-              {isEdit ? (
-                // 날짜 바꾸기는 수정 모드만. 오늘과 지난 날짜만(max=오늘, 직접 타이핑한 미래 날짜도 받지 않는다)
-                <label className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-gray-600">{dateLabel(draft.dateKey)}</span>
-                  <input
-                    type="date"
-                    required
-                    value={draft.dateKey}
-                    max={today}
-                    disabled={saving}
-                    onChange={(e) => {
-                      const v = parseDateKey(e.target.value)
-                      if (v && v <= today) setDraft((d) => (d ? { ...d, dateKey: v } : d))
-                    }}
-                    className="min-h-11 rounded-lg border border-gray-300 bg-white px-3 text-base"
-                  />
-                </label>
-              ) : (
-                <p className="text-sm font-medium text-gray-600">{dateLabel(phase.initial.dateKey)}</p>
-              )}
+              {/* 날짜는 새 기록(사진 결과·직접 입력)과 수정 모두 바꿀 수 있다(앨범 사진의 찍은 시각으로 미리 채워진 날짜도 고치게).
+                  오늘과 지난 날짜만(max=오늘, 직접 타이핑한 미래 날짜도 받지 않는다) */}
+              <label className="flex items-center justify-between gap-2">
+                <span className="text-sm font-medium text-gray-600">{dateLabel(draft.dateKey)}</span>
+                <input
+                  type="date"
+                  required
+                  value={draft.dateKey}
+                  max={today}
+                  disabled={saving}
+                  onChange={(e) => {
+                    const v = parseDateKey(e.target.value)
+                    if (v && v <= today) setDraft((d) => (d ? { ...d, dateKey: v } : d))
+                  }}
+                  className="min-h-11 rounded-lg border border-gray-300 bg-white px-3 text-base"
+                />
+              </label>
               <div className="grid grid-cols-4 gap-2">
                 {MEAL_TYPES.map((m) => {
                   const on = draft.mealType === m.value
