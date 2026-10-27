@@ -2,7 +2,7 @@
 // 데이터 라우터(createBrowserRouter)를 쓴다: 결과 화면의 useBlocker(브라우저 뒤로 가기 때 "저장하지 않고 나갈까요?")가
 // 데이터 라우터에서만 동작한다. 라우터는 한 번만 만들고, 로그인 상태는 컨텍스트로 넘겨 경로 가드에서 본다.
 import type { User } from 'firebase/auth'
-import { createContext, lazy, Suspense, useContext } from 'react'
+import { createContext, lazy, Suspense, useContext, type ReactNode } from 'react'
 import { createBrowserRouter, Navigate, Outlet, useLocation, type RouteObject } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import RouteErrorScreen from './components/RouteErrorScreen'
@@ -31,15 +31,24 @@ function useUser(): User {
   return user
 }
 
+/** 앱 틀(디자인 조각 D2-H1, 시안 .app): 모든 화면을 가운데 430px 흰(surface) 기둥에 넣는다. 바깥은 body의 ground, 기둥 테두리는 line 1px 그림자. */
+function Frame({ children }: { children: ReactNode }) {
+  return (
+    <div className="relative mx-auto min-h-dvh max-w-[430px] bg-surface shadow-[0_0_0_1px_var(--color-line)]">{children}</div>
+  )
+}
+
 function Loading() {
-  return <main className="flex min-h-dvh items-center justify-center p-4 text-sm text-gray-500">불러오는 중…</main>
+  return <main className="flex min-h-dvh items-center justify-center p-4 text-sm text-ink-2">불러오는 중…</main>
 }
 
 function Root() {
   return (
-    <Suspense fallback={<Loading />}>
-      <Outlet />
-    </Suspense>
+    <Frame>
+      <Suspense fallback={<Loading />}>
+        <Outlet />
+      </Suspense>
+    </Frame>
   )
 }
 
@@ -86,7 +95,11 @@ const router = createBrowserRouter([
   {
     element: <Root />,
     // 화면 파일 불러오기 실패·화면 예외: 영어 기본 오류 화면 대신 한국어 안내(배포본은 청크 실패 때 한 번 자동 새로고침)
-    errorElement: <RouteErrorScreen />,
+    errorElement: (
+      <Frame>
+        <RouteErrorScreen />
+      </Frame>
+    ),
     children: [
       { path: '/login', element: <LoginRoute /> },
       ...(UiGalleryPage ? [{ path: '/dev/ui', element: <UiGalleryPage /> }] : []),
@@ -97,7 +110,12 @@ const router = createBrowserRouter([
 
 export default function App() {
   const { user, loading } = useAuthUser()
-  if (loading) return <Loading />
+  if (loading)
+    return (
+      <Frame>
+        <Loading />
+      </Frame>
+    )
   return (
     <UserContext.Provider value={user}>
       <RouterProvider router={router} />

@@ -47,9 +47,12 @@
   body {
     font-family: var(--font-jua);
   }
+  /* 시안 body: 15px, 줄 간격 1.5. 바탕 ground는 앱 틀(App.tsx Frame, 가운데 430px 흰 기둥) 바깥으로 보인다 */
   body {
     background-color: var(--color-ground);
     color: var(--color-ink);
+    font-size: 15px;
+    line-height: 1.5;
     -webkit-font-smoothing: antialiased;
   }
   /* Jua는 굵기 400 하나뿐이라 굵게(font-bold 등)를 주면 브라우저가 가짜 굵게를 만든다. 시안처럼 모든 글자를 400으로 고정한다. */

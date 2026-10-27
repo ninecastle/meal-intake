@@ -1,0 +1,39 @@
+// 홈 복숭아 띠 "나의 변화"(디자인 조각 D2-H1, 시안 home() .band.peach). 체중 기록은 D6이라 지금은 자리만 둔다:
+// "오늘 내 체중은?"·"–"·저울 그림(장식, 시안 SVG 값 그대로)·[기록하기](부르는 화면이 "준비 중이에요" 토스트, onSoon).
+import { Band, Button } from '../ui'
+
+export default function ChangeBand({ onSoon }: { onSoon: () => void }) {
+  return (
+    <Band tone="peach" title="나의 변화">
+      <div className="text-center">
+        <p className="text-ink-2">오늘 내 체중은?</p>
+        <p className="num text-[56px] leading-[1.1]">
+          <span aria-hidden="true">–</span>
+          <span className="sr-only">기록 없음</span>
+          <span aria-hidden="true" className="text-[22px] text-ink-2">
+            {' '}
+            kg
+          </span>
+        </p>
+        <svg className="mx-auto mt-[18px] block h-auto w-[220px] max-w-full" viewBox="0 0 220 210" aria-hidden="true">
+          <ellipse cx="110" cy="200" rx="88" ry="8" fill="rgba(201,105,44,.18)" />
+          <rect x="14" y="22" width="192" height="178" rx="42" fill="#E9865A" />
+          <rect x="14" y="14" width="192" height="170" rx="42" fill="#F29A6B" />
+          <path d="M40 30h60" stroke="#F7B48D" strokeWidth="8" strokeLinecap="round" />
+          <path d="M58 82a52 52 0 0 1 104 0z" fill="#FFFFFF" />
+          <path d="M58 82a52 52 0 0 1 104 0" fill="none" stroke="#FCE3D2" strokeWidth="4" />
+          <g stroke="#E9B796" strokeWidth="2.5" strokeLinecap="round">
+            <path d="M70 76l4 2M78 58l4 4M94 44l3 5M110 40v6M126 44l-3 5M142 58l-4 4M150 76l-4 2" />
+          </g>
+          <path d="M110 46l7 24h-14z" fill="#E2552B" />
+          <circle cx="110" cy="76" r="5" fill="#E2552B" />
+          <rect x="44" y="112" width="52" height="52" rx="20" fill="#F5AE85" />
+          <rect x="124" y="112" width="52" height="52" rx="20" fill="#F5AE85" />
+        </svg>
+        <Button full className="mt-[18px]" onClick={onSoon}>
+          기록하기
+        </Button>
+      </div>
+    </Band>
+  )
+}
