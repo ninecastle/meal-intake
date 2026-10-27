@@ -79,3 +79,24 @@ export function axisTicks(values: readonly number[], fallbackMax: number): numbe
   const step = niceCeil((max * 1.1) / 4) || 1
   return [0, step, step * 2, step * 3, step * 4]
 }
+
+/**
+ * 주간 그래프 목표선(2026-10-27 사용자 결정): 날짜별 목표를 주 전체 폭(월~일)에 계단 모양으로 잇는다.
+ * 목표를 정하기 전 날(앞쪽 null)은 그 주에 처음 적용된 목표로 채운다. 그 주에 목표가 하나도 없으면 null(목표선 없음).
+ * 목표를 한 번 정한 뒤의 날은 goalForDate가 항상 값을 주므로 가운데·뒤쪽 null은 생기지 않지만, 생기면 바로 앞 값을 잇는다.
+ */
+export function weekGoalSteps(goals: readonly (number | null)[]): number[] | null {
+  const first = goals.find((g): g is number => g !== null && Number.isFinite(g))
+  if (first === undefined) return null
+  let prev = first
+  return goals.map((g) => {
+    if (g !== null && Number.isFinite(g)) prev = g
+    return prev
+  })
+}
+
+/** 주간 평균(평균선·상세 비교): 그 주에 기록이 있는 날(값이 null이 아닌 날)만으로 낸다. 기록이 없으면 null. */
+export function weekAverage(values: readonly (number | null)[]): number | null {
+  const v = values.filter((x): x is number => x !== null && Number.isFinite(x))
+  return v.length > 0 ? v.reduce((a, b) => a + b, 0) / v.length : null
+}

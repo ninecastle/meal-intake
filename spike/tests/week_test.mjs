@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 import assert from 'node:assert/strict'
 
 const ROOT = process.argv[2] ?? process.cwd()
-const { mondayOf, weekDays, shiftWeek, defaultWeek, monthForWeek, parseWeek, isCurrentOrLaterWeek, niceCeil, axisTicks } =
+const { mondayOf, weekDays, shiftWeek, defaultWeek, monthForWeek, parseWeek, isCurrentOrLaterWeek, niceCeil, axisTicks, weekGoalSteps, weekAverage } =
   await import(pathToFileURL(path.join(ROOT, 'web/src/lib/week.ts')).href)
 
 const today = '2026-10-27' // 화요일
@@ -55,5 +55,16 @@ for (const vals of [[1], [99], [123456], [57, 56], [0.5]]) {
   const t = axisTicks(vals, 100)
   assert.ok(t[4] >= Math.max(...vals) * 1.1 - 1e-9, `${vals} 머리 공간`)
 }
+
+// 목표선 계단: 앞쪽(목표 정하기 전)은 그 주 첫 목표로, 주 중간에 바뀌면 그 날부터
+assert.deepEqual(weekGoalSteps([null, null, 2060, 2060, 2200, 2200, 2200]), [2060, 2060, 2060, 2060, 2200, 2200, 2200])
+assert.deepEqual(weekGoalSteps([2000, 2000, 2000, 2000, 2000, 2000, 2000]), [2000, 2000, 2000, 2000, 2000, 2000, 2000])
+assert.equal(weekGoalSteps([null, null, null, null, null, null, null]), null)
+assert.deepEqual(weekGoalSteps([1800, null, 2000, null, null, null, null]), [1800, 1800, 2000, 2000, 2000, 2000, 2000])
+// 평균: 기록 있는 날만
+assert.equal(weekAverage([1800, 2050, null, 2500, 1500, 2300, 900]), (1800 + 2050 + 2500 + 1500 + 2300 + 900) / 6)
+assert.equal(weekAverage([null, 511, null, null, null, null, null]), 511)
+assert.equal(weekAverage([null, null, null, null, null, null, null]), null)
+assert.equal(weekAverage([0, null]), 0)
 
 console.log('모두 통과')
