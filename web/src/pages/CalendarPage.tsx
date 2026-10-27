@@ -25,6 +25,7 @@ import { gridRange, METRICS, parseMonth, shiftMonth, type Metric } from '../lib/
 import { isCurrentOrLaterWeek, monthForWeek, parseWeek, shiftWeek } from '../lib/week'
 import { toDateKey } from '../lib/time'
 import type { Nutrients } from '../types/analysis'
+import { IconButton, TopBar } from '../components/ui'
 
 /** 마지막으로 고른 항목. 못 읽거나 모르는 값이면 칼로리 */
 const METRIC_KEY = 'record-view-metric'
@@ -154,18 +155,8 @@ export default function CalendarPage({ uid }: { uid: string }) {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col px-4 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
-      <header className="flex items-center">
-        <button
-          type="button"
-          onClick={goHome}
-          aria-label="홈으로"
-          className="-ml-2 flex min-h-11 min-w-11 items-center justify-center rounded-lg text-2xl text-gray-700"
-        >
-          ‹
-        </button>
-        <h1 className="text-lg font-bold">기록 보기</h1>
-      </header>
+    <main className="mx-auto flex min-h-dvh max-w-[430px] flex-col px-4 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <TopBar className="-mx-4" left={<IconButton icon="back" label="홈으로" onClick={goHome} />} title="기록 보기" />
 
       {/* 달력 카드(2026-10-27 사용자 요청): 월 이동·월 요약 줄 + 요일·날짜 격자 + 범례·항목 선택 줄을 둥근 테두리 하나로 감싼다.
           안쪽 여백은 좌우 6px(px-1.5)만: 360px 폰에서 카드 안쪽 328 − 테두리 2 − 여백 12 = 314px → 날짜 칸 (314 − 14 − 18) ÷ 7 ≈ 40.3px.

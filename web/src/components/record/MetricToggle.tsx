@@ -12,7 +12,7 @@ export const METRIC_NAME: Record<Metric, string> = {
 
 export default function MetricToggle({ value, onChange }: { value: Metric; onChange: (m: Metric) => void }) {
   return (
-    <div role="group" aria-label="항목 선택" className="ml-auto flex shrink-0 rounded-lg border border-gray-200 p-0.5">
+    <div role="group" aria-label="항목 선택" className="ml-auto flex shrink-0 rounded-full bg-ground p-[3px]">
       {METRICS.map((m) => {
         const on = m === value
         return (
@@ -22,8 +22,8 @@ export default function MetricToggle({ value, onChange }: { value: Metric; onCha
             aria-pressed={on}
             aria-label={METRIC_NAME[m]}
             onClick={() => onChange(m)}
-            className={`flex min-h-11 min-w-11 items-center justify-center rounded-md px-1.5 text-sm whitespace-nowrap ${
-              on ? 'bg-emerald-600 font-semibold text-white' : 'text-gray-700'
+            className={`focus-ring flex min-h-11 min-w-11 items-center justify-center rounded-full px-1.5 text-sm whitespace-nowrap ${
+              on ? 'bg-surface text-ink shadow-[0_1px_3px_rgba(31,42,46,.12)]' : 'text-ink-2'
             }`}
           >
             {METRIC_LABEL[m]}

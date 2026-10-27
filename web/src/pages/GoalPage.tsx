@@ -23,6 +23,7 @@ import {
 import { formatKcal } from '../components/mealText'
 import { GoalStoreError, saveGoal, subscribeGoal, type GoalStoreErrorCode, type StoredGoal } from '../data/goals'
 import { setFlash } from '../lib/flash'
+import { Button, IconButton, TopBar } from '../components/ui'
 
 /** 오프라인이면 쓰기 Promise가 서버 확인까지 끝나지 않는다(ReviewPage와 같은 값). */
 const SLOW_MS = 10_000
@@ -124,11 +125,11 @@ function toOverride(ovr: OverrideText): GoalOverride | null {
 }
 
 const seg = (on: boolean) =>
-  `min-h-11 flex-1 rounded-lg border px-3 text-sm font-medium disabled:opacity-40 ${
-    on ? 'border-emerald-600 bg-emerald-50 text-emerald-800' : 'border-gray-300 bg-white text-gray-700'
+  `focus-ring min-h-11 flex-1 rounded-tile border px-3 text-sm disabled:opacity-40 ${
+    on ? 'border-lime-deep bg-lime-soft text-ink' : 'border-line bg-surface text-ink'
   }`
 const numInput = (bad: boolean) =>
-  `min-h-11 w-24 rounded-lg border px-3 text-right text-base ${bad ? 'border-red-400' : 'border-gray-300'}`
+  `focus-ring min-h-11 w-24 rounded-tile border bg-surface px-3 text-right text-base ${bad ? 'border-red-400' : 'border-line'}`
 
 export default function GoalPage({ uid }: { uid: string }) {
   const navigate = useNavigate()
@@ -243,28 +244,27 @@ export default function GoalPage({ uid }: { uid: string }) {
   ]
 
   return (
-    <div className="mx-auto flex h-dvh max-w-md flex-col bg-white text-gray-900">
-      <header className="flex shrink-0 items-center gap-1 border-b border-gray-200 px-2">
-        <button type="button" onClick={() => leave()} aria-label="홈으로" className="min-h-11 min-w-11 px-2 text-lg">
-          ‹
-        </button>
-        <h1 className="text-base font-semibold">목표 설정</h1>
-      </header>
+    <div className="mx-auto flex h-dvh max-w-[430px] flex-col bg-surface text-ink">
+      <TopBar
+        className="shrink-0 border-b border-line"
+        left={<IconButton icon="back" label="홈으로" onClick={() => leave()} />}
+        title="목표 설정"
+      />
 
       {form === null ? (
-        <main className="flex flex-1 items-center justify-center text-gray-500">불러오는 중…</main>
+        <main className="flex flex-1 items-center justify-center text-ink-2">불러오는 중…</main>
       ) : (
         <>
           <main className="flex-1 space-y-5 overflow-y-auto px-4 py-3">
             {loadError && (
-              <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              <p className="rounded-tile bg-butter-soft px-3 py-2 text-sm text-ink">
                 저장된 목표를 불러오지 못했어요. 새로 넣어도 돼요.
               </p>
             )}
             <fieldset disabled={saving} className="min-w-0 space-y-5">
               <section aria-label="내 정보" className="space-y-3">
                 <div>
-                  <p className="mb-1 text-sm font-medium text-gray-700">성별</p>
+                  <p className="mb-1 text-sm font-medium text-ink">성별</p>
                   <div className="flex gap-2">
                     {SEXES.map((s) => (
                       <button
@@ -283,7 +283,7 @@ export default function GoalPage({ uid }: { uid: string }) {
                 {numFields.map(({ key, label, unit, mode, err }) => (
                   <div key={key}>
                     <label className="flex items-center justify-between gap-3">
-                      <span className="text-sm font-medium text-gray-700">{label}</span>
+                      <span className="text-sm font-medium text-ink">{label}</span>
                       <span className="flex items-center gap-2">
                         <input
                           type="text"
@@ -295,7 +295,7 @@ export default function GoalPage({ uid }: { uid: string }) {
                           aria-describedby={err ? `goal-${key}-err` : undefined}
                           className={numInput(!!err)}
                         />
-                        <span className="w-8 text-sm text-gray-600">{unit}</span>
+                        <span className="w-8 text-sm text-ink-2">{unit}</span>
                       </span>
                     </label>
                     {err && (
@@ -307,7 +307,7 @@ export default function GoalPage({ uid }: { uid: string }) {
                 ))}
 
                 <div>
-                  <p className="mb-1 text-sm font-medium text-gray-700">활동량</p>
+                  <p className="mb-1 text-sm font-medium text-ink">활동량</p>
                   <div className="flex flex-col gap-2">
                     {ACTIVITIES.map((a) => (
                       <button
@@ -324,7 +324,7 @@ export default function GoalPage({ uid }: { uid: string }) {
                 </div>
 
                 <div>
-                  <p className="mb-1 text-sm font-medium text-gray-700">목표</p>
+                  <p className="mb-1 text-sm font-medium text-ink">목표</p>
                   <div className="flex gap-2">
                     {GOALS.map((g) => {
                       const on = (minor ? 'maintain' : f.goal) === g.value
@@ -342,27 +342,27 @@ export default function GoalPage({ uid }: { uid: string }) {
                       )
                     })}
                   </div>
-                  {minor && <p className="mt-2 rounded-lg bg-sky-50 px-3 py-2 text-sm text-sky-900">{MINOR_MSG}</p>}
+                  {minor && <p className="mt-2 rounded-tile bg-sky-soft px-3 py-2 text-sm text-ink">{MINOR_MSG}</p>}
                 </div>
               </section>
 
-              <section aria-label="추천 목표" aria-live="polite" className="rounded-xl border border-gray-200 p-4">
+              <section aria-label="추천 목표" aria-live="polite" className="rounded-tile border border-line p-4">
                 {!result || !applied ? (
-                  <p className="text-sm text-gray-600">성별·나이·키·몸무게를 넣으면 바로 계산해 드려요.</p>
+                  <p className="text-sm text-ink-2">성별·나이·키·몸무게를 넣으면 바로 계산해 드려요.</p>
                 ) : (
                   <>
                     <dl className="grid grid-cols-2 gap-2 text-center text-sm">
-                      <div className="rounded-lg bg-gray-50 py-2">
-                        <dt className="text-xs text-gray-500">기초대사량</dt>
+                      <div className="rounded-tile bg-ground py-2">
+                        <dt className="text-xs text-ink-2">기초대사량</dt>
                         <dd className="font-semibold">{formatKcal(result.bmr)}kcal</dd>
                       </div>
-                      <div className="rounded-lg bg-gray-50 py-2">
-                        <dt className="text-xs text-gray-500">하루 소모량</dt>
+                      <div className="rounded-tile bg-ground py-2">
+                        <dt className="text-xs text-ink-2">하루 소모량</dt>
                         <dd className="font-semibold">{formatKcal(result.tdee)}kcal</dd>
                       </div>
                     </dl>
                     {result.clamped && (
-                      <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">{CLAMPED_MSG}</p>
+                      <p className="mt-3 rounded-tile bg-butter-soft px-3 py-2 text-sm text-ink">{CLAMPED_MSG}</p>
                     )}
 
                     <div className="mt-3 flex items-center justify-between">
@@ -371,7 +371,7 @@ export default function GoalPage({ uid }: { uid: string }) {
                         <button
                           type="button"
                           onClick={() => setOvr({})}
-                          className="min-h-11 rounded-lg px-2 text-sm font-medium text-emerald-700 underline"
+                          className="focus-ring min-h-11 rounded-tile px-2 text-sm text-sky-deep underline"
                         >
                           추천값으로
                         </button>
@@ -385,20 +385,20 @@ export default function GoalPage({ uid }: { uid: string }) {
                           <li key={k}>
                             <label className="flex items-center justify-between gap-3">
                               <span className="min-w-0 text-sm">
-                                <span className="font-medium text-gray-700">{label}</span>
+                                <span className="font-medium text-ink">{label}</span>
                                 {custom && (
-                                  <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-xs text-amber-800">
+                                  <span className="ml-1 rounded-chip bg-butter-soft px-1.5 py-0.5 text-xs text-ink">
                                     직접 조정
                                   </span>
                                 )}
                                 {custom && (
-                                  <span className="block text-xs text-gray-500">
+                                  <span className="block text-xs text-ink-2">
                                     추천 {formatKcal(rec)}
                                     {unit}
                                   </span>
                                 )}
                                 {k === 'target_kcal' && (
-                                  <span className="block text-xs text-gray-500">
+                                  <span className="block text-xs text-ink-2">
                                     최소 {formatKcal(targetKcalFloor(result))}kcal({result.minor ? '하루 소모량' : '기초대사량'})
                                   </span>
                                 )}
@@ -412,7 +412,7 @@ export default function GoalPage({ uid }: { uid: string }) {
                                   onChange={(e) => updateOverride(k, e.target.value)}
                                   className={numInput(false)}
                                 />
-                                <span className="w-8 text-sm text-gray-600">{unit}</span>
+                                <span className="w-8 text-sm text-ink-2">{unit}</span>
                               </span>
                             </label>
                           </li>
@@ -430,24 +430,24 @@ export default function GoalPage({ uid }: { uid: string }) {
                       ovr.carbs_g === undefined &&
                       ovr.protein_g === undefined &&
                       ovr.fat_g === undefined && (
-                      <p className="mt-2 text-xs text-gray-500">탄·단·지는 목표 칼로리를 {macroRatioText(result?.goal_applied ?? 'maintain')}로 나눠요.</p>
+                      <p className="mt-2 text-xs text-ink-2">탄·단·지는 목표 칼로리를 {macroRatioText(result?.goal_applied ?? 'maintain')}로 나눠요.</p>
                     )}
                   </>
                 )}
               </section>
             </fieldset>
 
-            <p className="text-xs leading-relaxed text-gray-500">{DISCLAIMER}</p>
+            <p className="text-xs leading-relaxed text-ink-2">{DISCLAIMER}</p>
           </main>
 
-          <footer className="shrink-0 space-y-2 border-t border-gray-200 bg-white px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <footer className="shrink-0 space-y-2 border-t border-line bg-surface px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
             {slow && (
-              <div className="flex items-center justify-between gap-2 rounded-lg bg-sky-50 p-2 text-sm text-sky-900">
+              <div className="flex items-center justify-between gap-2 rounded-tile bg-sky-soft p-2 text-sm text-ink">
                 <span>연결이 느려요. 연결되면 자동으로 저장돼요.</span>
                 <button
                   type="button"
                   onClick={() => leave('goal:pending')}
-                  className="min-h-11 shrink-0 px-2 font-semibold"
+                  className="focus-ring min-h-11 shrink-0 rounded-full px-2"
                 >
                   홈으로
                 </button>
@@ -459,14 +459,9 @@ export default function GoalPage({ uid }: { uid: string }) {
                 {saveError.code === 'GOAL_INVALID' && <p className="text-xs text-red-500">{saveError.detail}</p>}
               </div>
             )}
-            <button
-              type="button"
-              onClick={() => void onSave()}
-              disabled={!canSave}
-              className="min-h-12 w-full rounded-xl bg-emerald-600 text-base font-semibold text-white disabled:bg-gray-300 disabled:text-gray-500"
-            >
+            <Button full onClick={() => void onSave()} disabled={!canSave}>
               {saving ? '저장 중…' : saveError ? '다시 시도' : '저장'}
-            </button>
+            </Button>
           </footer>
         </>
       )}

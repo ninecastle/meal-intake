@@ -75,7 +75,7 @@ const MACRO_CELLS = [
   { k: 'fat_g', label: '지방' },
 ] as const
 
-const navBtn = 'flex min-h-11 min-w-20 items-center rounded-lg px-3 text-sm'
+const navBtn = 'focus-ring flex min-h-11 min-w-20 items-center rounded-full px-3 text-sm'
 
 // 스펙 4.7절 고지(GoalPage와 같은 문구)
 const GOAL_DISCLAIMER =
@@ -212,7 +212,7 @@ export default function HomePage({ user }: { user: User }) {
       <Link
         to="/goal"
         state={{ fromHome: true }}
-        className="mt-1 flex min-h-11 items-center justify-end px-1 text-sm text-amber-800"
+        className="focus-ring mt-1 flex min-h-11 items-center justify-end rounded-tile bg-butter-soft px-3 text-sm text-ink"
       >
         목표를 불러오지 못했어요 ·<span className="ml-1 font-medium underline">목표 설정</span>
       </Link>
@@ -221,7 +221,7 @@ export default function HomePage({ user }: { user: User }) {
     if (!summary) return null
     if (dayTargets) {
       return (
-        <section aria-label="목표 대비" className="mt-3 rounded-xl border border-gray-200 bg-white p-4">
+        <section aria-label="목표 대비" className="mt-3 rounded-card border border-line bg-surface p-4">
           <div className="flex items-center justify-between gap-2">
             <h2 className="font-semibold">
               {isToday ? '하루 목표' : '이 날 목표'} {formatKcal(dayTargets.target_kcal)}kcal
@@ -229,13 +229,13 @@ export default function HomePage({ user }: { user: User }) {
             <Link
               to="/goal"
               state={{ fromHome: true }}
-              className="-mr-2 flex min-h-11 shrink-0 items-center px-2 text-sm font-medium text-emerald-700"
+              className="focus-ring -mr-2 flex min-h-11 shrink-0 items-center rounded-full px-2 text-sm text-sky-deep"
             >
               목표 수정
             </Link>
           </div>
           <GoalBars consumed={summary.totals} targets={dayTargets} />
-          <p className="mt-3 text-xs text-gray-500">{GOAL_DISCLAIMER}</p>
+          <p className="mt-3 text-xs text-ink-2">{GOAL_DISCLAIMER}</p>
         </section>
       )
     }
@@ -243,15 +243,15 @@ export default function HomePage({ user }: { user: User }) {
     if (goal === undefined) return goalError ? loadError : null
     if (goal === null) {
       return (
-        <Link to="/goal" state={{ fromHome: true }} className="mt-3 block rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-          <p className="font-semibold text-emerald-900">목표 설정하기 ›</p>
-          <p className="mt-1 text-sm text-emerald-800">
+        <Link to="/goal" state={{ fromHome: true }} className="focus-ring mt-3 block rounded-card bg-lime-soft p-4">
+          <p className="font-semibold text-ink">목표 설정하기 ›</p>
+          <p className="mt-1 text-sm text-ink-2">
             키·몸무게·활동량을 넣으면 하루 목표 칼로리와 탄·단·지를 추천해 드려요.
           </p>
         </Link>
       )
     }
-    return <p className="mt-2 px-1 text-xs text-gray-500">이 날은 목표를 정하기 전이라 합계만 보여요</p>
+    return <p className="mt-2 px-1 text-xs text-ink-2">이 날은 목표를 정하기 전이라 합계만 보여요</p>
   }
 
   useEffect(() => {
@@ -281,7 +281,7 @@ export default function HomePage({ user }: { user: User }) {
       to={calendarHref}
       state={{ fromHome: true }}
       aria-label="기록 보기"
-      className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-gray-600"
+      className="focus-ring flex h-11 w-11 shrink-0 items-center justify-center rounded-[12px] text-ink hover:bg-ground"
     >
       <svg
         aria-hidden="true"
@@ -311,12 +311,12 @@ export default function HomePage({ user }: { user: User }) {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col px-4 pt-2">
-      <header className="flex items-center justify-between gap-2 text-sm text-gray-600">
+    <main className="mx-auto flex min-h-dvh max-w-[430px] flex-col px-4 pt-2">
+      <header className="flex items-center justify-between gap-2 text-sm text-ink-2">
         <span className="truncate">{user.displayName ?? user.email ?? '로그인됨'}</span>
         <div className="flex shrink-0 items-center">
           {import.meta.env.DEV && (
-            <Link to="/dev" className="flex min-h-11 items-center px-2 text-xs text-gray-400">
+            <Link to="/dev" className="flex min-h-11 items-center px-2 text-xs text-ink-3">
               개발
             </Link>
           )}
@@ -324,7 +324,7 @@ export default function HomePage({ user }: { user: User }) {
             type="button"
             onClick={() => void logout()}
             disabled={loggingOut}
-            className="min-h-11 rounded px-3 text-gray-600 disabled:opacity-50"
+            className="focus-ring min-h-11 rounded-full px-3 text-ink-2 disabled:opacity-50"
           >
             로그아웃
           </button>
@@ -332,24 +332,24 @@ export default function HomePage({ user }: { user: User }) {
       </header>
 
       <nav aria-label="날짜 이동" className="mt-1 flex items-center justify-between gap-1">
-        <Link to={homeHref(shiftDateKey(dateKey, -1), today)} replace className={`${navBtn} text-gray-700`}>
+        <Link to={homeHref(shiftDateKey(dateKey, -1), today)} replace className={`${navBtn} text-ink`}>
           ◀ 전날
         </Link>
         <div className="min-w-0 text-center">
           {/* 오늘·지난 날 같은 구성(2026-10-27 사용자 결정): 윗줄 날짜 글자, 아랫줄 "오늘로"(지난 날, 초록 글자, 누르면 오늘)
               또는 "오늘"(회색, 누를 수 없음) + 달력 아이콘. 두 줄이 항상 있어 날짜를 옮겨도 줄 높이가 같다.
               날짜 글자·달력 아이콘 = 그 날짜가 든 달의 S10 기록 보기(push + state.fromHome). */}
-          <Link to={calendarHref} state={{ fromHome: true }} className="block min-w-0 rounded-lg px-1">
+          <Link to={calendarHref} state={{ fromHome: true }} className="focus-ring block min-w-0 rounded-tile px-1">
             <h1 className="text-xl font-bold">{dateKeyLabel(dateKey)}</h1>
             <span className="sr-only">{isToday ? ', 오늘' : ''}, 기록 보기</span>
           </Link>
           <div className="flex items-center justify-center gap-1">
             {isToday ? (
-              <span aria-hidden="true" className={`${todayText} text-gray-400`}>
+              <span aria-hidden="true" className={`${todayText} text-ink-3`}>
                 오늘
               </span>
             ) : (
-              <Link to={homeHref(today, today)} replace className={`${todayText} text-emerald-700`}>
+              <Link to={homeHref(today, today)} replace className={`focus-ring ${todayText} text-sky-deep`}>
                 오늘로
               </Link>
             )}
@@ -357,34 +357,34 @@ export default function HomePage({ user }: { user: User }) {
           </div>
         </div>
         {isToday ? (
-          <button type="button" disabled className={`${navBtn} justify-end text-gray-300`}>
+          <button type="button" disabled className={`${navBtn} justify-end text-ink-3`}>
             다음 날 ▶
           </button>
         ) : (
-          <Link to={homeHref(shiftDateKey(dateKey, 1), today)} replace className={`${navBtn} justify-end text-gray-700`}>
+          <Link to={homeHref(shiftDateKey(dateKey, 1), today)} replace className={`${navBtn} justify-end text-ink`}>
             다음 날 ▶
           </Link>
         )}
       </nav>
 
       {saved && (
-        <p role="status" className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
+        <p role="status" className="mt-3 rounded-tile bg-lime-soft px-3 py-2 text-sm text-ink">
           저장했어요 · {formatKcal(saved.consumedKcal)}kcal
           {saved.dateKey !== today && ` (${shortDate(saved.dateKey)})`}
         </p>
       )}
       {goalNotice && (
-        <p role="status" className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">
+        <p role="status" className="mt-3 rounded-tile bg-lime-soft px-3 py-2 text-sm text-ink">
           {goalNotice === 'saved' ? '목표를 저장했어요' : '목표를 저장했어요. 연결되면 올라가요.'}
         </p>
       )}
       {!online && (
-        <p className="mt-3 rounded-lg bg-gray-100 px-3 py-2 text-sm text-gray-700">
+        <p className="mt-3 rounded-tile bg-surface px-3 py-2 text-sm text-ink">
           오프라인이에요. 기록은 연결되면 저장돼요.
         </p>
       )}
       {listError && (
-        <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <p className="mt-3 rounded-tile bg-butter-soft px-3 py-2 text-sm text-ink">
           이어 할 기록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.
         </p>
       )}
@@ -394,10 +394,10 @@ export default function HomePage({ user }: { user: User }) {
         {pending && pending.length > 0 && (
           <ul className="mt-4 space-y-3">
             {pending.map((m) => (
-              <li key={m.id} className="rounded-xl border border-amber-300 bg-amber-50 p-3">
+              <li key={m.id} className="rounded-card border border-butter bg-butter-soft p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-xs text-gray-600">
+                    <p className="text-xs text-ink-2">
                       {MEAL_TYPE_LABEL[m.mealType] ?? '식사'} · {whenText(m, today)}
                     </p>
                     <p className="truncate font-medium">{namesText(m)}</p>
@@ -405,14 +405,14 @@ export default function HomePage({ user }: { user: User }) {
                   <button
                     type="button"
                     onClick={() => cancelMeal(m)}
-                    className="min-h-11 shrink-0 px-2 text-sm text-gray-500 underline"
+                    className="focus-ring min-h-11 shrink-0 rounded-chip px-2 text-sm text-ink-2 underline"
                   >
                     기록 취소
                   </button>
                 </div>
                 <Link
                   to={m.status === 'awaiting_after' ? `/meal/${m.id}/after` : `/meal/${m.id}/review`}
-                  className="mt-2 flex min-h-12 items-center justify-center rounded-lg bg-amber-500 px-4 font-semibold text-white"
+                  className="focus-ring mt-2 flex min-h-12 items-center justify-center rounded-full bg-peach px-4 text-ink"
                 >
                   {m.status === 'awaiting_after' ? '다 드셨나요? 남은 음식 찍기' : '확인하고 저장하기'}
                 </Link>
@@ -421,34 +421,34 @@ export default function HomePage({ user }: { user: User }) {
           </ul>
         )}
 
-        <section aria-label="하루 합계" className="mt-4 rounded-xl border border-gray-200 bg-white p-4">
+        <section aria-label="하루 합계" className="mt-4 rounded-card border border-line bg-surface p-4">
           {dayError && (
-            <p className="mb-2 text-sm text-amber-800">요약을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.</p>
+            <p className="mb-2 rounded-tile bg-butter-soft px-3 py-2 text-sm text-ink">요약을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.</p>
           )}
           {summary ? (
             <>
-              <p className="text-sm text-gray-600">{isToday ? '오늘' : '이 날'} 먹은 양</p>
+              <p className="text-sm text-ink-2">{isToday ? '오늘' : '이 날'} 먹은 양</p>
               <p className="text-3xl font-bold">
                 {formatKcal(summary.totals.kcal)}
-                <span className="ml-1 text-base font-medium text-gray-600">kcal</span>
+                <span className="ml-1 text-base font-medium text-ink-2">kcal</span>
               </p>
               <dl className="mt-2 grid grid-cols-3 gap-2 text-center text-sm">
                 {MACRO_CELLS.map(({ k, label }) => (
-                  <div key={k} className="rounded-lg bg-gray-50 py-2">
-                    <dt className="text-xs text-gray-500">{label}</dt>
+                  <div key={k} className="rounded-tile bg-ground py-2">
+                    <dt className="text-xs text-ink-2">{label}</dt>
                     <dd className="font-semibold">{formatMacro(summary.totals[k])}g</dd>
                   </div>
                 ))}
               </dl>
               {summary.incompleteMacros && (
-                <p className="mt-2 text-xs text-amber-700">일부 음식의 탄·단·지가 빠져 있어요</p>
+                <p className="mt-2 rounded-chip bg-butter-soft px-2 py-1 text-xs text-ink">일부 음식의 탄·단·지가 빠져 있어요</p>
               )}
               {summary.hasPendingWrites && (
-                <p className="mt-1 text-xs text-gray-600">저장 대기 중(연결되면 올라가요)</p>
+                <p className="mt-1 text-xs text-ink-2">저장 대기 중(연결되면 올라가요)</p>
               )}
             </>
           ) : (
-            !dayError && <p className="text-sm text-gray-500">불러오는 중…</p>
+            !dayError && <p className="text-sm text-ink-2">불러오는 중…</p>
           )}
         </section>
 
@@ -456,10 +456,10 @@ export default function HomePage({ user }: { user: User }) {
 
         {summary &&
           (summary.meals.length === 0 ? (
-            <div className="mt-4 rounded-xl bg-gray-50 p-4 text-center">
-              <p className="font-medium text-gray-700">이 날은 기록이 없어요</p>
+            <div className="mt-4 rounded-card bg-surface p-4 text-center">
+              <p className="font-medium text-ink">이 날은 기록이 없어요</p>
               {isToday && (
-                <p className="mt-1 text-sm text-gray-600">
+                <p className="mt-1 text-sm text-ink-2">
                   먹기 전에 한 장, 다 먹고 한 장 찍으면 먹은 양을 계산해 드려요. 아래 [식사 기록]을 눌러 시작하세요.
                 </p>
               )}
@@ -473,21 +473,21 @@ export default function HomePage({ user }: { user: User }) {
                   <section key={t} aria-label={MEAL_TYPE_LABEL[t]} className="mt-4">
                     <div className="flex items-baseline justify-between px-1">
                       <h2 className="font-semibold">{MEAL_TYPE_LABEL[t]}</h2>
-                      <span className="text-sm text-gray-600">{formatKcal(summary.byMealType[t].kcal)}kcal</span>
+                      <span className="text-sm text-ink-2">{formatKcal(summary.byMealType[t].kcal)}kcal</span>
                     </div>
-                    <ul className="mt-1 divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white">
+                    <ul className="mt-1 divide-y divide-line rounded-card border border-line bg-surface">
                       {rows.map((m) => (
                         <li key={m.id}>
-                          <Link to={`/meal/${m.id}`} className="flex min-h-14 items-center gap-3 px-3 py-2">
+                          <Link to={`/meal/${m.id}`} className="focus-ring flex min-h-14 items-center gap-3 rounded-card px-3 py-2">
                             <div className="min-w-0 flex-1">
                               <p className="truncate font-medium">{itemsText(m.itemNames)}</p>
-                              <p className="text-xs text-gray-500">
+                              <p className="text-xs text-ink-2">
                                 {m.createdAt ? clockFmt.format(m.createdAt) : '방금'}
-                                {m.editedAt && <span className="ml-1 text-gray-400">· 수정됨</span>}
+                                {m.editedAt && <span className="ml-1 text-ink-3">· 수정됨</span>}
                               </p>
                             </div>
                             <span className="shrink-0 font-semibold">{formatKcal(m.consumed.kcal)}kcal</span>
-                            <span aria-hidden="true" className="text-gray-400">
+                            <span aria-hidden="true" className="text-ink-3">
                               ›
                             </span>
                           </Link>
@@ -497,15 +497,15 @@ export default function HomePage({ user }: { user: User }) {
                   </section>
                 )
               })}
-              <p className="mt-4 text-xs text-gray-500">{NUTRITION_SOURCE_NOTE}. DB에 없는 음식은 AI 추정값이에요.</p>
+              <p className="mt-4 text-xs text-ink-2">{NUTRITION_SOURCE_NOTE}. DB에 없는 음식은 AI 추정값이에요.</p>
             </>
           ))}
       </div>
 
-      <div className="sticky bottom-0 -mx-4 bg-white/95 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <div className="sticky bottom-0 -mx-4 bg-surface/95 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <Link
           to={isToday ? '/capture/before' : `/capture/before?date=${dateKey}`}
-          className="flex min-h-16 w-full items-center justify-center rounded-2xl bg-emerald-600 text-xl font-bold text-white"
+          className="focus-ring flex min-h-16 w-full items-center justify-center rounded-full bg-peach text-xl text-ink"
         >
           식사 기록
         </Link>

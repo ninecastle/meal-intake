@@ -3,8 +3,8 @@
 // 달력이 이미 구독한 격자 범위 값(날짜별 totals·목표 기록)을 그대로 쓴다(새 구독 없음).
 // 계산은 lib/calendar.ts(metricOf·targetOf·goalForDate)와 lib/week.ts(weekDays·axisTicks·weekGoalSteps·weekAverage·
 // isCurrentOrLaterWeek) 그대로. 그래프는 인라인 SVG(외부 차트 라이브러리 없음, viewBox + 폭 100%).
-// 선(2026-10-27 사용자 요청): 먹은 양 = emerald 실선·점(오늘까지), 목표 = 회색 점선(weekGoalSteps, 월~일 전체 폭, 바뀐 날부터 계단),
-// 평균 = amber 둥근 점 줄(weekAverage, 기록한 날만, 월~일 전체 폭). 목표·평균 값 글은 그래프 오른쪽 전용 자리(LABEL)에 둔다.
+// 선(2026-10-27 사용자 요청): 먹은 양 = 고른 항목 색 실선·점(오늘까지, LINE_STROKE), 목표 = 회색 점선(weekGoalSteps, 월~일 전체 폭, 바뀐 날부터 계단),
+// 평균 = peach-deep 둥근 점 줄(weekAverage, 기록한 날만, 월~일 전체 폭). 목표·평균 값 글은 그래프 오른쪽 전용 자리(LABEL)에 둔다.
 // 날짜 칸 누르기는 SVG 위에 겹친 HTML 버튼 7개(눈금 자리 AXIS와 값 글 자리 LABEL 사이, 높이 = 그래프 전체).
 import { useState } from 'react'
 import type { DatedGoal } from '../../data/goals'
@@ -96,6 +96,21 @@ function rangeLabel(keys: readonly string[]): string {
   const [, m1, d1] = keys[0].split('-').map(Number)
   const [, m2, d2] = keys[6].split('-').map(Number)
   return m1 === m2 ? `${m1}월 ${d1}일~${d2}일` : `${m1}월 ${d1}일~${m2}월 ${d2}일`
+}
+
+/** 먹은 양 선·점 색(디자인 D1-b1): 고른 항목 색. 칼로리 sky-deep(시안 홈 원 그래프), 탄·단·지 carb·prot·fat.
+ *  목표는 ink-2 점선, 평균은 peach-deep 둥근 점 줄(시안 평균선)이라 선 모양·색으로 구분된다 */
+const LINE_STROKE: Record<Metric, string> = {
+  kcal: 'stroke-sky-deep',
+  carbs_g: 'stroke-carb',
+  protein_g: 'stroke-prot',
+  fat_g: 'stroke-fat',
+}
+const LINE_FILL: Record<Metric, string> = {
+  kcal: 'fill-sky-deep',
+  carbs_g: 'fill-carb',
+  protein_g: 'fill-prot',
+  fat_g: 'fill-fat',
 }
 
 export interface WeeklyTrendProps {
@@ -227,13 +242,13 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
     <section aria-labelledby="weekly-trend-title" className={RECORD_CARD}>
       <div className="flex flex-wrap items-center justify-between gap-x-2 pl-1.5">
         <h2 id="weekly-trend-title" className="text-base font-bold whitespace-nowrap">
-          주간 추이 <span className="font-medium text-gray-600">· {range}</span>
+          주간 추이 <span className="font-medium text-ink-2">· {range}</span>
         </h2>
         <nav aria-label="주 이동" className="ml-auto flex">
           <button
             type="button"
             onClick={() => onMoveWeek(-1)}
-            className="flex min-h-11 items-center rounded-lg px-2 text-sm whitespace-nowrap text-gray-700"
+            className="focus-ring flex min-h-11 items-center rounded-full px-2 text-sm whitespace-nowrap text-ink"
           >
             ◀ 지난주
           </button>
@@ -241,7 +256,7 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
             type="button"
             onClick={() => onMoveWeek(1)}
             disabled={isCurrentOrLaterWeek(weekStart, today)}
-            className="flex min-h-11 items-center rounded-lg px-2 text-sm whitespace-nowrap text-gray-700 disabled:text-gray-300"
+            className="focus-ring flex min-h-11 items-center rounded-full px-2 text-sm whitespace-nowrap text-ink disabled:text-ink-3"
           >
             다음 주 ▶
           </button>
@@ -249,18 +264,18 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
       </div>
 
       {/* 범례 "— 먹은 양 · - - 목표 · ··· 평균"과 단위 */}
-      <div className="mt-1 flex items-center justify-between gap-2 px-1.5 text-xs text-gray-600">
+      <div className="mt-1 flex items-center justify-between gap-2 px-1.5 text-xs text-ink-2">
         <ul aria-label="범례" className="flex items-center gap-3">
           <li className="flex items-center gap-1">
             <svg width="22" height="10" aria-hidden="true">
-              <line x1="1" y1="5" x2="21" y2="5" className="stroke-emerald-600" strokeWidth="2" strokeLinecap="round" />
-              <circle cx="11" cy="5" r="3.5" className="fill-emerald-600 stroke-white" strokeWidth="1.5" />
+              <line x1="1" y1="5" x2="21" y2="5" className={LINE_STROKE[metric]} strokeWidth="2" strokeLinecap="round" />
+              <circle cx="11" cy="5" r="3.5" className={`${LINE_FILL[metric]} stroke-surface`} strokeWidth="1.5" />
             </svg>
             먹은 양
           </li>
           <li className="flex items-center gap-1">
             <svg width="22" height="10" aria-hidden="true">
-              <line x1="1" y1="5" x2="21" y2="5" className="stroke-gray-500" strokeWidth="1.5" strokeDasharray="4 3" />
+              <line x1="1" y1="5" x2="21" y2="5" className="stroke-ink-2" strokeWidth="1.5" strokeDasharray="4 3" />
             </svg>
             목표
           </li>
@@ -271,7 +286,7 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
                 y1="5"
                 x2="20"
                 y2="5"
-                className="stroke-amber-600"
+                className="stroke-peach-deep"
                 strokeWidth="2"
                 strokeDasharray="0.1 4"
                 strokeLinecap="round"
@@ -291,8 +306,8 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
             const y = yOf(t)
             return (
               <g key={k}>
-                <line x1={AXIS} x2={PLOT_R} y1={y} y2={y} className={k === 0 ? 'stroke-gray-300' : 'stroke-gray-200'} strokeWidth={1} />
-                <text x={AXIS - 3} y={y + 3.5} textAnchor="end" fontSize={10} className="fill-gray-500 tabular-nums">
+                <line x1={AXIS} x2={PLOT_R} y1={y} y2={y} className={k === 0 ? 'stroke-ink-3/60' : 'stroke-line'} strokeWidth={1} />
+                <text x={AXIS - 3} y={y + 3.5} textAnchor="end" fontSize={10} className="fill-ink-2 tabular-nums">
                   {tickText(t)}
                 </text>
               </g>
@@ -301,24 +316,24 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
 
           {/* 목표: 회색 점선, 월~일 전체 폭(미래 날 위로도), 목표가 바뀐 날부터 계단 */}
           {steps && (
-            <path d={goalPath} fill="none" className="stroke-gray-500" strokeWidth={1.5} strokeDasharray="4 3" strokeLinejoin="round" />
+            <path d={goalPath} fill="none" className="stroke-ink-2" strokeWidth={1.5} strokeDasharray="4 3" strokeLinejoin="round" />
           )}
 
-          {/* 평균: amber 둥근 점 줄, 월~일 전체 폭. 목표선과 겹쳐도 점 모양·색으로 구분된다 */}
+          {/* 평균: peach-deep 둥근 점 줄, 월~일 전체 폭. 목표선과 겹쳐도 점 모양·색으로 구분된다 */}
           {avg !== null && (
             <line
               x1={AXIS + 2}
               x2={PLOT_R - 1}
               y1={yOf(avg)}
               y2={yOf(avg)}
-              className="stroke-amber-600"
+              className="stroke-peach-deep"
               strokeWidth={2}
               strokeDasharray="0.1 4"
               strokeLinecap="round"
             />
           )}
 
-          {/* 먹은 양: emerald 실선과 점. 기록 없는 날은 0으로 그리지 않고 선을 끊는다. 오늘 이후는 그리지 않는다 */}
+          {/* 먹은 양: 고른 항목 색 실선과 점. 기록 없는 날은 0으로 그리지 않고 선을 끊는다. 오늘 이후는 그리지 않는다 */}
           {valueRuns
             .filter((run) => run.length > 1)
             .map((run, k) => (
@@ -326,7 +341,7 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
                 key={k}
                 points={run.map((p) => `${cx(p.i)},${yOf(p.v)}`).join(' ')}
                 fill="none"
-                className="stroke-emerald-600"
+                className={LINE_STROKE[metric]}
                 strokeWidth={2}
                 strokeLinejoin="round"
                 strokeLinecap="round"
@@ -338,14 +353,14 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
               cx={cx(p.i)}
               cy={yOf(p.value)}
               r={sel?.d === p.d ? 6 : 4.5}
-              className="fill-emerald-600 stroke-white"
+              className={`${LINE_FILL[metric]} stroke-surface`}
               strokeWidth={2}
             />
           ))}
 
           {/* 오른쪽 값 글(LABEL 자리): "목표" / "2,060", "평균" / "1,234". 가까우면 placeEndLabels가 위아래로 비켜 놓는다 */}
           {endLabels.map((l) => (
-            <g key={l.kind} aria-hidden="true" className={l.kind === 'goal' ? 'fill-gray-600' : 'fill-amber-700'}>
+            <g key={l.kind} aria-hidden="true" className={l.kind === 'goal' ? 'fill-ink-2' : 'fill-peach-deep'}>
               <text x={PLOT_R + 2.5} y={l.cy - 7} fontSize={9} fontWeight={500}>
                 {l.word}
               </text>
@@ -360,7 +375,7 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
             const isToday = p.d === today
             const [, m, dd] = p.d.split('-').map(Number)
             const tone =
-              p.i === 5 ? 'fill-blue-600' : p.i === 6 ? 'fill-red-600' : isToday ? 'fill-gray-900' : 'fill-gray-600'
+              p.i === 5 ? 'fill-blue-600' : p.i === 6 ? 'fill-red-600' : isToday ? 'fill-ink' : 'fill-ink-2'
             return (
               <g key={p.d} className={p.future ? 'opacity-40' : undefined}>
                 <text x={cx(p.i)} y={WD_Y} textAnchor="middle" fontSize={12} fontWeight={isToday ? 700 : 500} className={tone}>
@@ -376,15 +391,15 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
                 >
                   {p.i === 0 || dd === 1 ? `${m}/${dd}` : dd}
                 </text>
-                {isToday && <rect x={cx(p.i) - 8} y={DATE_Y + 3} width={16} height={2} rx={1} className="fill-gray-900" />}
+                {isToday && <rect x={cx(p.i) - 8} y={DATE_Y + 3} width={16} height={2} rx={1} className="fill-ink" />}
               </g>
             )
           })}
         </svg>
 
         {message && (
-          <p className="pointer-events-none absolute inset-x-0 top-[32%] flex justify-center text-sm text-gray-500">
-            <span className="rounded bg-white/90 px-2 py-0.5">{message}</span>
+          <p className="pointer-events-none absolute inset-x-0 top-[32%] flex justify-center text-sm text-ink-2">
+            <span className="rounded-chip bg-surface/90 px-2 py-0.5">{message}</span>
           </p>
         )}
 
@@ -403,8 +418,8 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
                 aria-pressed={on}
                 aria-label={dayLabel(p)}
                 onClick={() => setPicked(on ? null : p.d)}
-                className={`min-w-0 rounded-md focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-emerald-600 ${
-                  on ? 'bg-gray-900/5' : ''
+                className={`min-w-0 rounded-chip focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-sky-deep ${
+                  on ? 'bg-ink/5' : ''
                 }`}
               />
             )
@@ -414,22 +429,22 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
 
       {/* 고른 날: 값과 목표, 주 평균 대비, [그날 기록 보기](달력 날짜 누르기와 같은 onOpenDay) */}
       {/* 버튼은 날짜 줄 오른쪽에 두고, 값 줄 3개는 전체 폭을 써서 360px에서도 한 줄씩 들어가게 한다 */}
-      <div aria-live="polite" className="mt-2 flex min-h-14 flex-col justify-center rounded-lg bg-gray-50 px-3 py-1.5">
+      <div aria-live="polite" className="mt-2 flex min-h-14 flex-col justify-center rounded-tile bg-ground px-3 py-1.5">
         {sel ? (
           <>
             <div className="flex items-center justify-between gap-2">
-              <p className="min-w-0 text-sm font-semibold text-gray-800">{dateKeyLabel(sel.d)}</p>
+              <p className="min-w-0 text-sm font-semibold text-ink">{dateKeyLabel(sel.d)}</p>
               <button
                 type="button"
                 onClick={() => onOpenDay(sel.d)}
-                className="min-h-11 shrink-0 rounded-lg border border-emerald-600 bg-white px-3 text-sm font-semibold whitespace-nowrap text-emerald-700"
+                className="focus-ring min-h-11 shrink-0 rounded-full bg-surface px-3.5 text-sm whitespace-nowrap text-ink"
               >
                 그날 기록 보기
               </button>
             </div>
-            <p className="text-sm leading-snug text-gray-800">
+            <p className="text-sm leading-snug text-ink">
               {detailLines(sel).map((line, k) => (
-                <span key={k} className={`block whitespace-nowrap tabular-nums ${k === 0 ? '' : 'text-gray-600'}`}>
+                <span key={k} className={`block whitespace-nowrap tabular-nums ${k === 0 ? '' : 'text-ink-2'}`}>
                   {k > 0 && <span className="sr-only"> · </span>}
                   {line}
                 </span>
@@ -437,7 +452,7 @@ export default function WeeklyTrend({ weekStart, today, metric, ready, days, goa
             </p>
           </>
         ) : (
-          <p className="text-sm text-gray-500">점이나 날짜를 누르면 그날 값을 볼 수 있어요</p>
+          <p className="text-sm text-ink-2">점이나 날짜를 누르면 그날 값을 볼 수 있어요</p>
         )}
       </div>
     </section>

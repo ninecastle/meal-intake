@@ -5,14 +5,27 @@ import { compareToGoal, type GoalCompareKey, type GoalCompareRow, type GoalTarge
 import type { Nutrients } from '../types/analysis'
 import { formatKcal, formatMacro } from './mealText'
 
-const ROWS: { k: GoalCompareKey; label: string; fmt: (n: number) => string; unit: string }[] = [
-  { k: 'kcal', label: '칼로리', fmt: formatKcal, unit: 'kcal' },
-  { k: 'carbs_g', label: '탄수화물', fmt: formatMacro, unit: 'g' },
-  { k: 'protein_g', label: '단백질', fmt: formatMacro, unit: 'g' },
-  { k: 'fat_g', label: '지방', fmt: formatMacro, unit: 'g' },
+// 막대 색(디자인 D1-b1): 칼로리 sky-deep(시안 홈 원 그래프), 탄·단·지 carb·prot·fat, 초과는 peach-deep
+const ROWS: { k: GoalCompareKey; label: string; fmt: (n: number) => string; unit: string; bar: string }[] = [
+  { k: 'kcal', label: '칼로리', fmt: formatKcal, unit: 'kcal', bar: 'bg-sky-deep' },
+  { k: 'carbs_g', label: '탄수화물', fmt: formatMacro, unit: 'g', bar: 'bg-carb' },
+  { k: 'protein_g', label: '단백질', fmt: formatMacro, unit: 'g', bar: 'bg-prot' },
+  { k: 'fat_g', label: '지방', fmt: formatMacro, unit: 'g', bar: 'bg-fat' },
 ]
 
-function Row({ label, row, fmt, unit }: { label: string; row: GoalCompareRow; fmt: (n: number) => string; unit: string }) {
+function Row({
+  label,
+  row,
+  fmt,
+  unit,
+  bar,
+}: {
+  label: string
+  row: GoalCompareRow
+  fmt: (n: number) => string
+  unit: string
+  bar: string
+}) {
   // 보이는 자리에서 0이 되는 초과(예: 0.3kcal)는 초과로 치지 않는다.
   const overText = row.remaining < 0 ? fmt(-row.remaining) : '0'
   const over = overText !== '0'
@@ -23,9 +36,9 @@ function Row({ label, row, fmt, unit }: { label: string; row: GoalCompareRow; fm
   return (
     <li>
       <div className="flex items-baseline justify-between gap-2 text-sm">
-        <span className="font-medium text-gray-800">{label}</span>
-        <span className="text-gray-600">
-          <span className="font-semibold text-gray-900">{fmt(row.eaten)}</span> / {fmt(row.target)}
+        <span className="font-medium text-ink">{label}</span>
+        <span className="text-ink-2">
+          <span className="font-semibold text-ink">{fmt(row.eaten)}</span> / {fmt(row.target)}
           {unit}
         </span>
       </div>
@@ -36,11 +49,11 @@ function Row({ label, row, fmt, unit }: { label: string; row: GoalCompareRow; fm
         aria-valuemax={100}
         aria-valuenow={pct}
         aria-valuetext={`${fmt(row.eaten)} / ${fmt(row.target)}${unit}, ${status}`}
-        className="mt-1 h-2.5 overflow-hidden rounded-full bg-gray-100"
+        className="mt-1 h-2.5 overflow-hidden rounded-full bg-ink/8"
       >
-        <div className={`h-full rounded-full ${over ? 'bg-orange-500' : 'bg-emerald-500'}`} style={{ width: `${pct}%` }} />
+        <div className={`h-full rounded-full ${over ? 'bg-peach-deep' : bar}`} style={{ width: `${pct}%` }} />
       </div>
-      <p className={`mt-0.5 text-right text-xs ${over ? 'font-semibold text-orange-700' : 'text-gray-600'}`}>{status}</p>
+      <p className={`mt-0.5 text-right text-xs ${over ? 'text-peach-deep' : 'text-ink-2'}`}>{status}</p>
     </li>
   )
 }
@@ -49,8 +62,8 @@ export default function GoalBars({ consumed, targets }: { consumed: Nutrients; t
   const rows = compareToGoal(consumed, targets)
   return (
     <ul className="mt-2 space-y-3">
-      {ROWS.map(({ k, label, fmt, unit }) => (
-        <Row key={k} label={label} row={rows[k]} fmt={fmt} unit={unit} />
+      {ROWS.map(({ k, label, fmt, unit, bar }) => (
+        <Row key={k} label={label} row={rows[k]} fmt={fmt} unit={unit} bar={bar} />
       ))}
     </ul>
   )

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouteError } from 'react-router'
 import { isChunkLoadError, reloadOnceForNewVersion } from '../lib/chunkReload'
+import { Button } from './ui'
 
 export default function RouteErrorScreen() {
   const error = useRouteError()
@@ -15,24 +16,20 @@ export default function RouteErrorScreen() {
   }, [chunk, error])
 
   if (reloading) {
-    return <main className="flex min-h-dvh items-center justify-center p-4 text-sm text-gray-500">새 버전을 불러오는 중…</main>
+    return <main className="flex min-h-dvh items-center justify-center p-4 text-sm text-ink-2">새 버전을 불러오는 중…</main>
   }
   return (
-    <main className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-3 p-4 text-center">
-      <p className="text-lg font-semibold text-gray-900">{chunk ? '화면을 불러오지 못했어요' : '화면에 문제가 생겼어요'}</p>
-      <p className="text-sm text-gray-600">
+    <main className="mx-auto flex min-h-dvh max-w-[430px] flex-col items-center justify-center gap-3 p-4 text-center">
+      <p className="text-lg font-semibold text-ink">{chunk ? '화면을 불러오지 못했어요' : '화면에 문제가 생겼어요'}</p>
+      <p className="text-sm text-ink-2">
         {chunk ? '인터넷 연결을 확인하고 다시 시도해 주세요.' : '다시 시도해도 계속되면 홈으로 돌아가 주세요.'}
       </p>
-      <button
-        type="button"
-        onClick={() => window.location.reload()}
-        className="min-h-12 w-full rounded-xl bg-emerald-600 font-semibold text-white"
-      >
+      <Button full onClick={() => window.location.reload()}>
         다시 시도
-      </button>
-      <button type="button" onClick={() => window.location.assign('/')} className="min-h-11 w-full text-gray-600">
+      </Button>
+      <Button variant="ghost" full onClick={() => window.location.assign('/')}>
         홈으로
-      </button>
+      </Button>
     </main>
   )
 }

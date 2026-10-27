@@ -1,4 +1,4 @@
-// 기록 보기(S10) 히트맵 달력(2026-10-27 사용자 결정). 고른 항목(metric)의 그날 목표 대비 %로 emerald 한 가지 색의 진하기 4단계.
+// 기록 보기(S10) 히트맵 달력(2026-10-27 사용자 결정). 고른 항목(metric)의 그날 목표 대비 %로 진하기 4단계(시안 heat1~heat4: 연두 세 단계, 110% 초과는 복숭아).
 // 그리기만 한다: 보고 있는 달·항목·조회 결과는 페이지(CalendarPage)가 넘긴다(아래 섹션들과 같은 상태를 나눠 쓰게).
 // 계산은 lib/calendar.ts(heatLevelFor·monthGrid·monthSummary·goalForDate) 그대로. AI 호출 없음.
 // 격자 = 요일 머리줄 + 주 줄(5주 달 5줄, 6주 달 6줄) × [월~일 날짜 칸 7개 + 맨 오른쪽 얇은 › 칸(그 주 주간 추이 보기)].
@@ -26,8 +26,8 @@ const WEEKDAYS = ['월', '화', '수', '목', '금', '토', '일'] as const
 
 /** 기록 보기 카드 공통(달력 카드·주간 추이 카드, 2026-10-27 사용자 요청). 바깥 간격은 쓰는 쪽이 붙인다.
  *  좌우 안쪽 여백 6px: 360px 폰에서 카드 안쪽 폭 328 − 테두리 2 − 12 = 314px(8px면 날짜 칸이 40px 아래로 준다) */
-// 테두리: 2026-10-27 사용자 요청으로 굵고 진하게(1px gray-200 → 2px gray-300)
-export const RECORD_CARD = 'rounded-2xl border-2 border-gray-300 bg-white px-1.5 pt-1 pb-2'
+// 테두리: 2026-10-27 사용자 요청으로 굵게 2px(색은 디자인 조각 D1-b1에서 시안 line)
+export const RECORD_CARD = 'rounded-card border-2 border-line bg-surface px-1.5 pt-1 pb-2'
 
 /** 날짜 칸 7개 + › 칸 18px. 360px 폰(카드 안쪽 314px, 칸 사이 2px)에서 날짜 칸 (314 − 14 − 18) ÷ 7 ≈ 40.3px */
 const GRID_COLS = 'grid-cols-[repeat(7,minmax(0,1fr))_1.125rem]'
@@ -42,28 +42,27 @@ function weekRangeText(monday: string, sunday: string): string {
 /** 진하기별 칸 바탕(2026-10-27 사용자 요청으로 한 단계씩 연하게: 100·300·500·700 → 50·200·400·600,
  *  이어서 110% 초과만 600 → 500: OKLCH 밝기 59.6% → 69.6%, 3단계 400(76.5%)보다는 여전히 진하다). 0 = 기록 없음(칠하지 않음) */
 const LEVEL_BG: Record<HeatLevel, string> = {
-  0: 'bg-gray-100',
-  1: 'bg-emerald-50',
-  2: 'bg-emerald-200',
-  3: 'bg-emerald-400',
-  4: 'bg-emerald-500',
+  0: 'bg-heat0',
+  1: 'bg-heat1',
+  2: 'bg-heat2',
+  3: 'bg-heat3',
+  4: 'bg-heat4',
 }
-/** 가장 연한 단계(emerald-50)는 기록 없는 칸(gray-100)과 밝기가 비슷해 얇은 초록 테두리로 구분한다(오늘 칸은 오늘 테두리가 대신한다) */
+/** 시안 칸은 테두리 없이 색만 쓴다(heat1 연두는 heat0 회색과 색이 달라 구분된다). 단계별 자리는 남겨 둔다 */
 const LEVEL_EDGE: Record<HeatLevel, string> = {
   0: '',
-  1: 'ring-1 ring-inset ring-emerald-300',
+  1: '',
   2: '',
   3: '',
   4: '',
 }
-/** 진하기별 글자색(바탕과 4.5:1 이상: 1~3은 emerald-950 약 8~17:1, 4는 emerald-500(#00bc7d) 위 gray-950 약 8.1:1.
- *  흰 글자는 emerald-500 위 약 2.5:1이라 쓰지 않는다) */
+/** 진하기별 글자색: 모든 단계 ink(시안 heat0~heat4 바탕 위 약 7:1 이상) */
 const LEVEL_TEXT: Record<HeatLevel, string> = {
-  0: 'text-gray-700',
-  1: 'text-emerald-950',
-  2: 'text-emerald-950',
-  3: 'text-emerald-950',
-  4: 'text-gray-950',
+  0: 'text-ink',
+  1: 'text-ink',
+  2: 'text-ink',
+  3: 'text-ink',
+  4: 'text-ink',
 }
 
 /** 2×2로 놓는다(윗줄 1·2단계, 아랫줄 3·4단계) */
@@ -126,11 +125,11 @@ export default function RecordHeatmap({
     <section aria-label="달력">
       <p role="status" className="min-h-5 text-center text-sm">
         {!ready ? (
-          <span className="text-gray-500">불러오는 중…</span>
+          <span className="text-ink-2">불러오는 중…</span>
         ) : daysError ? (
-          <span className="text-amber-800">기록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.</span>
+          <span className="rounded-chip bg-butter-soft px-1.5 py-0.5 text-ink">기록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.</span>
         ) : goalsError ? (
-          <span className="text-amber-800">목표를 불러오지 못해 색 없이 보여요.</span>
+          <span className="rounded-chip bg-butter-soft px-1.5 py-0.5 text-ink">목표를 불러오지 못해 색 없이 보여요.</span>
         ) : null}
       </p>
 
@@ -144,7 +143,7 @@ export default function RecordHeatmap({
         {weekRow >= 0 && (
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute -inset-0.5 rounded-lg ring-2 ring-gray-400 ring-inset sm:-inset-1"
+            className="pointer-events-none absolute -inset-0.5 rounded-[12px] ring-2 ring-ink-3 ring-inset sm:-inset-1"
             style={{ gridColumn: '1 / -1', gridRow: `${weekRow + 2} / ${weekRow + 3}` }}
           />
         )}
@@ -152,7 +151,7 @@ export default function RecordHeatmap({
           <div
             key={w}
             aria-hidden="true"
-            className={`py-1 text-xs font-medium ${i === 5 ? 'text-blue-600' : i === 6 ? 'text-red-600' : 'text-gray-500'}`}
+            className={`py-1 text-xs font-medium ${i === 5 ? 'text-blue-600' : i === 6 ? 'text-red-600' : 'text-ink-2'}`}
           >
             {w}
           </div>
@@ -176,9 +175,9 @@ export default function RecordHeatmap({
                 const valueText = value === null ? '' : formatMetric(value, metric)
 
                 const tone = isFuture
-                  ? 'text-gray-300'
+                  ? 'text-ink-3/50'
                   : !days
-                    ? `bg-white text-gray-800 ${isToday ? '' : 'ring-1 ring-gray-100 ring-inset'}`
+                    ? `bg-surface text-ink ${isToday ? '' : 'ring-1 ring-line ring-inset'}`
                     : `${LEVEL_BG[heat?.level ?? 0]} ${LEVEL_TEXT[heat?.level ?? 0]}`
 
                 const parts: string[] = [dateKeyLabel(d)]
@@ -203,8 +202,8 @@ export default function RecordHeatmap({
                     onClick={() => onOpenDay(d)}
                     aria-label={parts.join(', ')}
                     aria-current={isToday ? 'date' : undefined}
-                    className={`relative flex aspect-square min-h-11 w-full min-w-0 flex-col items-center justify-start rounded-md pt-1 ${tone} ${
-                      isToday ? 'ring-2 ring-gray-900 ring-inset' : days && !isFuture ? LEVEL_EDGE[heat?.level ?? 0] : ''
+                    className={`focus-ring relative flex aspect-square min-h-11 w-full min-w-0 flex-col items-center justify-start rounded-chip pt-1 ${tone} ${
+                      isToday ? 'ring-2 ring-ink ring-inset' : days && !isFuture ? LEVEL_EDGE[heat?.level ?? 0] : ''
                     } ${!inMonth && !isFuture ? 'opacity-40' : ''}`}
                   >
                     <span className={`text-xs leading-none sm:text-sm ${isToday ? 'font-bold' : 'font-medium'}`}>
@@ -217,7 +216,7 @@ export default function RecordHeatmap({
                     )}
                     {valueText && (
                       <span
-                        className={`mt-auto mb-1 rounded-full bg-white/90 px-1 py-0.5 leading-none font-semibold whitespace-nowrap text-gray-900 tabular-nums ring-1 ring-black/5 ${
+                        className={`mt-auto mb-1 rounded-full bg-surface/90 px-1 py-0.5 leading-none font-semibold whitespace-nowrap text-ink tabular-nums ring-1 ring-ink/5 ${
                           valueText.length >= 6 ? 'text-[9px] sm:text-[11px]' : 'text-[10px] sm:text-[11px]'
                         }`}
                       >
@@ -234,8 +233,8 @@ export default function RecordHeatmap({
                 onClick={() => onShowWeek(monday)}
                 aria-label={`${weekRangeText(monday, week[6].dateKey)} 주간 추이 보기`}
                 aria-current={selected ? 'true' : undefined}
-                className={`flex min-h-11 items-center justify-center rounded-md text-lg leading-none ${
-                  selected ? 'bg-gray-300 font-bold text-gray-900' : futureWeek ? 'text-gray-200' : 'bg-gray-100 text-gray-500'
+                className={`focus-ring flex min-h-11 items-center justify-center rounded-chip text-lg leading-none ${
+                  selected ? 'bg-sky text-ink' : futureWeek ? 'text-ink-3/40' : 'bg-ground text-ink-2'
                 }`}
               >
                 ›
@@ -255,13 +254,13 @@ export default function RecordHeatmap({
             {LEGEND.map(({ level, text }) => (
               <li
                 key={level}
-                className={`rounded px-1 py-1 text-center text-[10px] leading-none font-medium whitespace-nowrap ${LEVEL_BG[level]} ${LEVEL_TEXT[level]} ${LEVEL_EDGE[level]}`}
+                className={`rounded-chip px-1 py-1 text-center text-[10px] leading-none font-medium whitespace-nowrap ${LEVEL_BG[level]} ${LEVEL_TEXT[level]} ${LEVEL_EDGE[level]}`}
               >
                 {text}
               </li>
             ))}
           </ul>
-          <p className="mt-1 text-[10px] leading-snug text-gray-500">
+          <p className="mt-1 text-[10px] leading-snug text-ink-2">
             목표 없으면 기준 {formatMetric(ref, metric)}
             {unit}
           </p>
@@ -288,15 +287,15 @@ export function MonthSummary({
   for (const [k, t] of days) valueByDate.set(k, metricOf(t, metric))
   const summary = monthSummary(valueByDate, month)
   return (
-    <p className="shrink-0 text-right text-xs leading-relaxed text-gray-600">
+    <p className="shrink-0 text-right text-xs leading-relaxed text-ink-2">
       <span className="block">
         <span className="sr-only">{Number(month.slice(5))}월 </span>기록{' '}
-        <span className="font-semibold text-gray-800 tabular-nums">{summary.recordDays}</span>일
+        <span className="font-semibold text-ink tabular-nums">{summary.recordDays}</span>일
       </span>
       {summary.average !== null && (
         <span className="block">
           <span className="sr-only">· </span>하루 평균{' '}
-          <span className="font-semibold text-gray-800 tabular-nums">{formatMetric(summary.average, metric)}</span>
+          <span className="font-semibold text-ink tabular-nums">{formatMetric(summary.average, metric)}</span>
           {METRIC_UNIT[metric]}
         </span>
       )}
