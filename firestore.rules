@@ -27,6 +27,8 @@ rules_version = '2';
 // - v13(디자인 조각 D14, 2026-10-28): AI 주간 리포트 users/{uid}/reports/{weekStart}(스펙 4.11절). 본인만 읽기·쓰기·삭제.
 //   키 허용 목록, weekStart == 문서 id(그 주 월요일 dateKey), genCount는 만들 때 1·다시 만들 때마다 정확히 1씩(3까지, 주당 3회),
 //   createdAt은 만들 때 요청 시각·그 뒤 그대로, updatedAt == request.time. 크기는 stats·text 키 수와 문장 길이로 대략 막는다.
+// - v14(2026-10-29): reports text에 nutrients·meals(칸마다 300자 이하)·swaps(4개 이하, from·to 100자·why 300자)·focus(300자) 허용(프롬프트 r3).
+//   genCount 상한 3 → 999: 2026-10-29 사용자 테스트용으로 한도 해제. 제출 전(11/4 기능 동결) 3으로 되돌릴지 사용자에게 확인.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -358,12 +360,38 @@ service cloud.firestore {
 
     function validReportText(t) {
       return t is map
-        && t.keys().hasOnly(['summary', 'good', 'improve', 'next', 'dayPlan'])
+        && t.keys().hasOnly(['summary', 'good', 'improve', 'next', 'dayPlan', 'nutrients', 'meals', 'swaps', 'focus'])
         && (!('summary' in t) || shortStr(t.summary, 1000))
         && (!('good' in t) || validLines(t.good))
         && (!('improve' in t) || validLines(t.improve))
         && (!('next' in t) || validLines(t.next))
-        && (!('dayPlan' in t) || (t.dayPlan is map && t.dayPlan.keys().hasOnly(['breakfast', 'lunch', 'dinner', 'snack'])));
+        && (!('dayPlan' in t) || (t.dayPlan is map && t.dayPlan.keys().hasOnly(['breakfast', 'lunch', 'dinner', 'snack'])))
+        && (!('nutrients' in t) || validReportCells(t.nutrients, ['carbs', 'protein', 'fat', 'sodium', 'sugar']))
+        && (!('meals' in t) || validReportCells(t.meals, ['breakfast', 'lunch', 'dinner', 'snack']))
+        && (!('swaps' in t) || validSwaps(t.swaps))
+        && (!('focus' in t) || shortStr(t.focus, 300));
+    }
+
+    // v14(2026-10-29): 영양소별·끼니별 한마디. 칸마다 한 문장(300자 이하)
+    function cellOk(m, k) {
+      return !(k in m) || shortStr(m[k], 300);
+    }
+
+    function validReportCells(m, keys) {
+      return m is map && m.keys().hasOnly(keys)
+        && cellOk(m, keys[0]) && cellOk(m, keys[1]) && cellOk(m, keys[2]) && cellOk(m, keys[3])
+        && (keys.size() < 5 || cellOk(m, keys[4]));
+    }
+
+    // v14: 바꿔 보면 좋은 음식 { from, to, why } 4개 이하(앱은 3개까지). 항목 키·길이는 앞에서부터 있는 것만 검사
+    function swapOk(l, i) {
+      return l.size() <= i
+        || (l[i] is map && l[i].keys().hasOnly(['from', 'to', 'why'])
+            && shortStr(l[i].get('from', ''), 100) && shortStr(l[i].get('to', ''), 100) && shortStr(l[i].get('why', ''), 300));
+    }
+
+    function validSwaps(l) {
+      return l is list && l.size() <= 4 && swapOk(l, 0) && swapOk(l, 1) && swapOk(l, 2) && swapOk(l, 3);
     }
 
     function validReport(d, weekStart) {
@@ -375,7 +403,7 @@ service cloud.firestore {
         && validReportText(d.text)
         && (!('model' in d) || shortStr(d.model, 60))
         && (!('promptVersion' in d) || shortStr(d.promptVersion, 40))
-        && d.genCount is int && d.genCount >= 1 && d.genCount <= 3
+        && d.genCount is int && d.genCount >= 1 && d.genCount <= 999
         && d.createdAt is timestamp
         && d.updatedAt == request.time;
     }

@@ -263,7 +263,8 @@ await t('입력 글: 숫자·기록 요약, 개인 정보 없음, 18세 미만 �
   const meals = [meal(day(0), 'lunch', 2000, [item('김밥_김치'), item('피자', { remaining_ratio: 1 })], { c: 250, p: 100, f: 60 })]
   const s = W.computeWeekStats(MON, meals, () => GOAL)
   const txt = W.buildReportUserText(s, { under18: true, meals, goal: GOAL, compare: { kcalDiff: -120, scoreDiff: 5 } })
-  assert.ok(txt.includes('10월 19일(월) 합계 2000kcal(목표 2000kcal): 점심 김치김밥 2000kcal'))
+  assert.ok(txt.includes('10월 19일(월) 합계 2000kcal(목표 2000kcal): 점심 2000kcal'))
+  assert.ok(txt.includes('  - 점심 김치김밥'))
   assert.ok(!txt.includes('피자'), '다 남긴 음식은 요약에서도 뺌')
   assert.ok(txt.includes('120kcal 적음') && txt.includes('5점 높음'))
   assert.ok(txt.includes('성장기 청소년'))
@@ -287,7 +288,7 @@ await t('응답 형식 정리', () => {
   assert.equal(W.parseReportJson('{}'), null)
   const r = W.parseReportJson(JSON.stringify({ summary: ' 좋아요. ', good: ['a', 'b', 'c', 'd', 3, ''], dayPlan: { lunch: '비빔밥' } }))
   assert.equal(r.summary, '좋아요.')
-  assert.deepEqual(r.good, ['a', 'b', 'c'])
+  assert.deepEqual(r.good, ['a', 'b', 'c', 'd'])
   assert.deepEqual(r.improve, [])
   assert.deepEqual(r.dayPlan, { breakfast: '', lunch: '비빔밥', dinner: '', snack: '' })
   const f = W.filterReportText(r, [], false)
@@ -298,7 +299,7 @@ await t('기록 3일 미만은 호출하지 않음', async () => {
   const s = W.computeWeekStats(MON, [meal(day(0), 'lunch', 500, [item('비빔밥')])], () => GOAL)
   await assert.rejects(W.generateReportText(s, { under18: false, meals: [] }), (e) => e.code === 'ANALYSIS_UNAVAILABLE' && e.reason === 'bad_request')
   assert.equal(W.REPORT_MIN_DAYS, 3)
-  assert.equal(W.PROMPT_VERSION_REPORT, 'r2') // r2: 공복 끼니 입력(2026-10-29)
+  assert.equal(W.PROMPT_VERSION_REPORT, 'r3') // r3: 음식별 영양소 입력·새 칸(2026-10-29)
 })
 
 await t('공복(2026-10-29): 기록 없는 끼니의 공복만 세고, 해시·AI 입력에 반영', () => {
@@ -316,6 +317,120 @@ await t('공복(2026-10-29): 기록 없는 끼니의 공복만 세고, 해시·A
   const txt = W.buildReportUserText(s, { under18: false, meals })
   assert.ok(txt.includes('공복') && txt.includes('아침 2번'))
   assert.ok(!W.buildReportUserText(base, { under18: false, meals }).includes('공복'))
+})
+
+
+// ── r3(2026-10-29): 음식별 영양소 입력·새 칸 ──
+const richItem = (name, kcal, c, p, f, extra = {}) => item(name, { consumed: { kcal, carbs_g: c, protein_g: p, fat_g: f }, ...extra })
+
+await t('r3 입력: 음식별 탄단지·나트륨·당류(있는 것만, 반올림), 끼니별 합계, 숫자 집합에 들어감', () => {
+  const meals = [
+    meal(day(0), 'lunch', 500, [richItem('김밥_김치', 480.4, 60.4, 15.2, 12.6, { detail_consumed: { sodium_mg: 901.7, sugar_g: 4.6 } })], { c: 60, p: 15, f: 13 }),
+    meal(day(0), 'lunch', 120, [richItem('된장국', 120, 8, 7, 4)], { c: 8, p: 7, f: 4 }),
+    meal(day(0), 'dinner', 900, [richItem('양념치킨', 900, 40, 50, 55)], { c: 40, p: 50, f: 55 }),
+  ]
+  const s = W.computeWeekStats(MON, meals, () => GOAL)
+  const txt = W.buildReportUserText(s, { under18: false, meals, goal: GOAL })
+  assert.ok(txt.includes('합계 1520kcal(목표 2000kcal): 점심 620kcal / 저녁 900kcal'), txt)
+  assert.ok(txt.includes('  - 점심 김치김밥 480kcal(탄 60g, 단 15g, 지 13g, 나트륨 902mg, 당류 5g)'))
+  assert.ok(txt.includes('  - 점심 된장국 120kcal(탄 8g, 단 7g, 지 4g)'), '없는 세부 영양소는 뺌')
+  const allowed = W.inputNumberSet(txt)
+  assert.ok(W.numbersOk('김치김밥의 나트륨이 902mg이었어요.', allowed))
+  assert.ok(!W.numbersOk('나트륨이 1,234mg이었어요.', allowed))
+})
+
+await t('r3 입력: 음식 줄 상한(80) 넘으면 생략 줄', () => {
+  const meals = [0, 1, 2, 3, 4, 5, 6].map((i) =>
+    meal(day(i), 'lunch', 1000, Array.from({ length: 15 }, (_, k) => richItem(`반찬${String.fromCharCode(0xac00 + k)}`, 50, 1, 1, 1))),
+  )
+  const s = W.computeWeekStats(MON, meals, () => GOAL)
+  const txt = W.buildReportUserText(s, { under18: false, meals, goal: GOAL })
+  assert.equal((txt.match(/^  - /gm) ?? []).length, W.MAX_FOOD_LINES)
+  assert.ok(txt.includes('(음식 줄이 많아 25개는 생략)'))
+})
+
+const fullResp = (over = {}) => ({
+  summary: '이번 주는 3일 기록했어요. 비빔밥을 자주 드셨어요. 치킨을 드신 날이 조금 많았어요.',
+  good: ['꾸준히 기록하셨어요.', '점심에 비빔밥으로 채소를 챙기셨어요.'],
+  improve: ['저녁 치킨이 하루 칼로리를 끌어올렸어요.', '단백질 반찬이 적은 날이 있었어요.'],
+  next: ['점심 비빔밥에 달걀프라이를 올려 보세요.', '간식은 우유로 바꿔 보세요.'],
+  dayPlan: { breakfast: '현미밥, 달걀찜', lunch: '비빔밥', dinner: '생선구이', snack: '사과' },
+  nutrients: { carbs: '탄수화물은 비빔밥 덕분에 알맞았어요.', protein: '단백질이 조금 적었어요.', fat: '치킨을 드신 날 지방이 많았어요.', sodium: '', sugar: '당류는 적당했어요.' },
+  meals: { lunch: '점심은 비빔밥으로 든든했어요.', dinner: '저녁 치킨은 구운 치킨으로 바꿔 보세요.', breakfast: '' },
+  swaps: [
+    { from: '치킨', to: '구운 치킨과 샐러드', why: '튀김옷이 없어 지방을 덜 드실 수 있어요.' },
+    { from: '비 빔밥', to: '산채비빔밥', why: '나물이 많아 식이섬유를 더 챙길 수 있어요.' },
+    { from: '떡볶이', to: '김밥', why: '그 주에 먹지 않은 음식이라 버려요.' },
+  ],
+  focus: '다음 주에는 저녁 치킨 대신 구운 치킨에 샐러드를 곁들여 보세요.',
+  ...over,
+})
+
+await t('r3 응답 정리: 새 칸 파싱(빈 칸 빼기, swaps 3개·빈 항목 버림, 문장 4개)', () => {
+  const r = W.parseReportJson(JSON.stringify(fullResp({ swaps: [...fullResp().swaps, { from: '라면', to: '', why: 'x' }, { from: '김밥', to: '유부초밥', why: '넷째' }] })))
+  assert.equal(r.focus, '다음 주에는 저녁 치킨 대신 구운 치킨에 샐러드를 곁들여 보세요.')
+  assert.deepEqual(Object.keys(r.nutrients).sort(), ['carbs', 'fat', 'protein', 'sugar'])
+  assert.deepEqual(Object.keys(r.meals).sort(), ['dinner', 'lunch'])
+  assert.equal(r.swaps.length, 3)
+  assert.ok(r.swaps.every((s) => s.to))
+  const old = W.parseReportJson(JSON.stringify({ summary: '좋아요.', good: ['잘했어요.'] }))
+  assert.deepEqual(old.swaps, [])
+  assert.equal(old.focus, '')
+  assert.deepEqual(old.meals, {})
+})
+
+await t('r3 거르기: swaps.from은 그 주 음식만(띄어쓰기 무시), 위반 칸만 비움, 예전 저장본 그대로', async () => {
+  const r = await W.runReportFlow(stats3, opts3, async () => W.parseReportJson(JSON.stringify(fullResp())))
+  assert.equal(r.calls, 1)
+  assert.deepEqual(r.text.swaps.map((s) => s.from), ['치킨', '비 빔밥'])
+  assert.ok(r.dropped.some((d) => d.startsWith('떡볶이')))
+  assert.equal(r.text.nutrients.sugar, '당류는 적당했어요.')
+  // 숫자·안전 위반: 그 칸만 비움, swaps는 항목째
+  let n = 0
+  const r2 = await W.runReportFlow(stats3, opts3, async () => {
+    n++
+    return W.parseReportJson(
+      JSON.stringify(
+        fullResp({
+          nutrients: { carbs: '탄수화물은 하루 345g이었어요.', protein: '단백질이 적었어요.', fat: '지방은 알맞았어요.', sodium: '나트륨 때문에 고혈압이 걱정돼요.' },
+          meals: { lunch: '점심은 든든했어요.', dinner: '저녁은 굶어 보세요.' },
+          swaps: [
+            { from: '치킨', to: '샐러드', why: '777kcal를 줄일 수 있어요.' },
+            { from: '비빔밥', to: '산채비빔밥', why: '나물이 많아 좋아요.' },
+          ],
+          focus: '다음 주엔 저녁 식사를 건너뛰어 보세요.',
+        }),
+      ),
+    )
+  })
+  assert.equal(n, 2, '숫자 위반이면 1회 다시')
+  assert.equal(r2.text.nutrients.carbs, '')
+  assert.equal(r2.text.nutrients.protein, '단백질이 적었어요.')
+  assert.equal(r2.text.nutrients.sodium, undefined)
+  assert.deepEqual(r2.text.meals, { lunch: '점심은 든든했어요.' })
+  assert.deepEqual(r2.text.swaps.map((s) => s.from), ['비빔밥'])
+  assert.equal(r2.text.focus, '')
+  // 예전 저장본(r2, 새 칸 없음)은 새 칸 없이 그대로
+  const legacy = { summary: '좋아요.', good: ['꾸준히 기록하셨어요.'], improve: [], next: [], dayPlan: { breakfast: '', lunch: '', dinner: '', snack: '' } }
+  const f = W.filterReportText(legacy, [], false)
+  assert.ok(!('swaps' in f.text) && !('nutrients' in f.text) && !('focus' in f.text))
+  // foodNames를 안 주면 swaps는 모두 버림
+  assert.deepEqual(W.filterReportText(W.parseReportJson(JSON.stringify(fullResp())), W.inputNumberSet(W.buildReportUserText(stats3, opts3)), false).text.swaps, [])
+})
+
+await t('r3 목업: 새 칸을 채우고 거르기를 그대로 통과', async () => {
+  const meals = [0, 1, 2, 3, 4].flatMap(perfectDay)
+  const s = W.computeWeekStats(MON, meals, () => GOAL)
+  for (const under18 of [false, true]) {
+    const r = await W.runReportFlow(s, { under18, meals, goal: GOAL }, async () => W.mockReportText(s, under18))
+    assert.deepEqual(r.dropped, [])
+    assert.ok(r.text.focus)
+    assert.ok(r.text.nutrients.carbs && r.text.nutrients.protein && r.text.nutrients.fat)
+    assert.deepEqual(Object.keys(r.text.meals).sort(), ['breakfast', 'dinner', 'lunch'])
+    assert.ok(r.text.swaps.length >= 2)
+    assert.ok(r.text.good.length >= 2 && r.text.improve.length >= 2 && r.text.next.length >= 2)
+    assert.ok(r.text.summary.split(/(?<=[.!?])\s+/).length >= 3)
+  }
 })
 
 console.log(`weekly_report_test: ${pass} passed`)

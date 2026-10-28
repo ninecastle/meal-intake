@@ -26,6 +26,7 @@ import { goalForDate, RANGE_HIGH } from '../../lib/calendar'
 import { axisTicks, mondayOf, shiftWeek, weekDays, weekGoalSteps } from '../../lib/week'
 import { formatKcal, MEAL_TYPE_LABEL, MEAL_TYPES } from '../mealText'
 import { BottomSheet, Crown, Mascot } from '../ui'
+import { foodName } from '../../lib/foodName'
 
 const WEEKDAY = ['월', '화', '수', '목', '금', '토', '일']
 const md = (k: string) => `${Number(k.slice(5, 7))}.${Number(k.slice(8, 10))}`
@@ -230,7 +231,10 @@ export default function AiReportPane({ uid, today, onOpenDay }: AiReportPaneProp
             ) : (
               // 2026-10-29 사용자 결정: 바뀐 기록을 새로 분석할지 묻고 남은 횟수를 보인다
               <Banner
-                text={`${week === shiftWeek(thisWeek, -1) ? '지난주' : '이 주'} 기록이 바뀌었어요. 새로 분석할까요? (남은 횟수 ${REPORT_MAX_GEN - saved.genCount}번)`}
+                // 남은 횟수는 10번 이하일 때만(2026-10-29 테스트용 한도 해제로 999면 숨김)
+                text={`${week === shiftWeek(thisWeek, -1) ? '지난주' : '이 주'} 기록이 바뀌었어요. 새로 분석할까요?${
+                  REPORT_MAX_GEN - saved.genCount <= 10 ? ` (남은 횟수 ${REPORT_MAX_GEN - saved.genCount}번)` : ''
+                }`}
                 action="새로 분석하기"
                 onAction={() => generate(saved)}
               />
@@ -365,6 +369,34 @@ function Report({
   const lines = (t: string[] | undefined) => (t ?? []).filter((s) => s.trim().length > 0)
   const plan = text?.dayPlan
   const planRows = plan ? MEAL_TYPES.filter((m) => (plan[m] ?? '').trim().length > 0) : []
+  // r3 칸(2026-10-29). 예전 저장본(r1·r2)에는 없으니 모두 빈 칸 처리
+  const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
+  const focus = str(text?.focus)
+  const nu = text?.nutrients
+  const nutRows = (
+    [
+      ['carbs', '탄수화물', 'var(--carb)'],
+      ['protein', '단백질', 'var(--prot)'],
+      ['fat', '지방', 'var(--fat)'],
+      ['sodium', '나트륨', 'var(--ink-3)'],
+      ['sugar', '당류', 'var(--peach)'],
+    ] as const
+  )
+    .map(([k, name, color]) => [k, name, color, str(nu?.[k])] as const)
+    .filter((r) => r[3].length > 0)
+  const mealRows = MEAL_TYPES.map((m) => [m, str(text?.meals?.[m])] as const).filter((r) => r[1].length > 0)
+  const swaps = (Array.isArray(text?.swaps) ? (text?.swaps ?? []) : []).filter((s) => s && str(s.from) && str(s.to))
+  const listBlock = (title: string, l: string[]) =>
+    l.length > 0 ? (
+      <div key={title}>
+        <H4>{title}</H4>
+        <ul style={{ listStyle: 'disc' }}>
+          {l.map((s, i) => (
+            <li key={i}>{s}</li>
+          ))}
+        </ul>
+      </div>
+    ) : null
 
   return (
     <>
@@ -547,30 +579,74 @@ function Report({
             <b style={{ fontSize: 15 }}>AI가 본 한 주</b>
             <span className="aitag">AI 분석</span>
           </div>
-          {text.summary.trim() && (
+          {(text.summary ?? '').trim() && (
             <>
               <H4>한 주 총평</H4>
               <p style={{ margin: 0, fontSize: 14, lineHeight: 1.55 }}>{text.summary}</p>
             </>
           )}
-          {(
-            [
-              ['잘한 점', lines(text.good)],
-              ['아쉬운 점', lines(text.improve)],
-              ['다음 주 제안', lines(text.next)],
-            ] as const
-          ).map(([t, l]) =>
-            l.length > 0 ? (
-              <div key={t}>
-                <H4>{t}</H4>
-                <ul style={{ listStyle: 'disc' }}>
-                  {l.map((s, i) => (
-                    <li key={i}>{s}</li>
-                  ))}
-                </ul>
+          {focus && (
+            <>
+              <H4>다음 주 실천 한 가지</H4>
+              <div
+                data-testid="report-focus"
+                style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'var(--butter-soft)', borderRadius: 18, padding: '12px 14px' }}
+              >
+                <div style={{ width: 30, flex: 'none' }}>
+                  <Mascot size={30} decorative />
+                </div>
+                <b style={{ fontSize: 15, lineHeight: 1.5 }}>{focus}</b>
               </div>
-            ) : null,
+            </>
           )}
+          {listBlock('잘한 점', lines(text.good))}
+          {listBlock('아쉬운 점', lines(text.improve))}
+          {nutRows.length > 0 && (
+            <>
+              <H4>영양소별 한마디</H4>
+              <div className="callout" data-testid="report-nutrients" style={{ ...BOX, display: 'grid', gap: 10 }}>
+                {nutRows.map(([k, name, color, s]) => (
+                  <div key={k} style={{ fontSize: 14, lineHeight: 1.5 }}>
+                    <b>
+                      <span style={{ color }}>●</span> {name}
+                    </b>
+                    <div style={{ color: 'var(--ink-2)' }}>{s}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {mealRows.length > 0 && (
+            <>
+              <H4>끼니별 한마디</H4>
+              <div className="callout" data-testid="report-meals" style={{ ...BOX, display: 'grid', gap: 10 }}>
+                {mealRows.map(([m, s]) => (
+                  <div key={m} style={{ fontSize: 14, lineHeight: 1.5 }}>
+                    <b>
+                      <span style={{ color: SHARE_COLOR[m] }}>●</span> {MEAL_TYPE_LABEL[m]}
+                    </b>
+                    <div style={{ color: 'var(--ink-2)' }}>{s}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {swaps.length > 0 && (
+            <>
+              <H4>바꿔 보면 좋은 음식</H4>
+              <div data-testid="report-swaps" style={{ display: 'grid', gap: 8 }}>
+                {swaps.map((s, i) => (
+                  <div key={i} style={{ background: 'var(--surface)', borderRadius: 14, padding: '10px 14px' }}>
+                    <b style={{ fontSize: 15 }}>
+                      {foodName(s.from)} <span style={{ color: 'var(--ink-3)' }}>→</span> <span style={{ color: 'var(--lime-deep)' }}>{s.to}</span>
+                    </b>
+                    <div style={{ fontSize: 13, color: 'var(--ink-2)', marginTop: 2, lineHeight: 1.45 }}>{s.why}</div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {listBlock('다음 주 제안', lines(text.next))}
           {planRows.length > 0 && plan && (
             <>
               <H4>다음 주 하루 식단 예시</H4>

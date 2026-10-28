@@ -1180,7 +1180,7 @@ describe('AI 주간 리포트(users/{uid}/reports/{weekStart}, 규칙 v13, 디�
     await assertSucceeds(deleteDoc(doc(fs, rPath())))
   })
 
-  test('genCount: 처음이 1이 아니면, 건너뛰거나 같거나 4면 거부', async () => {
+  test('genCount: 처음이 1이 아니면, 건너뛰거나 같으면 거부, 4는 허용(v14 한도 999), 1000 거부', async () => {
     const fs = alice()
     await assertFails(setDoc(doc(fs, rPath()), report(2, serverTimestamp())))
     await assertFails(setDoc(doc(fs, rPath()), report(1.5, serverTimestamp())))
@@ -1190,9 +1190,46 @@ describe('AI 주간 리포트(users/{uid}/reports/{weekStart}, 규칙 v13, 디�
     await assertFails(setDoc(doc(fs, rPath()), report(3, c)))
     await assertSucceeds(setDoc(doc(fs, rPath()), report(2, c)))
     await assertSucceeds(setDoc(doc(fs, rPath()), report(3, c)))
-    await assertFails(setDoc(doc(fs, rPath()), report(4, c)))
     // createdAt 바꾸기 거부
     await assertFails(setDoc(doc(fs, rPath()), report(4, serverTimestamp())))
+    await assertSucceeds(setDoc(doc(fs, rPath()), report(4, c)))
+    // 2026-10-29 사용자 테스트용 한도 해제(999): 999 다음 1000은 거부
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), rPath()), { ...report(998, c), updatedAt: serverTimestamp() })
+    })
+    await assertSucceeds(setDoc(doc(fs, rPath()), report(999, c)))
+    await assertFails(setDoc(doc(fs, rPath()), report(1000, c)))
+  })
+
+  const TEXT3 = {
+    ...TEXT,
+    focus: '다음 주에는 점심마다 달걀 반찬을 하나 더해 보세요.',
+    nutrients: { carbs: '탄수화물은 알맞았어요.', protein: '단백질이 조금 적었어요.', fat: '지방은 알맞았어요.', sodium: '라면 국물로 나트륨이 많았어요.' },
+    meals: { lunch: '점심은 든든했어요.', dinner: '저녁이 조금 많았어요.' },
+    swaps: [
+      { from: '양념치킨', to: '구운 치킨', why: '튀김옷이 없어 지방이 적어요.' },
+      { from: '라면', to: '잔치국수', why: '국물이 순해 나트륨이 적어요.' },
+    ],
+  }
+
+  test('v14 r3 칸(focus·nutrients·meals·swaps) 허용, 크기 초과·모르는 키 거부', async () => {
+    const fs = alice()
+    await assertSucceeds(setDoc(doc(fs, rPath()), report(1, serverTimestamp(), { text: TEXT3, promptVersion: 'r3' })))
+    await deleteDoc(doc(fs, rPath()))
+    const swap = { from: '라면', to: '국수', why: '좋아요.' }
+    const bad = [
+      { ...TEXT3, focus: '가'.repeat(301) },
+      { ...TEXT3, nutrients: { ...TEXT3.nutrients, fiber: '식이섬유' } },
+      { ...TEXT3, nutrients: { ...TEXT3.nutrients, sugar: '가'.repeat(301) } },
+      { ...TEXT3, meals: { lunch: 1 } },
+      { ...TEXT3, meals: { brunch: '브런치' } },
+      { ...TEXT3, swaps: [swap, swap, swap, swap, swap] },
+      { ...TEXT3, swaps: [swap, { ...swap, why: '가'.repeat(301) }] },
+      { ...TEXT3, swaps: [{ ...swap, note: 'x' }] },
+      { ...TEXT3, swaps: 'x' },
+    ]
+    for (const text of bad) await assertFails(setDoc(doc(fs, rPath()), report(1, serverTimestamp(), { text })))
+    await assertSucceeds(setDoc(doc(fs, rPath()), report(1, serverTimestamp(), { text: { ...TEXT3, swaps: [swap, swap, swap, swap] } })))
   })
 
   test('키·형식 거부(모르는 키, 사진, weekStart ≠ id, 긴 문장, 지난 updatedAt, id 형식)', async () => {

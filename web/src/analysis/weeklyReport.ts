@@ -14,7 +14,7 @@ import { AnalysisError } from './errors.ts'
 import { isKoreanText } from './koreanText.ts'
 
 export const REPORT_MIN_DAYS = 3
-export const PROMPT_VERSION_REPORT = 'r2'
+export const PROMPT_VERSION_REPORT = 'r3'
 export const MOCK_REPORT_MODEL = 'mock'
 
 // ───────────────────────── 숫자 계산(AI 없음) ─────────────────────────
@@ -142,6 +142,47 @@ function shownNames(m: MealWithId): string[] {
     .filter((it) => !isAllLeft(it))
     .map((it) => foodName(typeof it.name === 'string' ? it.name : ''))
     .filter((n) => n.length > 0)
+}
+
+type ReportItem = NonNullable<MealWithId['analysis']>['items'][number]
+
+/** 화면에 보이는 음식(다 남긴 음식·이름 없는 음식 제외) */
+function shownItems(m: MealWithId): ReportItem[] {
+  const items = Array.isArray(m.analysis?.items) ? m.analysis!.items : []
+  return items.filter((it) => !isAllLeft(it) && foodName(typeof it.name === 'string' ? it.name : '').length > 0)
+}
+
+/** AI 입력의 음식 줄 상한(입력 길이 제한) */
+export const MAX_FOOD_LINES = 80
+
+const fin = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+
+/** "김치김밥 480kcal(탄 60g, 단 15g, 지 12g, 나트륨 900mg, 당류 5g)" — 먹은 양 기준, 있는 값만, 정수 반올림 */
+function foodLine(it: ReportItem): string {
+  const name = foodName(it.name)
+  const c = it.consumed as Partial<Record<'kcal' | 'carbs_g' | 'protein_g' | 'fat_g', unknown>> | undefined
+  const dc = it.detail_consumed as Partial<Record<string, unknown>> | undefined
+  const r = (v: unknown) => (fin(v) ? Math.round(v) : null)
+  const k = r(c?.kcal)
+  const kcal = k == null ? '' : ` ${k}kcal`
+  const parts: string[] = []
+  for (const [label, v, u] of [
+    ['탄', r(c?.carbs_g), 'g'],
+    ['단', r(c?.protein_g), 'g'],
+    ['지', r(c?.fat_g), 'g'],
+    ['나트륨', r(dc?.sodium_mg), 'mg'],
+    ['당류', r(dc?.sugar_g), 'g'],
+  ] as const) {
+    if (v != null) parts.push(`${label} ${v}${u}`)
+  }
+  return `${name}${kcal}${parts.length ? `(${parts.join(', ')})` : ''}`
+}
+
+/** 그 주에 먹은 음식 이름(화면 이름). swaps.from 검사용 */
+export function weekFoodNames(stats: WeekStats, meals: MealWithId[]): Set<string> {
+  const out = new Set<string>(stats.topFoods.map((f) => f.name))
+  for (const d of stats.days) for (const m of doneMealsOf(d.dateKey, meals)) for (const n of shownNames(m)) out.add(n)
+  return out
 }
 
 const mealKcal = (m: MealWithId) => {
@@ -289,26 +330,68 @@ export function compareWeeks(cur: WeekStats, prev: WeekStats | null): { kcalDiff
 
 // ───────────────────────── AI 글(프롬프트 r1) ─────────────────────────
 
+export interface ReportNutrients {
+  carbs: string
+  protein: string
+  fat: string
+  sodium?: string
+  sugar?: string
+}
+export type ReportMeals = Partial<Record<MealType, string>>
+export interface ReportSwap {
+  /** 그 주에 실제로 먹은 음식 이름(입력에 적힌 이름 그대로) */
+  from: string
+  to: string
+  why: string
+}
+
 export interface ReportText {
   summary: string
   good: string[]
   improve: string[]
   next: string[]
   dayPlan: { breakfast: string; lunch: string; dinner: string; snack: string }
+  /** r3(2026-10-29). 예전 저장본(r1·r2)에는 없다 → 화면은 없으면 그리지 않는다 */
+  nutrients?: ReportNutrients
+  /** r3. 기록 있는 끼니만 */
+  meals?: ReportMeals
+  /** r3. 2~3개 */
+  swaps?: ReportSwap[]
+  /** r3. 다음 주 실천 한 가지 */
+  focus?: string
 }
+
+/** 한 칸에 받는 문장 수 상한(규칙은 5개 이하) */
+const MAX_LINES = 4
+const MAX_SWAPS = 3
 
 export const SYSTEM_INSTRUCTION_REPORT = [
   '너는 식단 기록 앱의 주간 리포트를 쓰는 친절한 영양 코치다. 모든 글은 한국어 존댓말(~해요체)로 쓴다.',
-  '입력은 앱이 이미 계산한 한 주의 숫자, 날짜·끼니별 기록 요약, 목표다. 숫자는 새로 계산하거나 지어내지 않는다.',
-  '숫자를 쓸 때는 입력에 적힌 숫자만 그대로 쓴다. 입력에 없는 숫자(새 합계, 새 비율, 횟수, 권장량, 그램 수 등)는 쓰지 말고 말로 표현한다.',
-  '안전: 단식, 굶기, 끼니 거르기, 아주 적은 칼로리로 줄이기 같은 극단적 감량은 권하지 않는다. 질병·약·진단·치료는 언급하지 않는다.',
-  '출력 JSON:',
-  '- summary: 한 주 총평 2~3문장.',
-  '- good: 잘한 점 1~3개(한 항목에 한 문장).',
-  '- improve: 아쉬운 점 1~3개(한 항목에 한 문장, 비난하지 않는 말투).',
-  '- next: 다음 주 제안 1~3개. 항목마다 구체적인 음식 예시를 넣는다(예: "점심에 현미밥과 고등어구이를 곁들여 보세요").',
+  '입력은 앱이 이미 계산한 한 주의 숫자, 날짜·끼니별 합계, 음식별 먹은 양 기준 영양소(탄=탄수화물, 단=단백질, 지=지방, 나트륨, 당류), 목표다. 숫자는 새로 계산하거나 지어내지 않는다.',
+  '숫자를 쓸 때는 입력에 적힌 숫자만 그대로 쓴다. 입력에 없는 숫자(새 합계, 새 비율, 횟수, 권장량, 그램 수, 물 몇 잔 등)는 쓰지 말고 말로 표현한다.',
+  '안전: 단식, 굶기, 끼니 거르기, 아주 적은 칼로리로 줄이기 같은 극단적 감량은 권하지 않는다. 질병·약·진단·치료·영양제는 언급하지 않는다.',
+  '',
+  '[좋은 문장 기준]',
+  '- 근거: 그 주에 실제로 먹은 음식 이름과 날짜(예: 10월 21일)나 끼니(아침·점심·저녁·간식)를 짚어서 쓴다. 기록에 없는 사실은 만들지 않는다.',
+  '- 말투: 따뜻하고 비난하지 않는다. 아쉬운 점도 "~하면 더 좋아요"처럼 다음 행동으로 이어지게 쓴다.',
+  '- 실천: 읽고 바로 따라 할 수 있게 언제(끼니)·무엇(음식)을 구체적으로 쓴다.',
+  '- 금지: "균형 잡힌 식사를 하세요", "물을 많이 드세요", "규칙적으로 드세요", "건강을 챙기세요"처럼 누구에게나 할 수 있는 뻔한 말.',
+  '- 길이: 한 문장은 50~90자 정도. 같은 말·같은 음식 제안을 여러 칸에서 되풀이하지 않는다.',
+  '- 좋은 예: "10월 22일 저녁 양념치킨이 하루 칼로리를 끌어올렸어요. 다음엔 구운 치킨에 샐러드를 곁들여 보세요."',
+  '- 좋은 예: "점심마다 김치김밥이나 비빔밥처럼 밥 위주라 단백질이 목표보다 적었어요. 달걀 하나만 더해도 좋아요."',
+  '- 나쁜 예: "단백질이 부족해요. 균형 잡힌 식사를 하세요." (근거 없음, 뻔함)',
+  '- 나쁜 예: "야식을 너무 많이 드셨네요." (비난, 무엇을 할지 없음)',
+  '',
+  '[출력 JSON]',
+  '- summary: 한 주 총평 3~4문장. 한 주의 흐름(잘된 날·아쉬운 날, 끼니 패턴)을 근거와 함께.',
+  '- focus: 다음 주에 가장 효과가 클 행동 한 가지, 한 문장.',
+  '- good: 잘한 점 2~4개(한 항목에 한 문장).',
+  '- improve: 아쉬운 점 2~4개(한 항목에 한 문장).',
+  '- nutrients: 영양소별 한마디 한 문장씩. carbs(탄수화물)·protein(단백질)·fat(지방)은 꼭 쓰고, sodium(나트륨)·sugar(당류)는 눈에 띌 때만 쓴다(아니면 빈 문자열).',
+  '- meals: 끼니별 한마디 한 문장씩. breakfast·lunch·dinner·snack 가운데 그 주에 기록이 있는 끼니만 쓰고 나머지는 빈 문자열.',
+  '- swaps: 바꿔 보면 좋은 음식 2~3개. from은 그 주에 실제로 먹은 음식 이름을 입력에 적힌 그대로, to는 비슷하게 즐길 수 있는 대안 음식 이름, why는 이유 한 문장.',
+  '- next: 다음 주 제안 2~4개. 항목마다 구체적인 음식 예시를 넣는다(예: "점심 비빔밥에 달걀프라이를 올려 단백질을 더해 보세요").',
   '- dayPlan: 다음 주 하루 식단 예시. breakfast·lunch·dinner·snack에 메뉴 이름만 쓴다(숫자·양·칼로리 없이, 예: "현미밥, 된장국, 시금치나물").',
-  '기록에 있는 음식을 근거로 구체적으로 쓰고, 기록에 없는 사실은 만들지 않는다.',
   '공복으로 표시한 끼니는 한 주를 이해하는 참고 자료다. 꼭 언급할 필요는 없고, 공복이 잦거나 다른 내용과 이어질 때만 자연스럽게 한두 번 쓴다. 쓸 때는 "공복이었던 아침이 있었어요"처럼 "공복"이라는 말로만 쓰고(거르다·건너뛰다·빼먹다는 쓰지 않는다), 필요하면 바쁜 날 간단히 챙길 수 있는 음식을 제안한다. 끼니를 거르라고 하지 않는다.',
 ].join('\n')
 
@@ -316,8 +399,31 @@ const STR_ARR = Schema.array({ items: Schema.string() })
 export const RESPONSE_SCHEMA_REPORT = Schema.object({
   properties: {
     summary: Schema.string(),
+    focus: Schema.string(),
     good: STR_ARR,
     improve: STR_ARR,
+    nutrients: Schema.object({
+      properties: {
+        carbs: Schema.string(),
+        protein: Schema.string(),
+        fat: Schema.string(),
+        sodium: Schema.string(),
+        sugar: Schema.string(),
+      },
+      optionalProperties: ['sodium', 'sugar'],
+    }),
+    meals: Schema.object({
+      properties: {
+        breakfast: Schema.string(),
+        lunch: Schema.string(),
+        dinner: Schema.string(),
+        snack: Schema.string(),
+      },
+      optionalProperties: ['breakfast', 'lunch', 'dinner', 'snack'],
+    }),
+    swaps: Schema.array({
+      items: Schema.object({ properties: { from: Schema.string(), to: Schema.string(), why: Schema.string() } }),
+    }),
     next: STR_ARR,
     dayPlan: Schema.object({
       properties: {
@@ -334,7 +440,8 @@ export const GENERATION_CONFIG_REPORT: GenerationConfig = {
   responseMimeType: 'application/json',
   responseSchema: RESPONSE_SCHEMA_REPORT,
   thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
-  maxOutputTokens: 2048,
+  // r3: 칸이 늘어 글이 대략 두 배(한국어 1,500~2,500자) + 생각 토큰 여유
+  maxOutputTokens: 4096,
 }
 
 const md = (dk: string) => {
@@ -390,19 +497,39 @@ export function buildReportUserText(stats: WeekStats, opts: Pick<ReportOpts, 'un
     const sd = c.scoreDiff === 0 ? '같음' : `${Math.abs(c.scoreDiff)}점 ${c.scoreDiff > 0 ? '높음' : '낮음'}`
     L.push(`- 지난주와 비교: 하루 평균 ${kd}, 점수 ${sd}`)
   }
-  L.push('[날짜별 기록]')
+  L.push('[날짜별 기록] 날짜 합계 뒤에 끼니별 합계, 그 아래 줄에 음식별 먹은 양 기준 영양소(탄=탄수화물, 단=단백질, 지=지방)')
+  let foodLines = 0
+  let omitted = 0
   stats.days.forEach((d, i) => {
     const head = `${md(d.dateKey)}(${WEEKDAY_KO[i]})`
     if (d.kcal == null) {
       L.push(`${head}: 기록 없음`)
       return
     }
-    const parts = doneMealsOf(d.dateKey, opts.meals).map((m) => {
-      const names = shownNames(m)
-      return `${MEAL_KO[m.mealType]} ${names.length ? names.join('·') : '음식 없음'} ${Math.round(mealKcal(m))}kcal`
-    })
+    const dayMeals = doneMealsOf(d.dateKey, opts.meals)
+    const byType = MEAL_TYPES.map((mt) => ({ mt, ms: dayMeals.filter((m) => m.mealType === mt) })).filter((x) => x.ms.length > 0)
+    const parts = byType.map(({ mt, ms }) => `${MEAL_KO[mt]} ${Math.round(ms.reduce((a, m) => a + mealKcal(m), 0))}kcal`)
     L.push(`${head} 합계 ${d.kcal}kcal${d.target != null ? `(목표 ${d.target}kcal)` : ''}: ${parts.join(' / ')}`)
+    for (const { mt, ms } of byType) {
+      const its = ms.flatMap(shownItems)
+      if (its.length === 0) {
+        if (foodLines < MAX_FOOD_LINES) {
+          L.push(`  - ${MEAL_KO[mt]} 음식 없음`)
+          foodLines++
+        }
+        continue
+      }
+      for (const it of its) {
+        if (foodLines >= MAX_FOOD_LINES) {
+          omitted++
+          continue
+        }
+        L.push(`  - ${MEAL_KO[mt]} ${foodLine(it)}`)
+        foodLines++
+      }
+    }
   })
+  if (omitted > 0) L.push(`(음식 줄이 많아 ${omitted}개는 생략)`)
   L.push('')
   L.push(
     opts.under18
@@ -479,18 +606,50 @@ export function parseReportJson(text: string): ReportText | null {
   }
   if (!o || typeof o !== 'object' || Array.isArray(o)) return null
   const r = o as Record<string, unknown>
-  const arr = (v: unknown) => (Array.isArray(v) ? v.map(clean).filter(Boolean).slice(0, 3) : [])
-  const dp = r.dayPlan && typeof r.dayPlan === 'object' ? (r.dayPlan as Record<string, unknown>) : {}
+  const arr = (v: unknown) => (Array.isArray(v) ? v.map(clean).filter(Boolean).slice(0, MAX_LINES) : [])
+  const obj = (v: unknown) => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, unknown>) : {})
+  const dp = obj(r.dayPlan)
+  const nu = obj(r.nutrients)
+  const ml = obj(r.meals)
+  const nutrients: ReportNutrients = { carbs: clean(nu.carbs), protein: clean(nu.protein), fat: clean(nu.fat) }
+  if (clean(nu.sodium)) nutrients.sodium = clean(nu.sodium)
+  if (clean(nu.sugar)) nutrients.sugar = clean(nu.sugar)
+  const meals: ReportMeals = {}
+  for (const mt of MEAL_TYPES) if (clean(ml[mt])) meals[mt] = clean(ml[mt])
+  const swaps = (Array.isArray(r.swaps) ? r.swaps : [])
+    .map((s) => {
+      const o = obj(s)
+      return { from: clean(o.from), to: clean(o.to), why: clean(o.why) }
+    })
+    .filter((s) => s.from && s.to && s.why)
+    .slice(0, MAX_SWAPS)
   const out: ReportText = {
     summary: clean(r.summary),
     good: arr(r.good),
     improve: arr(r.improve),
     next: arr(r.next),
     dayPlan: { breakfast: clean(dp.breakfast), lunch: clean(dp.lunch), dinner: clean(dp.dinner), snack: clean(dp.snack) },
+    nutrients,
+    meals,
+    swaps,
+    focus: clean(r.focus),
   }
   if (!out.summary && !out.good.length && !out.improve.length && !out.next.length) return null
   return out
 }
+
+/** 새 칸(r3)의 문장 목록(숫자 검사용). 예전 저장본처럼 칸이 없으면 빈 목록 */
+function extraSentences(t: ReportText): string[] {
+  const out: string[] = []
+  if (t.focus) out.push(t.focus)
+  for (const v of Object.values(t.nutrients ?? {})) if (typeof v === 'string' && v) out.push(v)
+  for (const v of Object.values(t.meals ?? {})) if (typeof v === 'string' && v) out.push(v)
+  for (const s of t.swaps ?? []) out.push(s.from, s.to, s.why)
+  return out
+}
+
+/** 이름 비교: 띄어쓰기 무시 */
+const nameKey = (s: string) => s.replace(/\s+/g, '')
 
 const splitSentences = (s: string) =>
   s
@@ -500,7 +659,7 @@ const splitSentences = (s: string) =>
 
 /** 숫자 위반 문장 목록(재요청 판단용) */
 export function numberViolations(t: ReportText, allowed: readonly number[]): string[] {
-  const all = [...splitSentences(t.summary), ...t.good, ...t.improve, ...t.next]
+  const all = [...splitSentences(t.summary), ...t.good, ...t.improve, ...t.next, ...extraSentences(t)]
   const bad = all.filter((s) => !numbersOk(s, allowed))
   // 식단 예시는 메뉴 이름만: 숫자가 있으면 위반
   for (const v of Object.values(t.dayPlan)) if (/\d/.test(v)) bad.push(v)
@@ -508,13 +667,50 @@ export function numberViolations(t: ReportText, allowed: readonly number[]): str
 }
 
 /** 숫자 위반·안전·한국어 아님 문장을 버린다. 배열이 비면 빈 배열 그대로(화면이 처리) */
-export function filterReportText(t: ReportText, allowed: readonly number[], under18: boolean): { text: ReportText; dropped: string[] } {
+export function filterReportText(
+  t: ReportText,
+  allowed: readonly number[],
+  under18: boolean,
+  /** 그 주에 먹은 음식 이름(weekFoodNames). swaps.from이 여기 없으면 그 항목을 버린다. 안 주면 swaps는 모두 버린다 */
+  foodNames?: ReadonlySet<string>,
+): { text: ReportText; dropped: string[] } {
   const dropped: string[] = []
+  const ok1 = (s: string) => isKoreanText(s) && numbersOk(s, allowed) && !isUnsafeSentence(s, under18)
   const keep = (s: string) => {
-    const ok = isKoreanText(s) && numbersOk(s, allowed) && !isUnsafeSentence(s, under18)
+    const ok = ok1(s)
     if (!ok) dropped.push(s)
     return ok
   }
+  /** 한 칸짜리 문장: 위반이면 빈 칸 */
+  const cell = (s: string | undefined) => (s && keep(s) ? s : '')
+  const names = new Set([...(foodNames ?? [])].map(nameKey))
+  const nutrients: ReportNutrients | undefined = t.nutrients
+    ? { carbs: cell(t.nutrients.carbs), protein: cell(t.nutrients.protein), fat: cell(t.nutrients.fat) }
+    : undefined
+  if (nutrients && t.nutrients) {
+    const so = cell(t.nutrients.sodium)
+    const su = cell(t.nutrients.sugar)
+    if (so) nutrients.sodium = so
+    if (su) nutrients.sugar = su
+  }
+  let meals: ReportMeals | undefined
+  if (t.meals) {
+    meals = {}
+    for (const mt of MEAL_TYPES) {
+      const v = cell(t.meals[mt])
+      if (v) meals[mt] = v
+    }
+  }
+  const swaps = t.swaps?.filter((s) => {
+    const ok = names.has(nameKey(s.from)) && ok1(s.from) && ok1(s.to) && ok1(s.why)
+    if (!ok) dropped.push(`${s.from} → ${s.to}: ${s.why}`)
+    return ok
+  })
+  const extra: Partial<ReportText> = {}
+  if (nutrients) extra.nutrients = nutrients
+  if (meals) extra.meals = meals
+  if (swaps) extra.swaps = swaps
+  if (t.focus !== undefined) extra.focus = cell(t.focus)
   const plan = (s: string) => {
     if (!s) return ''
     if (!/\d/.test(s) && isKoreanText(s) && !isUnsafeSentence(s, under18)) return s
@@ -533,6 +729,7 @@ export function filterReportText(t: ReportText, allowed: readonly number[], unde
         dinner: plan(t.dayPlan.dinner),
         snack: plan(t.dayPlan.snack),
       },
+      ...extra,
     },
     dropped,
   }
@@ -573,7 +770,7 @@ export async function runReportFlow(
       calls = 2 // 다시 부르기가 실패하면 첫 응답에서 위반 문장만 버린다
     }
   }
-  const { text, dropped } = filterReportText(res, allowed, opts.under18)
+  const { text, dropped } = filterReportText(res, allowed, opts.under18, weekFoodNames(stats, opts.meals))
   return { text, calls, dropped }
 }
 
@@ -581,21 +778,56 @@ export async function runReportFlow(
 
 export function mockReportText(stats: WeekStats, under18: boolean): ReportText {
   const top = stats.topFoods[0]?.name
+  const top2 = stats.topFoods[1]?.name
+  const best = stats.bestDay ? md(stats.bestDay.dateKey) : null
   const summary = [
     `이번 주는 ${stats.recordDays}일 기록했고 하루 평균 ${stats.avgKcal ?? '–'}kcal를 드셨어요.`,
     `목표 범위 안에 든 날은 ${stats.inRangeDays}일이에요.`,
-    top ? `${top}을 자주 드셨네요.` : '',
+    top ? `${top}을 자주 드셔서 입맛이 뚜렷한 한 주였어요.` : '',
+    best ? `${best}처럼 목표에 가까운 날을 늘려 가면 좋아요.` : '',
   ]
     .filter(Boolean)
     .join(' ')
+  const mp = stats.macroPct
+  const pctLine = (name: string, p: number | null, food: string) =>
+    p == null
+      ? `${name}은 목표가 없어 비교하지 않았어요. 끼니마다 ${food}을 곁들이면 좋아요.`
+      : p < 90
+        ? `${name}이 목표의 ${p}%로 조금 적었어요. 끼니마다 ${food}을 곁들여 보세요.`
+        : p > 110
+          ? `${name}이 목표의 ${p}%로 조금 많았어요. 다음엔 양을 살짝 줄여 보세요.`
+          : `${name}이 목표의 ${p}%로 알맞았어요. 지금처럼 이어 가면 좋아요.`
+  const nutrients: ReportNutrients = {
+    carbs: pctLine('탄수화물', mp.carbs, '잡곡밥'),
+    protein: pctLine('단백질', mp.protein, '달걀이나 두부'),
+    fat: pctLine('지방', mp.fat, '견과류'),
+  }
+  if (stats.minorAvg.sodium_mg != null)
+    nutrients.sodium = `나트륨은 하루 평균 ${stats.minorAvg.sodium_mg}mg이었어요. 국물은 건더기 위주로 드셔 보세요.`
+  const meals: ReportMeals = {}
+  const mealLine: Record<MealType, string> = {
+    breakfast: '아침을 챙긴 날이 있어 하루를 든든하게 시작하셨어요.',
+    lunch: '점심이 하루 식사의 중심이었어요. 채소 반찬을 하나 더하면 좋아요.',
+    dinner: '저녁이 늦어지는 날엔 가벼운 메뉴로 마무리해 보세요.',
+    snack: '간식은 과일이나 우유처럼 든든한 것으로 골라 보세요.',
+  }
+  for (const mt of MEAL_TYPES) if (stats.mealShare[mt] > 0) meals[mt] = mealLine[mt]
+  const swaps: ReportSwap[] = []
+  if (top) swaps.push({ from: top, to: '두부조림을 곁들인 한 끼', why: `${top}에 단백질 반찬을 더하면 오후까지 든든해요.` })
+  if (top2) swaps.push({ from: top2, to: '채소 듬뿍 된장찌개', why: '비슷하게 따뜻한 국물이지만 나트륨이 덜하고 채소를 더 챙길 수 있어요.' })
   return {
     summary,
+    focus: '다음 주에는 점심마다 달걀이나 두부 같은 단백질 반찬을 하나씩 더해 보세요.',
     good: [`${stats.recordDays}일 동안 꾸준히 기록하셨어요.`, '끼니마다 밥과 반찬을 함께 드신 날이 많았어요.'],
     improve: [
-      stats.macroPct.protein != null && stats.macroPct.protein < 100
-        ? `단백질이 목표의 ${stats.macroPct.protein}%로 조금 부족했어요.`
+      mp.protein != null && mp.protein < 90
+        ? `단백질이 목표의 ${mp.protein}%로 조금 부족했어요.`
         : '저녁에 드신 양이 다른 끼니보다 많은 편이었어요.',
+      '채소 반찬이 적은 끼니가 있었어요. 나물 하나만 더해도 좋아요.',
     ],
+    nutrients,
+    meals,
+    swaps,
     next: [
       '점심에 현미밥과 고등어구이를 곁들여 보세요.',
       under18 ? '간식으로 우유와 바나나를 드셔 보세요.' : '간식은 과자 대신 플레인 요거트와 견과류를 드셔 보세요.',
