@@ -135,18 +135,43 @@
     }
   }
   /* 사용자가 고른 변경 (15, 2026-10-28): 홈 띠 최소 높이. 기준은 흰 줄 전체(아이콘 줄 + 날짜 줄)가 보일 때 그 아래 화면 높이(화면 − 흰 줄).
-     나의 하루(첫 띠)는 그 높이 그대로(맨 위에서 화면 맨 아래까지), 식사·나의 변화는 그보다 20px 더. 늘어난 만큼은 위아래로 똑같이 나눈다(내용을 띠 가운데에).
+     나의 하루(첫 띠)는 그 높이 그대로(맨 위에서 화면 맨 아래까지), 식사·나의 변화는 그보다 20px 더.
+     제목은 시안 간격 그대로 띠 위에 붙이고, 늘어난 만큼은 띠 안 구성 사이의 빈 칸(.bgap, 한 몫·.half 반 몫)과 맨 아래(반 몫)에 나눈다.
+     시안의 원래 간격(margin)은 그대로 두고 그 위에 더한다. 내용이 이 높이보다 길면 빈 칸은 0이라 시안과 같다.
      svh = 주소창이 보이는 작은 화면 높이(맨 위 상태와 같은 기준). svh를 모르는 브라우저는 앞 줄 vh. --home-head는 HomeDateBar useBarHeights가 잰다. */
   .home > .band {
     display: flex;
     flex-direction: column;
-    justify-content: center;
     min-height: calc(100vh - var(--home-head, 0px) + 20px);
     min-height: calc(100svh - var(--home-head, 0px) + 20px);
   }
   .home > .band:first-of-type {
     min-height: calc(100vh - var(--home-head, 0px));
     min-height: calc(100svh - var(--home-head, 0px));
+  }
+  .home > .band > .pad {
+    flex: 1 0 auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .home > .band > .pad::after {
+    content: '';
+    flex: 0.5 0 0;
+  }
+  .home .bgap {
+    flex: 1 0 0;
+  }
+  .home .bgap.half {
+    flex-grow: 0.5;
+  }
+  /* 나의 변화: 안쪽 빈 칸 3개(제목↔체중 글, 체중 글↔저울, 저울↔[기록하기])가 다른 띠의 빈 칸과 같은 몫이 되게 3배로 늘린다 */
+  .home .weight {
+    flex: 3 0 auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .home .weight > svg {
+    flex: none;
   }
 
   /* D3-2 결과·직접 입력 화면의 입력 상자(테두리 상자 안에 입력 칸과 단위): 키보드 포커스 테두리를 안쪽 칸 대신 상자에(시안 :focus-visible과 같은 색) */

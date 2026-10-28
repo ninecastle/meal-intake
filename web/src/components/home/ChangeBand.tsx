@@ -92,6 +92,8 @@ export default function ChangeBand({
   return (
     <Band tone="peach" label="나의 변화" title="나의 변화">
       <div className="weight">
+        {/* 사용자가 고른 변경 (15): 띠가 늘어난 만큼 제목↔체중 글, 체중 글↔저울, 저울↔[기록하기] 빈 칸(.bgap)에 나눈다 */}
+        <div className="bgap" aria-hidden="true"></div>
         <div className="q">{isToday ? '오늘 내 체중은?' : '이날 내 체중은?'}</div>
         <div className="kg num">
           {cur ? formatKg(cur.kg) : '–'}
@@ -107,6 +109,7 @@ export default function ChangeBand({
             {cur && <GoalTag kg={cur.kg} targetKg={profile.targetKg} goal={goal ?? null} />}
           </div>
         )}
+        <div className="bgap" aria-hidden="true"></div>
         <svg className="scale" viewBox="0 0 220 210" aria-hidden="true">
           <ellipse cx="110" cy="200" rx="88" ry="8" fill="rgba(201,105,44,.18)" />
           <rect x="14" y="22" width="192" height="178" rx="42" fill="#E9865A" />
@@ -122,6 +125,7 @@ export default function ChangeBand({
           <rect x="44" y="112" width="52" height="52" rx="20" fill="#F5AE85" />
           <rect x="124" y="112" width="52" height="52" rx="20" fill="#F5AE85" />
         </svg>
+        <div className="bgap" aria-hidden="true"></div>
         <button type="button" className="btn peach" onClick={() => setSheet(true)}>
           기록하기
         </button>

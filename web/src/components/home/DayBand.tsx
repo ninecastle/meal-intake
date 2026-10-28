@@ -218,6 +218,8 @@ export default function DayBand({ summary, dayError, isToday, goal, online, onGl
     >
       {summary ? (
         <>
+          {/* 사용자가 고른 변경 (15): 띠가 늘어난 만큼 구성 사이 빈 칸(.bgap)에 나눈다(막대↔당류 줄은 반 몫) */}
+          <div className="bgap" aria-hidden="true"></div>
           <div className="summary">
             <Ring kcal={summary.totals.kcal} target={targets ? targets.target_kcal : null} />
             <div ref={ratioRef} className={stacked ? 'ratio stacked' : 'ratio'}>
@@ -233,8 +235,11 @@ export default function DayBand({ summary, dayError, isToday, goal, online, onGl
               ))}
             </div>
           </div>
+          <div className="bgap" aria-hidden="true"></div>
           <Bars summary={summary} targets={targets} />
+          <div className="bgap half" aria-hidden="true"></div>
           <Minor detail={summary.detail} />
+          <div className="bgap" aria-hidden="true"></div>
           {targets ? (
             <Remain summary={summary} targets={targets} />
           ) : (

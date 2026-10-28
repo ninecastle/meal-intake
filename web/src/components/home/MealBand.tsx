@@ -72,6 +72,8 @@ export default function MealBand({ uid, dateKey, day, pending, listError, onSoon
         <BandNotices items={[listError && '이어 할 기록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.', actionError]} />
       }
     >
+      {/* 사용자가 고른 변경 (15): 띠가 늘어난 만큼 구성 사이 빈 칸(.bgap)에 나눈다 */}
+      <div className="bgap" aria-hidden="true"></div>
       <div className="meals">
         {MEAL_TYPES.map((meal) => (
           <MealCard
@@ -87,6 +89,7 @@ export default function MealBand({ uid, dateKey, day, pending, listError, onSoon
           />
         ))}
       </div>
+      <div className="bgap" aria-hidden="true"></div>
       <div className="linkrow" style={{ gridTemplateColumns: '1fr' }}>
         <button type="button" onClick={onSoon}>
           음식 추천 <Crown />
