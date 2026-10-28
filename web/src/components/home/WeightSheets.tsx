@@ -51,7 +51,11 @@ function KgForm({ sub, value, hint, deleteLabel, onSave, onDelete }: Parameters<
           value={raw}
           onChange={(e) => setRaw(e.target.value.replace(/[^0-9.,]/g, '').slice(0, 6))}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') save()
+            if (e.key !== 'Enter') return
+            // 저장하면 시트가 닫히며 포커스가 [기록하기]로 돌아간다. 막지 않으면 같은 Enter가 그 버튼을 눌러 시트가 빈 칸으로 다시 열린다
+            // (폰 자판 완료 키, 2026-10-28 사용자 보고)
+            e.preventDefault()
+            save()
           }}
         />
         <span>kg</span>
