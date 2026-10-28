@@ -37,6 +37,8 @@ export default function ConsentPage({ user }: { user: User | null }) {
   const location = useLocation()
   const [nav] = useState(() => location.state as { fromWelcome?: unknown; from?: unknown } | null)
   const fromWelcome = nav?.fromWelcome === true
+  // [이미 계정이 있어요]로 로그인했는데 가입한 기록이 없는 계정: 알리고, 동의 뒤 목표 질문으로(새 가입과 같은 과정)
+  const newAccount = (nav as { newAccount?: unknown } | null)?.newAccount === true
   const [prefs, setPrefs] = useState<{ uid: string; p: Prefs } | null>(null)
   const [agree, setAgree] = useState<Agree | null>(() => (uid ? null : {}))
   const [termsKey, setTermsKey] = useState<TermsKey | null>(null)
@@ -62,8 +64,8 @@ export default function ConsentPage({ user }: { user: User | null }) {
   useEffect(() => {
     if (!submitted || !hasCurrentConsent(consent ?? null) || leaving.current) return
     leaving.current = true
-    // 로그인한 채 동의하면 늘 홈 맨 위로(2026-10-28 사용자 요청: 원래 가려던 화면 대신)
-    void navigate('/', { replace: true })
+    // 로그인한 채 동의하면 늘 홈 맨 위로(2026-10-28 사용자 요청: 원래 가려던 화면 대신). 가입한 기록이 없던 계정은 목표 질문으로
+    void navigate(newAccount ? '/start' : '/', { replace: true })
   }, [submitted, consent, navigate, fromWelcome, nav])
 
   useEffect(() => {
@@ -114,6 +116,11 @@ export default function ConsentPage({ user }: { user: User | null }) {
         <div style={{ display: 'flex', minWidth: 44, justifyContent: 'flex-end' }}></div>
       </div>
       <div className="pad q">
+        {newAccount && (
+          <p className="callout" role="status" style={{ margin: '8px 0 0', background: 'var(--sky-soft)' }}>
+            이 구글 계정으로 가입한 기록이 없어요. 새 계정처럼 동의와 목표 설정부터 시작할게요.
+          </p>
+        )}
         <h2>
           서비스 이용에
           <br />

@@ -9,7 +9,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import FoodPhoto from '../components/terms/FoodPhoto'
 import { clearConsentDraft, hasCurrentConsent } from '../data/consent'
-import { isExistingLogin, markExistingLogin, safeFrom, useConsent } from '../components/terms/consentState'
+import { subscribeGoal } from '../data/goals'
+import { isExistingLogin, markExistingLogin, useConsent } from '../components/terms/consentState'
 import { LoginNotice, useGoogleLogin } from '../components/terms/googleLogin'
 import { Crown, MealArt, Mascot } from '../components/ui'
 
@@ -84,17 +85,36 @@ export default function WelcomePage({ user }: { user: User | null }) {
     return () => root.classList.remove('lock')
   }, [])
 
-  // [이미 계정이 있어요]로 로그인했으면(팝업이든 리디렉션이든) 원래 가려던 곳으로
-  // 동의가 없는 계정(기존 계정·약관 버전 바뀜)이면 동의 화면으로(뒤로 없음)
+  // [이미 계정이 있어요]로 로그인했으면(팝업이든 리디렉션이든, 2026-10-28 사용자 요청):
+  // - 가입한 계정(동의나 목표가 있음): 홈 맨 위. 지금 약관에 아직 동의하지 않았으면 동의 화면(뒤로 없음) 한 번 → 홈
+  // - 가입한 적 없는 계정(동의·목표 모두 없음): "가입한 기록이 없어요"를 알리고 새 가입과 같은 과정(동의 → 목표 질문 → 결과)
   const consent = useConsent()
+  const checking = useRef(false)
   useEffect(() => {
-    if (user && consent !== undefined && isExistingLogin()) {
+    if (!user || consent === undefined || !isExistingLogin() || checking.current) return
+    if (hasCurrentConsent(consent)) {
       markExistingLogin(false)
-      const from = safeFrom(location.state)
-      if (hasCurrentConsent(consent)) void navigate(from, { replace: true })
-      else void navigate('/consent', { replace: true, state: { from } })
+      void navigate('/', { replace: true })
+      return
     }
-  }, [user, consent, navigate, location.state])
+    if (consent !== null) {
+      markExistingLogin(false)
+      void navigate('/consent', { replace: true })
+      return
+    }
+    // 동의 기록이 아예 없으면 목표가 있는지 한 번 본다(D10 전에 가입한 계정은 목표만 있다)
+    checking.current = true
+    let done = false
+    const finish = (hasGoal: boolean) => {
+      if (done) return
+      done = true
+      queueMicrotask(() => unsub())
+      markExistingLogin(false)
+      checking.current = false
+      void navigate('/consent', { replace: true, state: hasGoal ? null : { newAccount: true } })
+    }
+    const unsub = subscribeGoal(user.uid, (g) => finish(g !== null), () => finish(true))
+  }, [user, consent, navigate])
 
   function onScroll() {
     const s = slidesRef.current
@@ -107,9 +127,9 @@ export default function WelcomePage({ user }: { user: User | null }) {
 
   async function existing() {
     if (user) {
-      const from = safeFrom(location.state)
-      if (hasCurrentConsent(consent ?? null)) void navigate(from, { replace: true })
-      else void navigate('/consent', { replace: true, state: { from } })
+      // 이미 로그인한 채(처음 화면 다시 보기 등): 홈 맨 위, 지금 약관에 동의하지 않았으면 동의 한 번
+      if (hasCurrentConsent(consent ?? null)) void navigate('/', { replace: true })
+      else void navigate('/consent', { replace: true })
       return
     }
     // 동의 화면에서 [동의하고 계속] 뒤 로그인 창을 닫고 남은 초안이 이 계정에 동의 화면 없이 적용되지 않게(QA 결함)
