@@ -62,6 +62,32 @@ export const subscribeWeightBefore = (uid: string, dateKey: string, onData: (e: 
 export const subscribeLatestWeight = (uid: string, upToKey: string, onData: (e: WeightEntry | null) => void) =>
   subscribeNearest(uid, upToKey, false, onData)
 
+/** 기록 보기 달력 [몸무게] 칩(D7): start~end(둘 다 포함) 날짜별 체중. dateKey 한 필드 범위라 복합 인덱스 없음 */
+export function subscribeWeightsInRange(
+  uid: string,
+  start: string,
+  end: string,
+  onData: (m: Map<string, number>) => void,
+  onError?: () => void,
+): () => void {
+  const q = query(weightsCol(uid), where('dateKey', '>=', start), where('dateKey', '<=', end), orderBy('dateKey'))
+  return onSnapshot(
+    q,
+    (s) => {
+      const m = new Map<string, number>()
+      for (const d of s.docs) {
+        const e = readEntry(d.data())
+        if (e) m.set(e.dateKey, e.kg)
+      }
+      onData(m)
+    },
+    (e) => {
+      console.warn('[weights] 달 체중 구독 오류', e)
+      onError?.()
+    },
+  )
+}
+
 export async function setWeight(uid: string, dateKey: string, kg: number): Promise<void> {
   const v = roundKg(kg)
   if (!isKg(v)) throw new Error(`체중 범위 오류: ${kg}`)

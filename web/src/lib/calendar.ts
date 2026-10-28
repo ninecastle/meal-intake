@@ -10,6 +10,13 @@ export const METRICS: readonly Metric[] = ['kcal', 'carbs_g', 'protein_g', 'fat_
 /** 선택 버튼 글자 [칼로리 | 탄 | 단 | 지] */
 export const METRIC_LABEL: Record<Metric, string> = { kcal: '칼로리', carbs_g: '탄', protein_g: '단', fat_g: '지' }
 export const METRIC_UNIT: Record<Metric, 'kcal' | 'g'> = { kcal: 'kcal', carbs_g: 'g', protein_g: 'g', fat_g: 'g' }
+/** 화면 읽기·설명 글에 쓰는 항목 이름(버튼 글자 METRIC_LABEL의 긴 이름) */
+export const METRIC_NAME: Record<Metric, string> = { kcal: '칼로리', carbs_g: '탄수화물', protein_g: '단백질', fat_g: '지방' }
+
+/** 달력 항목 칩(디자인 조각 D7, 시안 .nchips [칼로리|탄|단|지|몸무게]). 몸무게는 달력에만 쓴다(2026-10-28 사용자 결정) */
+export type CalNut = Metric | 'weight'
+export const CAL_NUTS: readonly CalNut[] = [...METRICS, 'weight']
+export const CAL_NUT_LABEL: Record<CalNut, string> = { ...METRIC_LABEL, weight: '몸무게' }
 
 /** 목표 범위(✓): 목표의 90~110%, 경계 포함 */
 export const RANGE_LOW = 0.9
@@ -129,6 +136,46 @@ export function monthSummary(valueByDate: ReadonlyMap<string, number>, month: st
     sum += v
   }
   return { recordDays: n, average: n > 0 ? sum / n : null }
+}
+
+/** 월간 그래프(D7) 막대 수: 이번 달이면 오늘까지, 지난 달이면 말일까지 */
+export function monthDayCount(month: string, todayKey: string): number {
+  return month === todayKey.slice(0, 7) ? Number(todayKey.slice(8)) : daysInMonth(month)
+}
+
+/**
+ * 월간 그래프 가로축 날짜(시안 1·8·15·22·27일): 1일부터 7일마다 + 마지막 날.
+ * 마지막 날이 바로 앞 눈금과 4일 안이면 그 눈금 자리에 마지막 날을 쓴다(글자가 겹치지 않게). 5일 전이면 1일만.
+ */
+export function monthDayLabels(n: number): number[] {
+  const out: number[] = []
+  for (let d = 1; d <= n; d += 7) out.push(d)
+  const last = out[out.length - 1]
+  if (last !== n) {
+    if (n - last >= 4) out.push(n)
+    else if (out.length > 1) out[out.length - 1] = n
+  }
+  return out
+}
+
+/** 그달(앞뒤 달 날짜 제외) 기록한 날 가운데 목표 범위(90~110%) 안에 든 날 수. 그날 목표가 있는 기록일이 하나도 없으면 null */
+export function monthInRangeDays(
+  valueByDate: ReadonlyMap<string, number>,
+  month: string,
+  goals: readonly DatedGoal[],
+  metric: Metric,
+): number | null {
+  const { start, end } = monthRange(month)
+  let any = false
+  let n = 0
+  for (const [d, v] of valueByDate) {
+    if (d < start || d > end) continue
+    const t = targetOf(goalForDate(goals, d), metric)
+    if (t === null || !(t > 0)) continue
+    any = true
+    if (heatLevelFor(v, t, metric).inRange) n++
+  }
+  return any ? n : null
 }
 
 /**

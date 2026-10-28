@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 import assert from 'node:assert/strict'
 
 const ROOT = process.argv[2] ?? process.cwd()
-const { parseMonth, shiftMonth, monthRange, goalForDate, heatLevelFor, monthGrid, gridRange, monthSummary, targetOf, metricOf, REFERENCE_AMOUNT } = await import(
+const { parseMonth, shiftMonth, monthRange, goalForDate, heatLevelFor, monthGrid, gridRange, monthSummary, targetOf, metricOf, REFERENCE_AMOUNT, monthDayCount, monthDayLabels, monthInRangeDays, CAL_NUTS, CAL_NUT_LABEL } = await import(
   pathToFileURL(path.join(ROOT, 'web/src/lib/calendar.ts')).href
 )
 
@@ -98,5 +98,30 @@ for (const m of ['2026-01', '2026-02', '2026-03', '2026-08', '2026-11', '2028-02
 const vals = new Map([['2026-09-30', 9999], ['2026-10-01', 1500], ['2026-10-15', 2500], ['2026-11-01', 9999]])
 assert.deepEqual(monthSummary(vals, '2026-10'), { recordDays: 2, average: 2000 })
 assert.deepEqual(monthSummary(new Map(), '2026-10'), { recordDays: 0, average: null })
+
+// D7 월간 그래프: 막대 수(이번 달은 오늘까지), 가로축 날짜(시안 1·8·15·22·27일), 목표 범위 안 날 수
+assert.equal(monthDayCount('2026-10', '2026-10-27'), 27)
+assert.equal(monthDayCount('2026-09', '2026-10-27'), 30)
+assert.equal(monthDayCount('2026-02', '2026-10-27'), 28)
+assert.deepEqual(monthDayLabels(27), [1, 8, 15, 22, 27])
+assert.deepEqual(monthDayLabels(31), [1, 8, 15, 22, 31]) // 29와 31은 겹쳐서 31만
+assert.deepEqual(monthDayLabels(30), [1, 8, 15, 22, 30])
+assert.deepEqual(monthDayLabels(29), [1, 8, 15, 22, 29])
+assert.deepEqual(monthDayLabels(28), [1, 8, 15, 22, 28])
+assert.deepEqual(monthDayLabels(24), [1, 8, 15, 24])
+assert.deepEqual(monthDayLabels(5), [1, 5])
+assert.deepEqual(monthDayLabels(3), [1])
+assert.deepEqual(monthDayLabels(1), [1])
+{
+  const g = (dateKey, kcal) => ({ dateKey, targets: { target_kcal: kcal, carbs_g: 200, protein_g: 80, fat_g: 50 } })
+  const vals = new Map([['2026-09-30', 1900], ['2026-10-01', 1900], ['2026-10-02', 2300], ['2026-10-03', 1710], ['2026-10-04', 1000], ['2026-10-10', 2090]])
+  // 10/3부터 목표 1900: 10/1·10/2는 목표 전, 10/3 1710(90%)·10/10 2090(110%)은 안, 10/4 1000은 밖, 9/30은 다른 달
+  assert.equal(monthInRangeDays(vals, '2026-10', [g('2026-10-03', 1900)], 'kcal'), 2)
+  assert.equal(monthInRangeDays(vals, '2026-10', [], 'kcal'), null) // 목표가 없으면 null
+  assert.equal(monthInRangeDays(new Map(), '2026-10', [g('2026-10-03', 1900)], 'kcal'), null) // 기록이 없으면 null
+  assert.equal(monthInRangeDays(new Map([['2026-10-05', 210]]), '2026-10', [g('2026-10-03', 1900)], 'carbs_g'), 1) // 탄 200g의 105%
+}
+assert.deepEqual(CAL_NUTS, ['kcal', 'carbs_g', 'protein_g', 'fat_g', 'weight'])
+assert.deepEqual(CAL_NUTS.map((k) => CAL_NUT_LABEL[k]), ['칼로리', '탄', '단', '지', '몸무게'])
 
 console.log('모두 통과')

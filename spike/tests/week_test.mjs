@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url'
 import assert from 'node:assert/strict'
 
 const ROOT = process.argv[2] ?? process.cwd()
-const { mondayOf, weekDays, shiftWeek, defaultWeek, monthForWeek, parseWeek, isCurrentOrLaterWeek, niceCeil, axisTicks, weekGoalSteps, weekAverage } =
+const { mondayOf, weekDays, shiftWeek, defaultWeek, monthForWeek, parseWeek, isCurrentOrLaterWeek, niceCeil, axisTicks, rangeTicks, weekGoalSteps, weekAverage } =
   await import(pathToFileURL(path.join(ROOT, 'web/src/lib/week.ts')).href)
 
 const today = '2026-10-27' // 화요일
@@ -54,6 +54,25 @@ assert.deepEqual(axisTicks([], 2000), [0, 600, 1200, 1800, 2400]) // 기준량 2
 for (const vals of [[1], [99], [123456], [57, 56], [0.5]]) {
   const t = axisTicks(vals, 100)
   assert.ok(t[4] >= Math.max(...vals) * 1.1 - 1e-9, `${vals} 머리 공간`)
+}
+
+// 월간 그래프(D7): 3칸 눈금(시안 0·1000·2000·3000)
+assert.deepEqual(axisTicks([2290, 1900], 2000, 3), [0, 1000, 2000, 3000]) // 2519/3 = 839.7 → 1000
+assert.deepEqual(axisTicks([], 2000, 3), [0, 800, 1600, 2400]) // 2200/3 = 733 → 800
+assert.deepEqual(axisTicks([1.3], 1, 3), [0, 0.5, 1, 1.5]) // 소수 칸도 깔끔하게
+
+// 주간 그래프(D7): 4개 눈금, 0에서 시작하지 않아도 되고 값·목표·평균이 모두 들어간다
+assert.deepEqual(rangeTicks([1820, 1960, 1690, 2130, 1860, 2290, 1470, 1900, 1889], 2000), [1200, 1600, 2000, 2400]) // 시안 숫자
+assert.deepEqual(rangeTicks([1500], 2000), [1400, 1500, 1600, 1700]) // 값 하나
+assert.deepEqual(rangeTicks([1500, 1900], 2000), [1400, 1600, 1800, 2000])
+assert.deepEqual(rangeTicks([0, 50], 100), [0, 25, 50, 75]) // 0 아래로 내려가지 않는다
+assert.deepEqual(rangeTicks([0], 100), [0, 1, 2, 3])
+assert.deepEqual(rangeTicks([], 2000), [1800, 1950, 2100, 2250]) // 값이 없으면 기준량 하나
+for (const vals of [[1820, 2400, 511], [26, 103, 64], [0.4, 2.2], [58.4, 58.9, 54], [3200, 3300]]) {
+  const t = rangeTicks(vals, 100)
+  assert.equal(t.length, 4)
+  assert.ok(t[0] >= 0 && t[0] <= Math.min(...vals) + 1e-9 && t[3] >= Math.max(...vals) - 1e-9, `${vals} → ${t}`)
+  assert.ok(Math.abs(t[1] - t[0] - (t[3] - t[2])) < 1e-6, `${vals} 같은 간격`)
 }
 
 // 목표선 계단: 앞쪽(목표 정하기 전)은 그 주 첫 목표로, 주 중간에 바뀌면 그 날부터

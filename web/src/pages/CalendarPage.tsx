@@ -1,51 +1,60 @@
-// S10 기록 보기(3단계 조각 3-1, 스펙 4.7절 "기록 보기", 2026-10-27 사용자 결정으로 히트맵 달력). AI 호출 없음.
-// 주소 /calendar?month=YYYY-MM(없거나 틀리거나 이번 달보다 뒤면 이번 달, lib/calendar.ts parseMonth).
-// 상태는 페이지가 갖는다: 보고 있는 달(?month)과 고른 항목(metric, localStorage 'record-view-metric').
-// 위쪽 줄 = [◀ 10월 ▶] · 월 요약(MonthSummary), 달력 아래 줄 = 진하기 범례 · [칼로리|탄|단|지](2026-10-27 사용자 요청으로 맞바꿈).
-// 달·항목은 아래 섹션 모두에 같이 적용된다. 달력(RecordHeatmap) 아래 ① 주간 추이(WeeklyTrend).
-// 달력 주 줄 끝 › = 그 주를 고르고(?week replace) ① 주간 추이로 부드럽게 스크롤(showWeek). 이미 고른 주면 스크롤만.
-// 고른 주 = ?week=월요일 dateKey(lib/week.ts parseWeek: 틀리거나 미래 주이거나 그달 격자 밖이면 그달 기본 주).
-// 주 이동은 ?month·?week를 replace(옮긴 주가 격자 밖이면 monthForWeek로 달도 따라감). 달 이동은 ?week를 빼서 기본 주로.
-// 고른 주는 항상 그달 격자 안이라 주간 추이도 아래 두 구독 값을 그대로 쓴다(새 구독 없음).
-// 달력 조회: 격자 첫 칸~마지막 칸(gridRange, 앞뒤 달 날짜 포함, 최대 42일) 기록(subscribeDaysInRange)과 마지막 칸까지의
-// 날짜별 목표(subscribeGoalsUpTo). 두 구독의 첫 값이 모두 오기 전에는 숫자·색을 비우고 "불러오는 중…".
-// 방문 기록: 홈에서 push(state.fromHome)로 들어온다. 달 이동은 ?month만 replace(state는 그대로 넘겨 fromHome을 지킨다).
-// ‹ = 홈에서 왔으면 navigate(-1), 주소로 바로 열었으면 홈으로 replace.
-// 날짜 누르기 = 홈에서 왔으면 navigate(-1)이 끝난 뒤(라우터가 돌려주는 promise) 그 홈 자리를 그날 홈으로 replace,
-// 주소로 바로 열었으면 이 자리를 그날 홈으로 replace. 어느 쪽이든 홈이 두 번 쌓이지 않는다.
+// S10 기록 보기(디자인 조각 D7, 시안 calendar() 마크업·클래스 그대로, 숫자만 실제 데이터). AI 호출 없음.
+// div.screen > .topbar.sticky(‹ "기록 보기") → .pad > 달력(RecordCalendar: .calhead·.monthsum·.cal·.legendrow·.nchips)
+// → .segment [주간 | 월간 👑 | AI 리포트 👑](margin-top 26px) → 고른 탭 하나(WeekPane·MonthPane·AiReportPane).
+// 2026-10-28 사용자 결정: 예전 기록 보기 모양(카드 테두리, ✓, 토일 색, 주 줄 ›, 아래로 스크롤하는 섹션 등)은 모두 시안대로,
+// [몸무게] 칩은 달력에만(그래프는 그 전에 고른 항목, 처음엔 칼로리), AI 리포트 탭은 D14 전까지 "준비 중이에요".
+// 주소 /calendar?month=YYYY-MM&week=월요일&tab=month|ai(lib/calendar parseMonth, lib/week parseWeek, 탭 없거나 틀리면 주간).
+// 달·주·탭 바꾸기는 replace(state를 그대로 넘겨 fromHome을 지킨다, ScrollMemory가 같은 화면이라 스크롤 위치를 그대로 둔다).
+// 달 이동은 ?week를 빼서 그달 기본 주로. 주 이동이 격자 밖으로 나가면 monthForWeek로 달도 따라간다(고른 주는 늘 그달 격자 안 → 새 구독 없음).
+// 고른 칩은 localStorage 'record-view-metric'(몸무게 포함), 그래프 항목은 'record-view-graph-metric'(몸무게를 고르기 전 항목)에 기억한다.
+// 조회: 격자 범위 기록(subscribeDaysInRange, 최대 42일)·격자 끝까지 날짜별 목표(subscribeGoalsUpTo)·그달 체중(subscribeWeightsInRange).
+// 오류는 달력 위 시안 .note 상자 한 줄. 방문 기록: 홈에서 push(state.fromHome)로 들어온다. ‹ = 홈에서 왔으면 navigate(-1), 아니면 홈으로 replace.
+// 날짜 누르기 = 홈에서 왔으면 navigate(-1)이 끝난 뒤 그 홈 자리를 그날 홈으로 replace, 주소로 바로 열었으면 이 자리를 그날 홈으로 replace.
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router'
 import { homeHref } from '../components/mealText'
-import MonthNav from '../components/record/MonthNav'
-import RecordHeatmap, { MonthSummary, RECORD_CARD } from '../components/record/RecordHeatmap'
-import WeeklyTrend from '../components/record/WeeklyTrend'
+import AiReportPane from '../components/record/AiReportPane'
+import MonthPane from '../components/record/MonthPane'
+import RecordCalendar from '../components/record/RecordCalendar'
+import WeekPane from '../components/record/WeekPane'
+import { IconButton } from '../components/ui'
 import { subscribeGoalsUpTo, type DatedGoal } from '../data/goals'
 import { subscribeDaysInRange } from '../data/meals'
-import { gridRange, METRICS, parseMonth, shiftMonth, type Metric } from '../lib/calendar'
+import { subscribeWeightsInRange } from '../data/weights'
+import { CAL_NUTS, gridRange, METRICS, monthRange, parseMonth, shiftMonth, type CalNut, type Metric } from '../lib/calendar'
 import { isCurrentOrLaterWeek, monthForWeek, parseWeek, shiftWeek } from '../lib/week'
 import { toDateKey } from '../lib/time'
 import type { Nutrients } from '../types/analysis'
-import { IconButton, TopBar } from '../components/ui'
 
-/** 마지막으로 고른 항목. 못 읽거나 모르는 값이면 칼로리 */
-const METRIC_KEY = 'record-view-metric'
+const NUT_KEY = 'record-view-metric'
+const GRAPH_KEY = 'record-view-graph-metric'
 
-function readMetric(): Metric {
+function readKey<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
   try {
-    const v = localStorage.getItem(METRIC_KEY)
-    return METRICS.find((m) => m === v) ?? 'kcal'
+    const v = localStorage.getItem(key)
+    return allowed.find((m) => m === v) ?? fallback
   } catch {
-    return 'kcal'
+    return fallback
   }
 }
 
-function writeMetric(m: Metric) {
+function writeKey(key: string, v: string) {
   try {
-    localStorage.setItem(METRIC_KEY, m)
+    localStorage.setItem(key, v)
   } catch {
     // 사생활 보호 모드 등: 이번 화면에서만 기억한다
   }
 }
+
+type Tab = 'week' | 'month' | 'ai'
+const TABS: readonly Tab[] = ['week', 'month', 'ai']
+
+/** 시안 탭 안 작은 왕관(12px, fill crown) */
+const TAB_CROWN = (
+  <svg width="12" height="12" viewBox="0 0 16 16" role="img" aria-label="프리미엄" style={{ fill: 'var(--crown)' }}>
+    <path d="M2 12 L1 4 L5 7 L8 2 L11 7 L15 4 L14 12 Z" />
+  </svg>
+)
 
 /** 그달 첫 값. forMonth가 지금 달과 다르면 첫 값 전으로 본다(달을 옮긴 직후 이전 달 숫자를 보이지 않게). */
 type Loaded<T> = { forMonth: string; value: T } | { forMonth: string; error: true }
@@ -57,14 +66,19 @@ export default function CalendarPage({ uid }: { uid: string }) {
   const today = toDateKey(new Date())
   const month = parseMonth(params.get('month'), today)
   const week = parseWeek(params.get('week'), month, today)
+  const tab: Tab = TABS.find((t) => t === params.get('tab')) ?? 'week'
   const { start, end } = gridRange(month)
   const fromHome = (location.state as { fromHome?: unknown } | null)?.fromHome === true
   const leaving = useRef(false)
-  const trendRef = useRef<HTMLDivElement>(null)
 
-  const [metric, setMetric] = useState<Metric>(readMetric)
+  const [nut, setNut] = useState<CalNut>(() => readKey(NUT_KEY, CAL_NUTS, 'kcal'))
+  const [graphMetric, setGraphMetric] = useState<Metric>(() => {
+    const n = readKey(NUT_KEY, CAL_NUTS, 'kcal')
+    return n === 'weight' ? readKey(GRAPH_KEY, METRICS, 'kcal') : n
+  })
   const [days, setDays] = useState<Loaded<Map<string, Nutrients>> | null>(null)
   const [goals, setGoals] = useState<Loaded<DatedGoal[]> | null>(null)
+  const [weights, setWeights] = useState<Loaded<Map<string, number>> | null>(null)
 
   useEffect(
     () =>
@@ -87,51 +101,68 @@ export default function CalendarPage({ uid }: { uid: string }) {
       ),
     [uid, month, end],
   )
+  useEffect(() => {
+    const r = monthRange(month)
+    return subscribeWeightsInRange(
+      uid,
+      r.start,
+      r.end,
+      (m) => setWeights({ forMonth: month, value: m }),
+      () => setWeights({ forMonth: month, error: true }),
+    )
+  }, [uid, month])
 
   const daysNow = days && days.forMonth === month ? days : null
   const goalsNow = goals && goals.forMonth === month ? goals : null
+  const weightsNow = weights && weights.forMonth === month ? weights : null
   const ready = daysNow !== null && goalsNow !== null
   // 숫자·색은 두 구독의 첫 값이 모두 온 뒤에만(숫자 먼저, 색 나중으로 깜빡이지 않게). 기록 오류면 숫자 없이, 목표 오류면 색 없이.
   const dayTotals = ready && 'value' in daysNow ? daysNow.value : null
   const goalList = ready && 'value' in goalsNow ? goalsNow.value : null
+  const weightMap = weightsNow && 'value' in weightsNow ? weightsNow.value : null
 
-  function chooseMetric(m: Metric) {
-    setMetric(m)
-    writeMetric(m)
+  const notice =
+    nut === 'weight'
+      ? weightsNow && 'error' in weightsNow
+        ? '체중 기록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.'
+        : null
+      : ready && dayTotals === null
+        ? '기록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.'
+        : ready && goalList === null
+          ? '목표를 불러오지 못해 색 없이 보여요.'
+          : null
+
+  function chooseNut(n: CalNut) {
+    setNut(n)
+    writeKey(NUT_KEY, n)
+    if (n !== 'weight') {
+      setGraphMetric(n)
+      writeKey(GRAPH_KEY, n)
+    }
+  }
+
+  /** 같은 화면 안 주소 바꾸기(replace, fromHome state 그대로) */
+  function go(next: { month: string; week?: string; tab: Tab }) {
+    const q = new URLSearchParams({ month: next.month })
+    if (next.week) q.set('week', next.week)
+    if (next.tab !== 'week') q.set('tab', next.tab)
+    navigate({ pathname: '/calendar', search: `?${q}` }, { replace: true, state: location.state })
   }
 
   function moveMonth(delta: number) {
     const next = shiftMonth(month, delta)
     if (next > today.slice(0, 7)) return
-    // state를 그대로 넘겨야 fromHome이 남는다(달을 옮겨도 ‹·날짜 누르기가 홈 한 칸으로 돌아간다)
-    navigate({ pathname: '/calendar', search: `?month=${next}` }, { replace: true, state: location.state })
+    go({ month: next, tab })
   }
 
-  /** 주간 추이 ◀ 지난주 / 다음 주 ▶. 격자 밖으로 나가면 달력 달도 그 주 월요일의 달로 */
   function moveWeek(delta: number) {
     if (delta > 0 && isCurrentOrLaterWeek(week, today)) return
     const next = shiftWeek(week, delta)
-    const nextMonth = monthForWeek(month, next)
-    navigate(
-      { pathname: '/calendar', search: `?month=${nextMonth}&week=${next}` },
-      { replace: true, state: location.state },
-    )
+    go({ month: monthForWeek(month, next), week: next, tab })
   }
 
-  /** 달력 주 줄 › : 그 주를 고르고 ① 주간 추이로 스크롤. 고른 주는 그달 격자 안이라 달은 그대로. 미래 주는 막는다 */
-  function showWeek(monday: string) {
-    if (monday > today) return
-    if (monday !== week) {
-      navigate({ pathname: '/calendar', search: `?month=${month}&week=${monday}` }, { replace: true, state: location.state })
-    }
-    let reduce = false
-    try {
-      reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    } catch {
-      // matchMedia가 없으면 부드럽게
-    }
-    // 섹션 자리는 고른 주와 상관없이 같아서 주소를 바꾼 직후 바로 스크롤해도 된다
-    trendRef.current?.scrollIntoView({ behavior: reduce ? 'instant' : 'smooth', block: 'start' })
+  function chooseTab(t: Tab) {
+    go({ month, week: params.get('week') ? week : undefined, tab: t })
   }
 
   function goHome() {
@@ -155,50 +186,51 @@ export default function CalendarPage({ uid }: { uid: string }) {
   }
 
   return (
-    <main className="mx-auto flex min-h-dvh max-w-[430px] flex-col px-4 pt-2 pb-[max(1rem,env(safe-area-inset-bottom))]">
-      <TopBar className="-mx-4" left={<IconButton icon="back" label="홈으로" onClick={goHome} />} title="기록 보기" />
-
-      {/* 달력 카드(2026-10-27 사용자 요청): 월 이동·월 요약 줄 + 요일·날짜 격자 + 범례·항목 선택 줄을 둥근 테두리 하나로 감싼다.
-          안쪽 여백은 좌우 6px(px-1.5)만: 360px 폰에서 카드 안쪽 328 − 테두리 2 − 여백 12 = 314px → 날짜 칸 (314 − 14 − 18) ÷ 7 ≈ 40.3px.
-          8px로 하면 39.7px가 되어 40px 아래로 줄어든다. 화면 좌우 16px(main px-4)는 그대로 */}
-      <div className={`mt-1 ${RECORD_CARD}`}>
-        {/* 위쪽 줄: 왼쪽 월 이동, 오른쪽 월 요약(불러오기 전·기록 오류면 비움). 항목 선택은 달력 아래 줄 오른쪽(RecordHeatmap) */}
-        <div className="flex items-center justify-between gap-x-2 pr-1.5">
-          <MonthNav month={month} today={today} onMove={moveMonth} />
-          <MonthSummary month={month} metric={metric} days={dayTotals} />
+    <main className="screen enter">
+      <div className="topbar sticky pad">
+        <div style={{ display: 'flex' }}>
+          <IconButton icon="back" label="뒤로" onClick={goHome} />
         </div>
-
-        <RecordHeatmap
+        <h1>기록 보기</h1>
+        <div style={{ display: 'flex', minWidth: 44, justifyContent: 'flex-end' }}></div>
+      </div>
+      <div className="pad">
+        {notice && (
+          <p className="note" role="status" style={{ margin: '0 0 12px' }}>
+            {notice}
+          </p>
+        )}
+        <RecordCalendar
           month={month}
           today={today}
-          metric={metric}
+          nut={nut}
           ready={ready}
           days={dayTotals}
           goals={goalList}
-          weekStart={week}
+          weights={weightMap}
+          onMoveMonth={moveMonth}
           onOpenDay={(d) => void openDay(d)}
-          onShowWeek={showWeek}
-          onMetricChange={chooseMetric}
+          onNut={chooseNut}
         />
+        <div className="segment" role="tablist" aria-label="통계" style={{ marginTop: 26 }}>
+          <button type="button" role="tab" aria-selected={tab === 'week'} onClick={() => chooseTab('week')}>
+            주간
+          </button>
+          <button type="button" role="tab" aria-selected={tab === 'month'} onClick={() => chooseTab('month')}>
+            월간 {TAB_CROWN}
+          </button>
+          <button type="button" role="tab" aria-selected={tab === 'ai'} onClick={() => chooseTab('ai')}>
+            AI 리포트 {TAB_CROWN}
+          </button>
+        </div>
+        {tab === 'week' ? (
+          <WeekPane weekStart={week} today={today} metric={graphMetric} ready={ready} days={dayTotals} goals={goalList} onMoveWeek={moveWeek} />
+        ) : tab === 'month' ? (
+          <MonthPane month={month} today={today} metric={graphMetric} ready={ready} days={dayTotals} goals={goalList} />
+        ) : (
+          <AiReportPane />
+        )}
       </div>
-
-      {/* 아래 섹션 순서(같은 metric·month·week와 두 구독 값을 props로 받는다):
-          ① 주간 추이 그래프(무료, 조각 4, 달력과 같은 RECORD_CARD 카드) → ② PREMIUM 주간 분석 리포트 → ③ PREMIUM 월간 그래프·요약 */}
-      {/* 스크롤 대상(› 누르기). 카드 사이 간격은 이 div의 mt-3, scroll-mt-2로 스크롤하면 카드 위 테두리가 화면 맨 위에서 8px 아래에 온다 */}
-      <div ref={trendRef} className="mt-3 scroll-mt-2">
-        <WeeklyTrend
-          weekStart={week}
-          today={today}
-          metric={metric}
-          ready={ready}
-          days={dayTotals}
-          goals={goalList}
-          onMoveWeek={moveWeek}
-          onOpenDay={(d) => void openDay(d)}
-        />
-      </div>
-      {/* ② PREMIUM 주간 분석 리포트: 프리미엄 단계에서 만든다(PREMIUM 배지·"프리미엄 기능(월 요금 예정)" 미리보기·[체험하기]) */}
-      {/* ③ PREMIUM 월간 그래프·요약: 프리미엄 단계에서 만든다 */}
     </main>
   )
 }

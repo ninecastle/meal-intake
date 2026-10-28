@@ -69,15 +69,34 @@ export function niceCeil(x: number): number {
   return Math.round(nf * p * 1e6) / 1e6
 }
 
+const tidy = (n: number) => Math.round(n * 1e6) / 1e6
+
 /**
- * 그래프 세로축 눈금 5개(0과 4칸). 값·목표 가운데 가장 큰 값의 110% 이상이 되게 칸 크기를 보기 좋은 수로 올린다.
- * 값이 모두 없거나 0이면 fallbackMax(예: 기준량)를 쓴다.
+ * 그래프 세로축 눈금(0과 parts칸, 기본 4칸 = 5개, D7 월간 그래프는 시안처럼 3칸 = 0·1000·2000·3000). 값·목표 가운데 가장 큰 값의
+ * 110% 이상이 되게 칸 크기를 보기 좋은 수로 올린다. 값이 모두 없거나 0이면 fallbackMax(예: 기준량)를 쓴다.
  */
-export function axisTicks(values: readonly number[], fallbackMax: number): number[] {
+export function axisTicks(values: readonly number[], fallbackMax: number, parts = 4): number[] {
   const finite = values.filter((v) => Number.isFinite(v) && v > 0)
   const max = finite.length > 0 ? Math.max(...finite) : fallbackMax
-  const step = niceCeil((max * 1.1) / 4) || 1
-  return [0, step, step * 2, step * 3, step * 4]
+  const step = niceCeil((max * 1.1) / parts) || 1
+  return Array.from({ length: parts + 1 }, (_, i) => tidy(step * i))
+}
+
+/**
+ * 주간 그래프(D7) 세로축 눈금 4개(시안 1000·1500·2000·2500처럼 0에서 시작하지 않아도 된다). 값·목표·평균이 모두 들어가고
+ * 가운데쯤 오게 칸 크기(보기 좋은 수)와 시작값(칸 크기의 배수, 0 이상)을 정한다. 값이 없으면 fallback 하나만 있는 것으로 본다.
+ */
+export function rangeTicks(values: readonly number[], fallback: number): number[] {
+  const v = values.filter((x) => Number.isFinite(x) && x >= 0)
+  const lo = v.length > 0 ? Math.min(...v) : fallback
+  const hi = v.length > 0 ? Math.max(...v) : fallback
+  let step = niceCeil(Math.max(hi - lo, hi * 0.15) / 2.4) || 1
+  for (let k = 0; k < 40; k++) {
+    const min = Math.max(0, Math.round(((lo + hi) / 2 - 1.5 * step) / step) * step)
+    if (min <= lo + 1e-9 && min + 3 * step >= hi - 1e-9) return [0, 1, 2, 3].map((i) => tidy(min + step * i))
+    step = niceCeil(step * 1.0001)
+  }
+  return [0, 1, 2, 3].map((i) => tidy((hi / 3) * i))
 }
 
 /**
