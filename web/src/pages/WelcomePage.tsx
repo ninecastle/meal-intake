@@ -1,14 +1,15 @@
 // 소개(/welcome, 디자인 조각 D10): 시안 intro() 마크업·클래스 그대로 — .screen.ob.pad > .slides(슬라이드 3장) + .dots,
 // 아래 .bottom에 [시작하기](.btn.ink)와 [이미 계정이 있어요](.link). 시안처럼 화면에 있는 동안 html.lock(스크롤 잠금), 떠나면 해제.
 // 로그인 전: [시작하기] → 처음 동의, [이미 계정이 있어요] → 구글 로그인 → 원래 가려던 곳(기본 홈. 동의가 없는 계정은 경로 가드가 동의 화면으로).
+// 로그인했는데 동의 전(기존 계정·약관 버전 바뀜, 2026-10-28 사용자 요청): 경로 가드가 여기로 보낸다 — [시작하기] → 동의(‹ 있음), [이미 계정이 있어요] → 동의(‹ 없음).
 // 로그인 상태(설정 "처음 화면 다시 보기"): [시작하기] → 처음 동의(저장된 동의대로 체크), [이미 계정이 있어요] → 홈.
 // 슬라이드 3의 "1,124 / 1,900kcal"는 그림 속 예시라 시안 그대로 둔다.
 import type { User } from 'firebase/auth'
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import FoodPhoto from '../components/terms/FoodPhoto'
-import { clearConsentDraft } from '../data/consent'
-import { isExistingLogin, markExistingLogin, safeFrom } from '../components/terms/consentState'
+import { clearConsentDraft, hasCurrentConsent } from '../data/consent'
+import { isExistingLogin, markExistingLogin, safeFrom, useConsent } from '../components/terms/consentState'
 import { LoginNotice, useGoogleLogin } from '../components/terms/googleLogin'
 import { Crown, MealArt, Mascot } from '../components/ui'
 
@@ -84,12 +85,16 @@ export default function WelcomePage({ user }: { user: User | null }) {
   }, [])
 
   // [이미 계정이 있어요]로 로그인했으면(팝업이든 리디렉션이든) 원래 가려던 곳으로
+  // 동의가 없는 계정(기존 계정·약관 버전 바뀜)이면 동의 화면으로(뒤로 없음)
+  const consent = useConsent()
   useEffect(() => {
-    if (user && isExistingLogin()) {
+    if (user && consent !== undefined && isExistingLogin()) {
       markExistingLogin(false)
-      void navigate(safeFrom(location.state), { replace: true })
+      const from = safeFrom(location.state)
+      if (hasCurrentConsent(consent)) void navigate(from, { replace: true })
+      else void navigate('/consent', { replace: true, state: { from } })
     }
-  }, [user, navigate, location.state])
+  }, [user, consent, navigate, location.state])
 
   function onScroll() {
     const s = slidesRef.current
@@ -102,7 +107,9 @@ export default function WelcomePage({ user }: { user: User | null }) {
 
   async function existing() {
     if (user) {
-      void navigate('/', { replace: true })
+      const from = safeFrom(location.state)
+      if (hasCurrentConsent(consent ?? null)) void navigate(from, { replace: true })
+      else void navigate('/consent', { replace: true, state: { from } })
       return
     }
     // 동의 화면에서 [동의하고 계속] 뒤 로그인 창을 닫고 남은 초안이 이 계정에 동의 화면 없이 적용되지 않게(QA 결함)

@@ -64,7 +64,7 @@ export default function ConsentPage({ user }: { user: User | null }) {
   useEffect(() => {
     if (!submitted || !hasCurrentConsent(consent ?? null) || leaving.current) return
     leaving.current = true
-    void navigate(fromWelcome ? '/' : safeFrom(nav), { replace: true })
+    void navigate(safeFrom(nav), { replace: true })
   }, [submitted, consent, navigate, fromWelcome, nav])
 
   useEffect(() => {

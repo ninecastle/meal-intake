@@ -117,7 +117,8 @@ function RequireUser() {
   if (!user) return <Navigate to="/welcome" replace state={{ from: loc.pathname + loc.search }} />
   // 동의를 불러오는 중이거나, 로그인 전 동의 초안을 계정에 저장하는 중(Root가 다음 화면으로 보낸다)
   if (consent === undefined || (!hasCurrentConsent(consent) && readConsentDraft())) return <Loading />
-  if (!hasCurrentConsent(consent)) return <Navigate to="/consent" replace state={{ from: loc.pathname + loc.search }} />
+  // 동의 전 계정도 소개부터(2026-10-28 사용자 요청: 처음 화면 다시 보기를 누르지 않아도 동의 전에 소개)
+  if (!hasCurrentConsent(consent)) return <Navigate to="/welcome" replace state={{ from: loc.pathname + loc.search }} />
   return <Outlet />
 }
 
