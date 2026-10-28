@@ -6,6 +6,7 @@
 // 식사 사진 보관(D9): keepPhotos가 true면 먹은 후 분석이 끝난 뒤 같은 압축본으로 'after' 썸네일을 저장한다(기다리지 않음).
 //   다시 찍기(retake)여도 저장한다(다시 찍으면 덮어쓴다). [다 먹었어요]·[남긴 양 직접 고르기]는 먹은 후 사진이 없어 저장하지 않는다.
 // 먹은 후 사진은 이 화면 메모리에만 둔다. 먹기 전 사진은 IndexedDB에 있으면 카메라 화면에 반투명하게 겹친다(photoUrl).
+import { askConfirm } from '../ui'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { analyzeAfter, assembleAnalysis } from '../../analysis/analyze'
 import { WARN_NO_AFTER } from '../../analysis/assemble'
@@ -204,9 +205,9 @@ export function useAfterFlow(opts: {
     }, 'manual')
   }
 
-  function cancelMeal() {
+  async function cancelMeal() {
     const t = target
-    if (!t || !window.confirm('이 기록을 취소할까요? 먹기 전 분석 결과도 지워져요.')) return
+    if (!t || !(await askConfirm({ title: '이 기록을 취소할까요?', body: '먹기 전 분석 결과도 지워져요.', ok: '기록 취소', cancel: '아니요' }))) return
     abortRef.current?.abort()
     // 서버 확인을 기다리지 않는다(오프라인이면 끝나지 않는다).
     deleteMeal(uid, t.id).catch((e: unknown) => console.warn('[meal] 기록 취소 실패', e))

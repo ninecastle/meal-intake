@@ -10,6 +10,7 @@ import { createBrowserRouter, Navigate, Outlet, useLocation, useNavigate, type R
 import { RouterProvider } from 'react-router/dom'
 import RouteErrorScreen from './components/RouteErrorScreen'
 import ScrollMemory from './components/ScrollMemory'
+import { ConfirmHost } from './components/ui'
 import { ConsentContext, useConsent, useConsentSubscription } from './components/terms/consentState'
 import { clearConsentDraft, hasCurrentConsent, readConsentDraft, saveConsent } from './data/consent'
 import { subscribeGoal } from './data/goals'
@@ -102,6 +103,8 @@ function Root() {
     <Frame>
       {/* 뒤로 가기로 돌아오면 보던 위치, 새 화면·홈 날짜 바꾸기는 맨 위(2026-10-27 사용자가 고른 변경) */}
       <ScrollMemory />
+      {/* 앱 안 확인 창(브라우저 확인 창 대신, 2026-10-28 사용자 요청) */}
+      <ConfirmHost />
       <Suspense fallback={<Loading />}>
         <Outlet />
       </Suspense>

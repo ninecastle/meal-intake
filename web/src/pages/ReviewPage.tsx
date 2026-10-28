@@ -12,7 +12,7 @@
 // 모양(디자인 조각 D3-2, 사용자 확인 d32_4_review): 시안 .screen > .topbar.sticky(‹ 제목) → 날짜 줄 + [날짜 바꾸기](.chipbtn, 날짜 입력을 덮어 씀)
 // → [아침|점심|저녁|간식](.segment) → 편집기(합계·막대 → 확인할 점 .callout butter-soft → 음식 카드) → [기록 취소 ›] → .bottom([먹은 후 사진 다시 찍기]·[저장]).
 // 저장 상태 안내(연결이 느림·저장 실패·다시 계산 중·고칠 값)는 아래 막대 바로 위 .callout.
-import { IconButton } from '../components/ui'
+import { askConfirm, IconButton } from '../components/ui'
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   UNSAFE_DataRouterContext,
@@ -45,7 +45,7 @@ const MEAL_TYPES: { value: MealType; label: string }[] = [
   { value: 'dinner', label: '저녁' },
   { value: 'snack', label: '간식' },
 ]
-const LEAVE_MSG = '저장하지 않고 나갈까요?'
+const LEAVE_ASK = { title: '저장하지 않고 나갈까요?', body: '고친 내용은 사라져요.', ok: '나가기' }
 /** 오프라인이면 쓰기 Promise가 서버 확인까지 끝나지 않는다. 이 시간이 지나면 "연결되면 자동으로 저장돼요"를 보인다. */
 const SLOW_MS = 10_000
 const OFFLINE_HINT_MS = 1_500
@@ -103,8 +103,7 @@ function LeaveGuard({ shouldBlock }: { shouldBlock: () => boolean }) {
   const blocker = useBlocker(({ currentLocation, nextLocation }) => currentLocation.pathname !== nextLocation.pathname && shouldBlock())
   useEffect(() => {
     if (blocker.state !== 'blocked') return
-    if (window.confirm(LEAVE_MSG)) blocker.proceed()
-    else blocker.reset()
+    void askConfirm(LEAVE_ASK).then((ok) => (ok ? blocker.proceed() : blocker.reset()))
   }, [blocker])
   return null
 }
@@ -275,8 +274,8 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
     } else navigate('/', { replace: true, state: saved ? { saved } : undefined })
   }
 
-  function onBack() {
-    if (dirty && !window.confirm(LEAVE_MSG)) return
+  async function onBack() {
+    if (dirty && !(await askConfirm(LEAVE_ASK))) return
     leave()
   }
 
@@ -291,17 +290,17 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
   // 결과 확인(사진 분석 기록)에서만. 직접 입력(새 기록)은 저장 전이라 나가면 그만이고, 수정 모드는 끼니 화면 X로 지운다.
   const canCancel = !isEdit && routeId !== null && phase.kind === 'ready' && !phase.initial.isNew
 
-  function onCancelMeal() {
-    if (!uid || !routeId || saving || !window.confirm('이 기록을 취소할까요? 먹기 전 분석 결과도 지워져요.')) return
+  async function onCancelMeal() {
+    if (!uid || !routeId || saving || !(await askConfirm({ title: '이 기록을 취소할까요?', body: '먹기 전 분석 결과도 지워져요.', ok: '기록 취소', cancel: '아니요' }))) return
     // 서버 확인을 기다리지 않는다(오프라인이면 끝나지 않는다).
     deleteMeal(uid, routeId).catch((e: unknown) => console.warn('[review] 기록 취소 실패', e))
     beforePhotoStore.remove(routeId).catch(() => {})
     leave()
   }
 
-  function onRetake() {
+  async function onRetake() {
     if (!routeId || saving) return
-    if (dirty && !window.confirm(LEAVE_MSG)) return
+    if (dirty && !(await askConfirm(LEAVE_ASK))) return
     allowLeave.current = true
     navigate(`/meal/${routeId}/after`, { replace: true })
   }

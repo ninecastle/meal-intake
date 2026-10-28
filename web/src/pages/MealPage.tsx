@@ -32,7 +32,7 @@ import { useBeforeFlow } from '../components/meal/useBeforeFlow'
 import { useKeepPhotosAsk } from '../components/meal/KeepPhotosAsk'
 import { formatGrams, homeHref, isDateKey, macroPct, MEAL_TYPE_LABEL, MEAL_TYPES, sourceLabel } from '../components/mealText'
 import { foodName, isAllLeft, representativeFood } from '../lib/foodName'
-import { IconButton, MealArt, Toast } from '../components/ui'
+import { askConfirm, IconButton, MealArt, Toast } from '../components/ui'
 import { deleteMeal, saveMeal, subscribeMealsFor, type MealType, type MealWithId } from '../data/meals'
 import { sumDetail } from '../data/summary'
 import { setMealTime, subscribeMealTimes, toHm, type MealTimes } from '../data/mealTimes'
@@ -183,10 +183,12 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
   )
   useEffect(() => {
     if (blocker.state !== 'blocked') return
-    if (window.confirm('저장하지 않고 나갈까요? 고친 내용은 사라져요.')) {
-      clearPendingEdits()
-      blocker.proceed()
-    } else blocker.reset()
+    void askConfirm({ title: '저장하지 않고 나갈까요?', body: '고친 내용은 사라져요.', ok: '나가기' }).then((ok) => {
+      if (ok) {
+        clearPendingEdits()
+        blocker.proceed()
+      } else blocker.reset()
+    })
   }, [blocker])
 
   /** [수정 완료]: 고친 내용이 있으면 저장하고 "저장했어요", 없으면 그냥 홈(보던 위치)으로 */
@@ -298,7 +300,7 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
   }
 
   async function removeItem(m: MealWithId, item: MealItem) {
-    if (!m.analysis || !window.confirm(`${foodName(item.name) || '이 음식'}을(를) 지울까요?`)) return
+    if (!m.analysis || !(await askConfirm({ title: `${foodName(item.name) || '이 음식'}을(를) 지울까요?`, ok: '지우기' })) || !m.analysis) return
     setActionError(null)
     const pending = getPendingEdit(m.id)
     if (pending) {
