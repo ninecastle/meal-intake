@@ -37,6 +37,7 @@ import { setFlash } from '../lib/flash'
 import { beforePhotoStore } from '../photos/beforePhotoStore'
 import type { MealIntakeAnalysis } from '../types/analysis'
 import type { MealReturn } from '../components/meal/useAfterFlow'
+import { getPendingEdit, setPendingEdit } from '../lib/pendingEdits'
 
 const MEAL_TYPES: { value: MealType; label: string }[] = [
   { value: 'breakfast', label: '아침' },
@@ -123,6 +124,8 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
   const entryState = useRef<unknown>(location.state)
   const mealReturn = (entryState.current as Partial<MealReturn> | null)?.mealReturn ?? null
   const entryRetake = (entryState.current as { retake?: unknown } | null)?.retake === true
+  // 끼니 화면에서 음식을 눌러 들어온 수정: [확인]은 저장하지 않고 끼니 화면에 넘긴다([수정 완료] 때 저장, 2026-10-28 사용자 결정)
+  const deferSave = mode === 'edit' && (entryState.current as { fromMeal?: unknown } | null)?.fromMeal === true
   const entryDate = useRef(searchParams.get('date'))
   // 홈 끼니 카드에서 [직접 입력]으로 오면 ?meal(디자인 조각 D2, 끼니는 누른 카드)
   const entryMeal = useRef(searchParams.get('meal'))
@@ -187,6 +190,12 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
     }
     if (fromState) {
       ready({ mealId: routeId, ...fromState, isNew: false })
+      return
+    }
+    // 끼니 화면에서 이미 고쳐 둔 내용([수정 완료] 전)이 있으면 그것부터
+    const pending = deferSave ? getPendingEdit(routeId) : null
+    if (pending) {
+      ready({ mealId: routeId, ...pending, isNew: false })
       return
     }
     // 앱을 다시 열었을 때: 저장된 문서로 이어서 한다
@@ -302,6 +311,12 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
     const { mealId } = phase.initial
     const { analysis: a, mealType, dateKey } = draft
     const consumedKcal = a.totals.consumed.kcal
+    if (deferSave) {
+      // 바꾼 것이 없으면 넘기지 않는다([수정 완료]에서 "저장했어요"가 뜨지 않게)
+      if (dirty) setPendingEdit(mealId, { dateKey, mealType, analysis: a })
+      leave()
+      return
+    }
     pendingSave.current = { mealId, dateKey, consumedKcal }
     setSaving(true)
     setSaveError(null)
@@ -508,7 +523,7 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
                 </button>
               )}
               <button type="button" className="btn ink" onClick={onSave} disabled={!canSave}>
-                {saving ? '저장 중…' : saveError ? '다시 시도' : isEdit ? '수정 저장' : '저장'}
+                {saving ? '저장 중…' : saveError ? '다시 시도' : deferSave ? '확인' : isEdit ? '수정 저장' : '저장'}
               </button>
             </div>
           </div>

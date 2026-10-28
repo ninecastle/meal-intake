@@ -14,8 +14,8 @@
 // - 촬영·분석은 이 화면이 맡는다(useBeforeFlow·useAfterFlow, 카메라는 useCaptureSource 하나). 먹기 전 분석이 끝나면 이 화면에 머문다.
 // - [수정 완료]·닫기는 홈(그 날짜)으로. [수정 완료]는 "저장했어요" 토스트(바뀐 내용은 이미 바로 저장됨).
 // 들어오는 state: { fromHome?: true(홈에서 push → 나갈 때 뒤로), openAfter?: 기록 id(그 시트를 바로 연다), openRecord?: true(식사 기록 시트) }.
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { Navigate, useLocation, useNavigate, useParams } from 'react-router'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from 'react'
+import { Navigate, useBlocker, useLocation, useNavigate, useParams } from 'react-router'
 import { buildAnalysis } from '../analysis/compute'
 import { useCaptureSource } from '../components/capture/useCaptureSource'
 import {
@@ -38,6 +38,15 @@ import { sumDetail } from '../data/summary'
 import { setMealTime, subscribeMealTimes, toHm, type MealTimes } from '../data/mealTimes'
 import { clearFlash, peekFlash, setFlash } from '../lib/flash'
 import { toDateKey } from '../lib/time'
+import {
+  allPendingEdits,
+  clearPendingEdits,
+  dropPendingEdit,
+  getPendingEdit,
+  pendingEditsVersion,
+  setPendingEdit,
+  subscribePendingEdits,
+} from '../lib/pendingEdits'
 import type { MealItem } from '../types/analysis'
 
 /** 시안 meals[k].card(홈 끼니 카드 색). 끝난 기록 묶음의 왼쪽 세로 줄 색 */
@@ -155,6 +164,40 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
   )
   useEffect(() => subscribeMealTimes(uid, dateKey, setTimes), [uid, dateKey])
 
+  // 음식을 눌러 고친 내용(수정 화면 [확인], 2026-10-28 사용자 결정)은 [수정 완료] 때 저장한다. 그 전에는 저장한 기록 위에 덮어 보인다
+  // (날짜·끼니를 바꿨으면 이 화면에서 빠진다). [수정 완료] 없이 다른 화면으로 나가면 물어보고 버린다(수정·결과 화면으로 가는 것은 제외).
+  const pendingVer = useSyncExternalStore(subscribePendingEdits, pendingEditsVersion)
+  const view = useMemo(() => {
+    void pendingVer
+    if (!meals) return null
+    return meals.flatMap((m): MealWithId[] => {
+      const p = getPendingEdit(m.id)
+      if (!p) return [m]
+      if (p.dateKey !== dateKey || p.mealType !== meal) return []
+      return [{ ...m, ...p, editedAt: m.editedAt ?? (new Date() as unknown as MealWithId['editedAt']) }]
+    })
+  }, [meals, pendingVer, dateKey, meal])
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      allPendingEdits().length > 0 && currentLocation.pathname !== nextLocation.pathname && !nextLocation.pathname.startsWith('/meal/'),
+  )
+  useEffect(() => {
+    if (blocker.state !== 'blocked') return
+    if (window.confirm('저장하지 않고 나갈까요? 고친 내용은 사라져요.')) {
+      clearPendingEdits()
+      blocker.proceed()
+    } else blocker.reset()
+  }, [blocker])
+
+  /** [수정 완료]: 고친 내용이 있으면 저장하고 "저장했어요", 없으면 그냥 홈(보던 위치)으로 */
+  function finish() {
+    const edits = allPendingEdits()
+    // 기다리지 않는다(오프라인이면 끝나지 않는다). 쓰기는 기기에 남아 연결되면 올라간다.
+    for (const [id, e] of edits) saveMeal(uid, id, e).catch((err: unknown) => console.warn('[meal] 수정 저장 실패', err))
+    clearPendingEdits()
+    leave(edits.length > 0)
+  }
+
   // 들어올 때 받은 시트 열기 요청은 한 번만 쓴다(새로고침 때 다시 열리지 않게 state를 비운다)
   useEffect(() => {
     const s = entry.current
@@ -257,7 +300,19 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
   async function removeItem(m: MealWithId, item: MealItem) {
     if (!m.analysis || !window.confirm(`${foodName(item.name) || '이 음식'}을(를) 지울까요?`)) return
     setActionError(null)
-    const rest = m.analysis.items.filter((it) => it.id !== item.id)
+    const pending = getPendingEdit(m.id)
+    if (pending) {
+      const pRest = pending.analysis.items.filter((it) => it.id !== item.id)
+      if (pRest.length === 0) dropPendingEdit(m.id)
+      else
+        setPendingEdit(m.id, {
+          ...pending,
+          analysis: buildAnalysis(pRest, pending.analysis.warnings ?? [], { model: pending.analysis.model, prompt_version: pending.analysis.prompt_version }),
+        })
+    }
+    // X는 바로 저장(사용자 결정): 저장된 기록(고치기 전)에서 그 음식을 뺀다
+    const base = meals?.find((x) => x.id === m.id)?.analysis ?? m.analysis
+    const rest = base.items.filter((it) => it.id !== item.id)
     // 기다리지 않는다(오프라인이면 끝나지 않는다). 구독은 로컬 캐시로 바로 바뀐다.
     const job =
       rest.length === 0
@@ -265,9 +320,9 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
         : saveMeal(uid, m.id, {
             dateKey: m.dateKey,
             mealType: m.mealType,
-            analysis: buildAnalysis(rest, m.analysis.warnings ?? [], {
-              model: m.analysis.model,
-              prompt_version: m.analysis.prompt_version,
+            analysis: buildAnalysis(rest, base.warnings ?? [], {
+              model: base.model,
+              prompt_version: base.prompt_version,
             }),
           })
     showToast('삭제했어요')
@@ -277,7 +332,7 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
     })
   }
 
-  const done = useMemo(() => (meals ?? []).filter((m) => m.status === 'done' && m.analysis), [meals])
+  const done = useMemo(() => (view ?? []).filter((m) => m.status === 'done' && m.analysis), [view])
   const totals: MealTotals = useMemo(() => {
     const t = { kcal: 0, carbs_g: 0, protein_g: 0, fat_g: 0 }
     for (const m of done) {
@@ -294,7 +349,7 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
   const detail = useMemo(() => sumDetail(done.flatMap((m) => (m.analysis ? [m.analysis] : []))), [done])
 
   const groups: Group[] = []
-  for (const m of meals ?? []) {
+  for (const m of view ?? []) {
     if (m.status === 'done' && m.analysis) {
       // 다 남긴 음식(남긴 비율 100%)은 줄을 숨긴다. 기록의 음식이 모두 그렇면 묶음도 숨긴다(사용자가 고른 변경 18, 수정 화면에는 그대로)
       const shownItems = m.analysis.items.filter((it) => !isAllLeft(it))
@@ -480,10 +535,21 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
         </div>
         <div className="bottom">
           <div className="inner pad">
-            {/* [수정 완료]는 없앤다 — 바뀐 내용은 바로 저장되고 홈은 X·뒤로 가기로(2026-10-28 사용자가 고른 변경 20) */}
-            <button type="button" className="btn ink" onClick={openRecord}>
-              음식 추가
-            </button>
+            {rowCount > 0 ? (
+              <>
+                <button type="button" className="btn sky narrow" onClick={openRecord}>
+                  음식 추가
+                </button>
+                {/* 음식을 눌러 고친 내용은 여기서 저장(2026-10-28 사용자 결정), 고친 것이 없으면 홈으로만 */}
+                <button type="button" className="btn ink" onClick={finish}>
+                  수정 완료
+                </button>
+              </>
+            ) : (
+              <button type="button" className="btn ink" onClick={openRecord}>
+                음식 추가
+              </button>
+            )}
           </div>
         </div>
         <Toast message={toast?.text ?? null} />
