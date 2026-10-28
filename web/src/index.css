@@ -139,6 +139,7 @@
      제목은 띠 위에 붙이고(아래 padding-top), 늘어난 만큼은 띠 안 구성 사이의 빈 칸(.bgap, 한 몫·.half 반 몫)과 맨 아래(반 몫)에 나눈다.
      시안의 원래 간격(margin)은 그대로 두고 그 위에 더한다. 내용이 이 높이보다 길면 빈 칸은 0이라 시안과 같다.
      태블릿·PC처럼 화면이 큰 기기에서도 띠를 더 늘리지 않는다: 화면 높이는 폭 430px 폰(높이 932px)까지만 센다(2026-10-28 사용자 요청, 변경 27).
+     태블릿(두 변 모두 600px 이상)은 세로로 들어도 가로로 눕혔을 때와 같은 높이: 화면 높이 대신 짧은 변(svw)을 쓴다(같은 날 사용자 요청).
      svh = 주소창이 보이는 작은 화면 높이(맨 위 상태와 같은 기준). svh를 모르는 브라우저는 앞 줄 vh. --home-head는 HomeDateBar useBarHeights가 잰다. */
   /* 제목 줄은 띠 위 16px(시안 28px보다 12px 위, 2026-10-28 사용자 요청). 아래는 시안 32px 그대로 */
   .home > .band {
@@ -161,6 +162,16 @@
   .home > .band:first-of-type {
     min-height: calc(min(100vh, 932px) - var(--home-head, 0px));
     min-height: calc(min(100svh, 932px) - var(--home-head, 0px));
+  }
+  @media (min-width: 600px) and (min-height: 600px) {
+    .home > .band {
+      min-height: calc(min(100vh, 100vw, 932px) - var(--home-head, 0px) + 20px);
+      min-height: calc(min(100svh, 100svw, 932px) - var(--home-head, 0px) + 20px);
+    }
+    .home > .band:first-of-type {
+      min-height: calc(min(100vh, 100vw, 932px) - var(--home-head, 0px));
+      min-height: calc(min(100svh, 100svw, 932px) - var(--home-head, 0px));
+    }
   }
   .home > .band > .pad {
     flex: 1 0 auto;
