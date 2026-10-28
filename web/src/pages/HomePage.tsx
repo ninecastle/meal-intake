@@ -21,6 +21,7 @@ import { subscribeDay, subscribePending, type MealWithId } from '../data/meals'
 import { subscribePrefs } from '../data/prefs'
 import type { DaySummary } from '../data/summary'
 import { clearFlash, peekFlash } from '../lib/flash'
+import { autoFillFasting } from '../data/fasting'
 import { toDateKey } from '../lib/time'
 import { beforePhotoStore } from '../photos/beforePhotoStore'
 
@@ -70,6 +71,10 @@ export default function HomePage({ user }: { user: User }) {
     peekFlash('goal:saved') ? 'saved' : peekFlash('goal:pending') ? 'pending' : null,
   )
   const today = toDateKey(new Date())
+  // 자동 공복(2026-10-28 사용자 결정): 앱을 열 때 지난 7일 가운데 기록이 있는 날의 빈 아침·점심·저녁을 공복으로 저장
+  useEffect(() => {
+    autoFillFasting(uid, today).catch((e: unknown) => console.warn('[fasting] 자동 공복 실패', e))
+  }, [uid, today])
   // 보고 있는 날짜. 없거나 틀리거나 미래면 오늘.
   const rawDate = params.get('date')
   const dateKey = isDateKey(rawDate) && rawDate <= today ? rawDate : today

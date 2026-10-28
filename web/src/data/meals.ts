@@ -16,6 +16,7 @@ import {
   type Timestamp,
 } from 'firebase/firestore'
 import { validateAnalysis } from '../analysis/validate'
+import { clearFastedOnRecord } from './fasting'
 import { db } from '../lib/firebase'
 import type { BeforeAnalysis, MealIntakeAnalysis } from '../types/analysis'
 import { summarizeDay, type DaySummary } from './summary'
@@ -170,6 +171,8 @@ export async function createAwaitingMeal(
   } catch (e) {
     throw writeError(e)
   }
+  // 그 끼니에 기록이 생기면 공복 저장을 지운다(2026-10-28 사용자 결정). 식사 쓰기가 끝난 뒤, 기다리지 않는다
+  void clearFastedOnRecord(uid, v.dateKey, v.mealType)
 }
 
 /** 호출 B 성공 직후: awaiting_after → needs_review. 문서가 없으면 MEAL_NOT_FOUND. */
@@ -239,6 +242,7 @@ export async function saveMeal(
   } catch (e) {
     throw writeError(e)
   }
+  void clearFastedOnRecord(uid, v.dateKey, v.mealType)
 }
 
 /** 모든 상태에서 삭제할 수 있다. 호출하는 쪽이 beforePhotoStore.remove도 부른다. */

@@ -596,6 +596,18 @@ describe('하루 문서 공복 표시(users/{uid}/days/{dateKey}, 디자인 조�
     await assertFails(deleteDoc(doc(anon, dayPath())))
   })
 
+  test('v11 자동 공복: fastAuto true와 함께 공복 병합, 기록 저장 때 updateDoc으로 빼기, fastAuto는 bool만', async () => {
+    const fs = alice()
+    await assertSucceeds(setDoc(doc(fs, dayPath()), { dateKey: KEY, fastAuto: true, fasted: arrayUnion('breakfast', 'dinner'), updatedAt: serverTimestamp() }, { merge: true }))
+    await assertSucceeds(setDoc(doc(fs, dayPath()), { dateKey: KEY, fastAuto: true, updatedAt: serverTimestamp() }, { merge: true }))
+    await assertSucceeds(updateDoc(doc(fs, dayPath()), { fasted: arrayRemove('dinner'), updatedAt: serverTimestamp() }))
+    const d = (await getDoc(doc(fs, dayPath()))).data()
+    assert.deepEqual(d.fasted, ['breakfast'])
+    assert.equal(d.fastAuto, true)
+    await assertFails(setDoc(doc(fs, dayPath()), { dateKey: KEY, fastAuto: 'yes', updatedAt: serverTimestamp() }, { merge: true }))
+    await assertFails(setDoc(doc(db('bob'), dayPath()), { dateKey: KEY, fastAuto: true, updatedAt: serverTimestamp() }, { merge: true }))
+  })
+
   test('모르는 필드 거부(생성·병합 수정)', async () => {
     await assertFails(
       setDoc(doc(alice(), dayPath()), { dateKey: KEY, fasted: [], updatedAt: serverTimestamp(), weight_kg: 60 }),
