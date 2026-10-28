@@ -24,7 +24,7 @@ import { getReport, REPORT_MAX_GEN, saveReport, type StoredReport } from '../../
 import { goalForDate, RANGE_HIGH } from '../../lib/calendar'
 import { axisTicks, mondayOf, shiftWeek, weekDays, weekGoalSteps } from '../../lib/week'
 import { formatKcal, MEAL_TYPE_LABEL, MEAL_TYPES } from '../mealText'
-import { Crown, Mascot } from '../ui'
+import { BottomSheet, Crown, Mascot } from '../ui'
 
 const WEEKDAY = ['월', '화', '수', '목', '금', '토', '일']
 const md = (k: string) => `${Number(k.slice(5, 7))}.${Number(k.slice(8, 10))}`
@@ -56,6 +56,7 @@ export interface AiReportPaneProps {
 }
 
 export default function AiReportPane({ uid, today, onOpenDay }: AiReportPaneProps) {
+  const [info, setInfo] = useState(false)
   const thisWeek = mondayOf(today)
   const [week, setWeek] = useState(() => shiftWeek(thisWeek, -1))
   const isCurrent = week >= thisWeek
@@ -229,9 +230,21 @@ export default function AiReportPane({ uid, today, onOpenDay }: AiReportPaneProp
   return (
     <div className="chartcard report">
       <header>
-        <h3>AI 주간 리포트</h3>
+        <h3 style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          AI 주간 리포트
+          {/* 점수 판정 기준(2026-10-29 사용자 요청): 제목 옆 i → 시트 */}
+          <button
+            type="button"
+            aria-label="점수 기준 보기"
+            onClick={() => setInfo(true)}
+            style={{ width: 24, height: 24, minHeight: 0, padding: 0, borderRadius: '50%', border: '1.5px solid var(--ink-3)', background: 'transparent', color: 'var(--ink-2)', fontFamily: 'var(--f-num)', fontSize: 13, fontWeight: 700, lineHeight: 1, display: 'inline-grid', placeItems: 'center' }}
+          >
+            i
+          </button>
+        </h3>
         <Crown />
       </header>
+      <ScoreInfoSheet open={info} onClose={() => setInfo(false)} />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '4px 0 10px' }}>
         <button type="button" className="chipbtn" style={{ background: 'var(--ground)' }} onClick={() => setWeek(prevWeek)}>
           ‹ 지난주
@@ -613,5 +626,38 @@ function WeekBars({ stats }: { stats: WeekStats }) {
         </text>
       ))}
     </svg>
+  )
+}
+
+/** 점수 판정 기준 시트(2026-10-29 사용자 요청). 계산은 analysis/weeklyReport.ts scoreFor·headlineFor와 같다 */
+function ScoreInfoSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const row = (pts: string, title: string, desc: string) => (
+    <li style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '10px 0', borderTop: '1px solid var(--line)' }}>
+      <b className="num" style={{ minWidth: 44, fontSize: 18 }}>{pts}</b>
+      <span>
+        <b style={{ fontFamily: 'var(--f-head)', fontWeight: 400, fontSize: 16 }}>{title}</b>
+        <div style={{ fontSize: 14, color: 'var(--ink-2)', marginTop: 2 }}>{desc}</div>
+      </span>
+    </li>
+  )
+  return (
+    <BottomSheet open={open} onClose={onClose} title="점수는 이렇게 매겨요">
+      <p style={{ color: 'var(--ink-2)', margin: '6px 0 10px' }}>그 주(월~일) 기록으로 앱이 계산해요. 100점 만점이에요</p>
+      <ul style={{ listStyle: 'none', margin: 0, padding: 0 }}>
+        {row('30점', '꾸준히 기록했나요', '7일 모두 기록하면 30점, 기록한 날만큼 나눠 받아요')}
+        {row('40점', '칼로리가 목표에 맞았나요', '기록한 날 가운데 목표의 90~110% 안에 든 날의 비율만큼 받아요')}
+        {row('30점', '탄·단·지가 고르게 맞았나요', '탄수화물·단백질·지방 하루 평균이 목표와 같으면 각 10점, 50% 넘게 차이 나면 0점이에요')}
+      </ul>
+      <div className="callout" style={{ marginTop: 14, fontSize: 14, lineHeight: 1.6 }}>
+        <b>80점 이상</b> 균형 잡힌 한 주였어요
+        <br />
+        <b>60~79점</b> 조금만 더 다듬으면 좋아요
+        <br />
+        <b>60점 미만</b> 다음 주는 목표에 더 가까이 가 봐요
+      </div>
+      <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: '12px 0 0' }}>
+        점수·숫자는 기록으로 계산하고, 총평·잘한 점·아쉬운 점·제안·식단 예시는 AI가 써요. 기록이 3일 이상인 주만 분석해요
+      </p>
+    </BottomSheet>
   )
 }
