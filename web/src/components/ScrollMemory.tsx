@@ -5,6 +5,7 @@
 //   프레임마다 그 위치로 다시 맞춘다. 사용자가 화면을 만지거나 휠·키를 쓰면 바로 멈춘다.
 // - 새 화면으로 갈 때(push)와 다른 화면으로 바꿀 때(replace, 경로가 바뀜)는 맨 위(시안 go()의 scrollTo(0,0)).
 //   홈에서 날짜를 바꾸는 replace(?date)도 맨 위. 같은 화면 안에서 주소만 바꾸는 replace(기록 보기 ?month·?week 등)는 위치를 그대로 둔다.
+// - state.scrollY(숫자)를 달고 오면 그 위치로 돌아간다(끼니 화면에서 음식을 추가하고 결과 화면을 거쳐 돌아올 때, 2026-10-28 사용자 요청).
 // 위치는 방문 기록 칸 키(location.key)로 sessionStorage에 둔다(새로고침해도 같은 칸이면 그 위치, 새 탭·새 방문은 맨 위).
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { useLocation, useNavigationType, type Location } from 'react-router'
@@ -66,11 +67,13 @@ export default function ScrollMemory() {
     const prev = prevLoc.current
     prevLoc.current = location
     activeKey.current = location.key
-    if (type !== 'POP') {
+    // 화면이 다른 화면을 거쳐 같은 화면으로 replace로 돌아올 때(끼니 화면 → 결과 화면 → 끼니 화면) 떠날 때 위치를 state.scrollY로 넘긴다
+    const stateY = (location.state as { scrollY?: unknown } | null)?.scrollY
+    if (type !== 'POP' && typeof stateY !== 'number') {
       if (!(type === 'REPLACE' && keepOnReplace(prev, location))) window.scrollTo(0, 0)
       return
     }
-    const y = saved.get(location.key) ?? 0
+    const y = typeof stateY === 'number' && type !== 'POP' ? stateY : (saved.get(location.key) ?? 0)
     window.scrollTo(0, y)
     if (y === 0) return
     const roots = [document.documentElement, document.body]

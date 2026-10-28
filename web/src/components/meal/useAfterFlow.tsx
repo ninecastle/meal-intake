@@ -20,6 +20,9 @@ import { describeAnalysisError, isAbortError, type ErrorView } from '../capture/
 import { keepMealPhoto } from './KeepPhotosAsk'
 
 /** 결과 화면(ReviewPage)에 넘기는 state */
+/** 끼니 화면에서 결과 화면으로 갈 때 함께 넘기는 돌아올 곳(저장·나가기 뒤 그 끼니 화면, 보던 위치 그대로) */
+export type MealReturn = { mealReturn: { dateKey: string; mealType: MealType; fromHome: boolean; scrollY: number } }
+
 export type ReviewEntry = { analysis: MealIntakeAnalysis; dateKey: string; mealType: MealType; retake?: boolean }
 
 /** 먹은 후 흐름의 대상: awaiting_after 기록 하나 */

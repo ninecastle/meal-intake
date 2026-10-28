@@ -27,7 +27,7 @@ import {
   TimeSheet,
   type MealTotals,
 } from '../components/meal/MealSheets'
-import { afterTarget, useAfterFlow, type ReviewEntry } from '../components/meal/useAfterFlow'
+import { afterTarget, useAfterFlow, type MealReturn, type ReviewEntry } from '../components/meal/useAfterFlow'
 import { useBeforeFlow } from '../components/meal/useBeforeFlow'
 import { useKeepPhotosAsk } from '../components/meal/KeepPhotosAsk'
 import { formatGrams, homeHref, isDateKey, macroPct, MEAL_TYPE_LABEL, MEAL_TYPES, sourceLabel } from '../components/mealText'
@@ -187,9 +187,13 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
   }
 
   function goReview(mealId: string, e: ReviewEntry) {
-    navigate(`/meal/${mealId}/review`, { replace: true, state: e })
+    navigate(`/meal/${mealId}/review`, { replace: true, state: { ...e, ...backToMeal() } })
   }
-  const goManual = () => navigate(`/meal/new/review?date=${dateKey}&meal=${meal}`, { replace: true })
+  const goManual = () => navigate(`/meal/new/review?date=${dateKey}&meal=${meal}`, { replace: true, state: backToMeal() })
+  /** 결과 화면이 끝나면 이 끼니 화면으로, 보던 위치 그대로 돌아오게(2026-10-28 사용자 요청) */
+  function backToMeal(): MealReturn {
+    return { mealReturn: { dateKey, mealType: meal, fromHome, scrollY: window.scrollY } }
+  }
 
   // 식사 사진 보관(D9): 처음 사진 버튼을 누를 때 묻고, 켜져 있으면 흐름이 썸네일을 저장한다
   const keepAsk = useKeepPhotosAsk(uid)
@@ -476,20 +480,10 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
         </div>
         <div className="bottom">
           <div className="inner pad">
-            {rowCount > 0 ? (
-              <>
-                <button type="button" className="btn sky narrow" onClick={openRecord}>
-                  음식 추가
-                </button>
-                <button type="button" className="btn ink" onClick={() => leave(true)}>
-                  수정 완료
-                </button>
-              </>
-            ) : (
-              <button type="button" className="btn ink" onClick={openRecord}>
-                음식 추가
-              </button>
-            )}
+            {/* [수정 완료]는 없앤다 — 바뀐 내용은 바로 저장되고 홈은 X·뒤로 가기로(2026-10-28 사용자가 고른 변경 20) */}
+            <button type="button" className="btn ink" onClick={openRecord}>
+              음식 추가
+            </button>
           </div>
         </div>
         <Toast message={toast?.text ?? null} />

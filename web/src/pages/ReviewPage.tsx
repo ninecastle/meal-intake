@@ -36,6 +36,7 @@ import { APP_TIMEZONE, guessMealType, toDateKey } from '../lib/time'
 import { setFlash } from '../lib/flash'
 import { beforePhotoStore } from '../photos/beforePhotoStore'
 import type { MealIntakeAnalysis } from '../types/analysis'
+import type { MealReturn } from '../components/meal/useAfterFlow'
 
 const MEAL_TYPES: { value: MealType; label: string }[] = [
   { value: 'breakfast', label: '아침' },
@@ -120,6 +121,7 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
 
   // 처음 들어올 때의 state·date만 쓴다(그 뒤 주소가 바뀌어도 편집 내용을 다시 덮지 않는다)
   const entryState = useRef<unknown>(location.state)
+  const mealReturn = (entryState.current as Partial<MealReturn> | null)?.mealReturn ?? null
   const entryRetake = (entryState.current as { retake?: unknown } | null)?.retake === true
   const entryDate = useRef(searchParams.get('date'))
   // 홈 끼니 카드에서 [직접 입력]으로 오면 ?meal(디자인 조각 D2, 끼니는 누른 카드)
@@ -250,6 +252,13 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
         const { dateKey, mealType } = phase.initial
         navigate(`/day/${dateKey}/${mealType}`, { replace: true })
       } else navigate(`/meal/${routeId}`, { replace: true })
+    } else if (mealReturn) {
+      // 끼니 화면에서 음식을 추가해 들어왔으면 저장하든 나가든 그 끼니 화면으로, 보던 위치 그대로(2026-10-28 사용자 요청)
+      if (saved) setFlash('meal:saved')
+      navigate(`/day/${mealReturn.dateKey}/${mealReturn.mealType}`, {
+        replace: true,
+        state: { fromHome: mealReturn.fromHome, scrollY: mealReturn.scrollY },
+      })
     } else if (!saved && historyIdx() > 0) {
       // 저장하지 않고 나가기(‹)는 뒤로 가기: 이 화면은 끼니 화면 칸을 바꿔 들어오므로 한 칸 뒤가 그 앞 화면(보통 홈)이고,
       // 그 화면은 내렸던 위치 그대로 돌아온다(ScrollMemory, 2026-10-27 사용자가 고른 변경)
@@ -332,7 +341,7 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
   }
 
   const title = isEdit ? '기록 수정' : phase.kind === 'ready' && phase.initial.isNew ? '직접 입력' : '결과 확인'
-  const exitLabel = isEdit ? '기록으로' : '홈으로'
+  const exitLabel = isEdit ? '기록으로' : mealReturn ? '뒤로' : '홈으로'
   const center: CSSProperties = { textAlign: 'center', color: 'var(--ink-2)', margin: 0, padding: '80px 0 0' }
 
   // 확인할 점: Gemini 경고(한국어로 거른 것) + 남긴 양을 고르지 않은 음식 수
