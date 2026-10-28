@@ -12,6 +12,7 @@ import {
   type Activity,
   type GoalInput,
   type GoalOverride,
+  type GoalResult,
   type GoalType,
   type Sex,
 } from '../../analysis/goal'
@@ -48,7 +49,7 @@ const WHY: Record<GoalType, string> = {
   maintain: '유지 목표라 탄·단·지를 고르게 나눴어요',
   gain: '증량 목표라 탄수화물을 넉넉하게 잡았어요',
 }
-const MINOR_MSG = '성장기에는 감량·증량보다 고르게 잘 먹는 것이 중요해요. 목표는 유지 기준으로 보여 드려요.'
+export const MINOR_MSG = '성장기에는 감량·증량보다 고르게 잘 먹는 것이 중요해요. 목표는 유지 기준으로 보여 드려요.'
 const RECALC_HELP = '바꾸면 하루 추천 칼로리와 탄·단·지도 다시 계산해요'
 const CUSTOM_NOTE = '직접 정한 목표 칼로리·탄단지는 추천값으로 바뀌어요'
 
@@ -69,14 +70,36 @@ export function KcalSheet({ open, goal, onSave, onClose }: { open: boolean; goal
 }
 
 function KcalForm({ goal, onSave, onClose }: { goal: StoredGoal; onSave: (o: GoalOverride | null) => void; onClose: () => void }) {
-  const result = goal.result
+  const ed = useKcalEditor(goal.result, goal.override)
+
+  /** 시안: X와 [저장] 모두 저장하고 닫는다. 바꾼 값이 틀리면 저장하지 않고 닫는다 */
+  function close() {
+    if (ed.changed && ed.errors.length === 0) onSave(ed.override)
+    else onClose()
+  }
+
+  return (
+    <BottomSheet open onClose={close} title="하루 목표 칼로리">
+      <div style={{ marginTop: 10 }}>{ed.node}</div>
+      <button type="button" className="btn ink" style={{ width: '100%', marginTop: 16 }} disabled={ed.errors.length > 0} onClick={close}>
+        저장
+      </button>
+    </BottomSheet>
+  )
+}
+
+/**
+ * 시안 kcalEditor(.kedit) 부품과 상태. 설정 목표 칼로리 시트와 온보딩 추천 결과 화면(D11)이 함께 쓴다.
+ * initial = 처음 보일 직접 조정(없으면 추천값). override는 지금 화면 값의 직접 조정(추천값과 같으면 null).
+ */
+export function useKcalEditor(result: GoalResult, initial: GoalOverride | null) {
   const [mode, setMode] = useState<Mode>('init')
   const [kcalText, setKcalText] = useState('')
   const [macroText, setMacroText] = useState<Record<MacroKey, string>>({ carbs_g: '', protein_g: '', fat_g: '' })
 
   const macroNums: Macros = { carbs_g: toNum(macroText.carbs_g), protein_g: toNum(macroText.protein_g), fat_g: toNum(macroText.fat_g) }
   const override =
-    mode === 'init' ? goal.override : mode === 'rec' ? null : mode === 'kcal' ? kcalOverride(result, toNum(kcalText)) : macroOverride(result, macroNums)
+    mode === 'init' ? initial : mode === 'rec' ? null : mode === 'kcal' ? kcalOverride(result, toNum(kcalText)) : macroOverride(result, macroNums)
   const { targets, errors, custom } = previewTargets(result, override)
   const sum = kcalOfMacros(macroNums)
   const kcalShown = mode === 'kcal' ? kcalText : mode === 'macro' ? (Number.isFinite(sum) ? String(sum) : '') : String(targets.target_kcal)
@@ -89,11 +112,6 @@ function KcalForm({ goal, onSave, onClose }: { goal: StoredGoal; onSave: (o: Goa
   })
   const changed = mode !== 'init'
 
-  /** 시안: X와 [저장] 모두 저장하고 닫는다. 바꾼 값이 틀리면 저장하지 않고 닫는다 */
-  function close() {
-    if (changed && errors.length === 0) onSave(override)
-    else onClose()
-  }
   function step(dir: 1 | -1) {
     const cur = toNum(kcalShown)
     setKcalText(String(stepKcal(result, Number.isFinite(cur) ? cur : targets.target_kcal, dir)))
@@ -104,70 +122,65 @@ function KcalForm({ goal, onSave, onClose }: { goal: StoredGoal; onSave: (o: Goa
     setMode('macro')
   }
 
-  return (
-    <BottomSheet open onClose={close} title="하루 목표 칼로리">
-      <div style={{ marginTop: 10 }}>
-        <div className="kedit">
-          <div className="krow">
-            <button type="button" className="kstep" aria-label="50kcal 줄이기" onClick={() => step(-1)}>
-              −
-            </button>
-            <label className="kval">
-              <input
-                type="text"
-                inputMode="numeric"
-                enterKeyHint="done"
-                autoComplete="off"
-                aria-label="하루 목표 칼로리"
-                value={kcalShown}
-                onChange={(e) => {
-                  setKcalText(digits(e.target.value, 4))
-                  setMode('kcal')
-                }}
-              />
-              <span>kcal</span>
-            </label>
-            <button type="button" className="kstep" aria-label="50kcal 늘리기" onClick={() => step(1)}>
-              +
-            </button>
-          </div>
-          <div className="kmeta">
-            {custom ? (
-              <>
-                <span className="kcust">직접 조정</span>
-                <button type="button" className="link" onClick={() => setMode('rec')}>
-                  {`추천값으로 (${formatKcal(result.target_kcal)}kcal)`}
-                </button>
-              </>
-            ) : (
-              <span>추천값이에요 · 숫자를 눌러 직접 바꿀 수 있어요</span>
-            )}
-          </div>
-          <div className="kinfo">
-            {'기초대사량 '}
-            <b className="num">{formatKcal(result.bmr)}</b>
-            {' · 하루 소모량 '}
-            <b className="num">{formatKcal(result.tdee)}</b>
-            {`kcal · ${GOAL_LABEL[result.goal_applied]}`}
-          </div>
-          {errors.length > 0 && (
-            <p role="alert" style={{ ...ERROR_STYLE, margin: 0, textAlign: 'center' }}>
-              {errors[0]}
-            </p>
-          )}
-          <div className="macro3">
-            {MACRO_KEYS.map((k) => (
-              <MacroBox key={k} k={k} value={macrosShown[k]} share={shares[k]} onChange={(v) => editMacro(k, v)} />
-            ))}
-          </div>
-          <p className="kwhy">{WHY[result.goal_applied]}</p>
-        </div>
+  const node = (
+    <div className="kedit">
+      <div className="krow">
+        <button type="button" className="kstep" aria-label="50kcal 줄이기" onClick={() => step(-1)}>
+          −
+        </button>
+        <label className="kval">
+          <input
+            type="text"
+            inputMode="numeric"
+            enterKeyHint="done"
+            autoComplete="off"
+            aria-label="하루 목표 칼로리"
+            value={kcalShown}
+            onChange={(e) => {
+              setKcalText(digits(e.target.value, 4))
+              setMode('kcal')
+            }}
+          />
+          <span>kcal</span>
+        </label>
+        <button type="button" className="kstep" aria-label="50kcal 늘리기" onClick={() => step(1)}>
+          +
+        </button>
       </div>
-      <button type="button" className="btn ink" style={{ width: '100%', marginTop: 16 }} disabled={errors.length > 0} onClick={close}>
-        저장
-      </button>
-    </BottomSheet>
+      <div className="kmeta">
+        {custom ? (
+          <>
+            <span className="kcust">직접 조정</span>
+            <button type="button" className="link" onClick={() => setMode('rec')}>
+              {`추천값으로 (${formatKcal(result.target_kcal)}kcal)`}
+            </button>
+          </>
+        ) : (
+          <span>추천값이에요 · 숫자를 눌러 직접 바꿀 수 있어요</span>
+        )}
+      </div>
+      <div className="kinfo">
+        {'기초대사량 '}
+        <b className="num">{formatKcal(result.bmr)}</b>
+        {' · 하루 소모량 '}
+        <b className="num">{formatKcal(result.tdee)}</b>
+        {`kcal · ${GOAL_LABEL[result.goal_applied]}`}
+      </div>
+      {errors.length > 0 && (
+        <p role="alert" style={{ ...ERROR_STYLE, margin: 0, textAlign: 'center' }}>
+          {errors[0]}
+        </p>
+      )}
+      <div className="macro3">
+        {MACRO_KEYS.map((k) => (
+          <MacroBox key={k} k={k} value={macrosShown[k]} share={shares[k]} onChange={(v) => editMacro(k, v)} />
+        ))}
+      </div>
+      <p className="kwhy">{WHY[result.goal_applied]}</p>
+    </div>
   )
+
+  return { override, targets, errors, changed, node }
 }
 
 const MACRO_META: Record<MacroKey, { label: string; color: string }> = {

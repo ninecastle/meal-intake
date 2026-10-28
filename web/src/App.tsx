@@ -1,7 +1,7 @@
 // 라우터(2단계 조각 4-A). 로그인 전이면 어느 경로든 소개(/welcome, 디자인 조각 D10)로 보내고, 로그인 뒤에는 원래 가려던 경로로 돌려보낸다.
 // 처음 동의(D10): 로그인했는데 지금 버전 동의가 없으면(기존 계정) 어느 경로든 /consent로 보낸다(동의하면 원래 가려던 곳).
-// 로그인 전 동의 화면에서 [동의하고 계속]을 눌렀으면 동의 초안(기기)이 있고, 로그인 뒤 Root가 계정에 저장한 뒤
-// 목표가 없으면 /goal(D11 목표 질문이 들어갈 자리), 있으면 원래 가려던 곳(기본 홈)으로 보낸다.
+// 로그인 전 동의 화면에서 [동의하고 계속]을 눌렀으면 동의 초안(기기)이 있고, 로그인 뒤 Root가 계정에 저장한다.
+// 새 가입(목표 질문 결과 화면에서 로그인, D11)이면 화면은 결과 화면이 옮기고, 그 밖에는 목표가 없으면 /start, 있으면 홈으로 보낸다.
 // 데이터 라우터(createBrowserRouter)를 쓴다: 결과 화면의 useBlocker(브라우저 뒤로 가기 때 "저장하지 않고 나갈까요?")가
 // 데이터 라우터에서만 동작한다. 라우터는 한 번만 만들고, 로그인 상태는 컨텍스트로 넘겨 경로 가드에서 본다.
 import type { User } from 'firebase/auth'
@@ -15,6 +15,7 @@ import { ConsentContext, useConsent, useConsentSubscription } from './components
 import { clearConsentDraft, hasCurrentConsent, readConsentDraft, saveConsent } from './data/consent'
 import { subscribeGoal } from './data/goals'
 import { useAuthUser } from './lib/auth'
+import { readOnboardingDraft } from './lib/onboardingDraft'
 import HomePage from './pages/HomePage'
 import WelcomePage from './pages/WelcomePage'
 
@@ -24,7 +25,8 @@ const MealPage = lazy(() => import('./pages/MealPage'))
 const ReviewPage = lazy(() => import('./pages/ReviewPage'))
 const MealIdRedirect = lazy(() => import('./pages/MealRedirects').then((m) => ({ default: m.MealIdRedirect })))
 const CaptureBeforeRedirect = lazy(() => import('./pages/MealRedirects').then((m) => ({ default: m.CaptureBeforeRedirect })))
-const GoalPage = lazy(() => import('./pages/GoalPage'))
+// 목표 질문·추천 결과(디자인 조각 D11). 로그인 전(새 가입)에도 열린다
+const OnboardingPage = lazy(() => import('./pages/OnboardingPage'))
 // 한눈에·영양소 상세(디자인 조각 D5)
 const GlancePage = lazy(() => import('./pages/GlancePage'))
 const NutritionDetailPage = lazy(() => import('./pages/NutritionDetailPage'))
@@ -60,7 +62,8 @@ function Loading() {
 
 /**
  * 로그인 전 동의 초안을 계정에 저장한다(로그인 직후 한 번). 저장한 동의가 구독에 보이면 초안을 지운다.
- * 저장을 시작하면 목표 유무를 한 번 읽어 목표가 없으면 /goal, 있으면 원래 가려던 곳으로 보낸다.
+ * 저장을 시작하면 목표 유무를 한 번 읽어 목표가 없으면 목표 질문(/start), 있으면 홈으로 보낸다.
+ * 목표 질문 중에 로그인했으면(/start에 입력 초안이 있음) 화면을 옮기지 않는다(결과 화면이 목표를 저장하고 옮긴다).
  */
 function useConsentDraftFlush() {
   const user = useContext(UserContext)
@@ -78,6 +81,8 @@ function useConsentDraftFlush() {
     if (!draft || started.current === user.uid) return
     started.current = user.uid
     saveConsent(user.uid, draft).catch((e: unknown) => console.warn('[consent] 저장 실패', e))
+    // 목표 질문 결과 화면에서 로그인했으면 결과 화면이 이어서 목표를 저장하고 화면을 옮긴다
+    if (window.location.pathname.startsWith('/start') && readOnboardingDraft()) return
     let done = false
     const unsub = subscribeGoal(
       user.uid,
@@ -85,8 +90,8 @@ function useConsentDraftFlush() {
         if (done) return
         done = true
         queueMicrotask(() => unsub())
-        // 동의 뒤에는 늘 홈 맨 위(목표가 없으면 목표 화면, 2026-10-28 사용자 요청)
-        void navigate(g ? '/' : '/goal', { replace: true })
+        // 동의 뒤에는 늘 홈 맨 위(목표가 없으면 목표 질문, 2026-10-28 사용자 요청)
+        void navigate(g ? '/' : '/start', { replace: true })
       },
       () => {
         if (done) return
@@ -137,7 +142,11 @@ const HomeRoute = () => <HomePage user={useUser()} />
 const MealRoute = () => <MealPage uid={useUser().uid} />
 const MealIdRoute = () => <MealIdRedirect uid={useUser().uid} />
 const MealAfterRoute = () => <MealIdRedirect uid={useUser().uid} after />
-const GoalRoute = () => <GoalPage uid={useUser().uid} />
+const OnboardingRoute = () => <OnboardingPage user={useContext(UserContext)} />
+/** 예전 목표 화면 주소는 목표 질문으로(들어온 곳 state는 그대로) */
+function GoalRedirect() {
+  return <Navigate to="/start" replace state={useLocation().state as unknown} />
+}
 const GlanceRoute = () => <GlancePage uid={useUser().uid} />
 const DetailRoute = () => <NutritionDetailPage uid={useUser().uid} />
 const CalendarRoute = () => <CalendarPage uid={useUser().uid} />
@@ -155,8 +164,8 @@ const userRoutes: RouteObject[] = [
   // S8 기록 수정(3단계 조각 1-2): 결과 확인 화면(편집기·저장·나가기 확인)을 수정 모드로 다시 쓴다
   { path: '/meal/:mealId/edit', element: <ReviewPage mode="edit" /> },
   { path: '/meal/:mealId', element: <MealIdRoute /> },
-  // S6 목표 설정(3단계 조각 2). 홈에서는 push(state.fromHome)로 들어온다
-  { path: '/goal', element: <GoalRoute /> },
+  // 예전 목표 설정 화면(S6)은 목표 질문(D11)으로
+  { path: '/goal', element: <GoalRedirect /> },
   // 한눈에·영양소 상세(D5, ?date=YYYY-MM-DD). 홈 나의 하루 [한눈에]·[자세히]에서 push(state.fromHome)
   { path: '/glance', element: <GlanceRoute /> },
   { path: '/detail', element: <DetailRoute /> },
@@ -185,6 +194,9 @@ const router = createBrowserRouter([
       // 소개·처음 동의(D10): 로그인 없이 열린다(로그인 상태면 설정 "처음 화면 다시 보기"·기존 계정 동의)
       { path: '/welcome', element: <WelcomeRoute /> },
       { path: '/consent', element: <ConsentRoute /> },
+      // 목표 질문(?step=0~5)·추천 결과(D11): 새 가입은 로그인 전, 목표 없는 계정은 로그인한 채
+      { path: '/start', element: <OnboardingRoute /> },
+      { path: '/start/result', element: <OnboardingRoute /> },
       ...(UiGalleryPage ? [{ path: '/dev/ui', element: <UiGalleryPage /> }] : []),
       { element: <RequireUser />, children: userRoutes },
     ],

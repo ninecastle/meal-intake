@@ -13,6 +13,7 @@ import ChangeBand from '../components/home/ChangeBand'
 import DayBand, { type DayGoalView } from '../components/home/DayBand'
 import HomeDateBar from '../components/home/HomeDateBar'
 import MealBand from '../components/home/MealBand'
+import HomeTutorial from '../components/tutorial/HomeTutorial'
 import { formatKcal, isDateKey } from '../components/mealText'
 import { Toast } from '../components/ui'
 import { subscribeGoal, subscribeGoalForDate, type DatedGoal, type StoredGoal } from '../data/goals'
@@ -252,6 +253,12 @@ export default function HomePage({ user }: { user: User }) {
       <ChangeBand uid={uid} dateKey={dateKey} today={today} goal={goal} onToast={(text) => setNote({ text, at: Date.now() })} />
 
       <Toast message={toastText} />
+
+      {/* D11 첫 홈 튜토리얼: 그날 홈이 다 그려진 뒤(요약·이어 할 기록·목표 첫 값) */}
+      <HomeTutorial
+        uid={uid}
+        ready={(summary !== null || dayError) && (pending !== null || listError) && goalView.kind !== 'loading'}
+      />
     </main>
   )
 }

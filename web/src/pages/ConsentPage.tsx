@@ -1,7 +1,7 @@
 // 처음 동의(/consent, 디자인 조각 D10): 시안 consent() 마크업·클래스 그대로 — .topbar(‹) + .pad.q(제목·부제) + .allagree(전체 동의)
 // + 항목 줄(.arow: .lbl 체크 + 필수/선택 꼬리표, [보기] → 약관 시트) + .bottom [동의하고 계속](필수 4개를 모두 체크해야 켜짐).
-// - 로그인 전(소개 [시작하기]): ‹ 소개. [동의하고 계속] → 동의 초안을 기기에 두고 구글 로그인 → App의 Root가 계정에 저장하고
-//   목표가 없으면 목표 화면, 있으면 홈으로 보낸다.
+// - 로그인 전(소개 [시작하기]): ‹ 소개. [동의하고 계속] → 동의 초안을 기기에 두고 목표 질문(/start, D11)으로.
+//   결과 화면에서 구글 로그인하면 App의 Root가 동의를 계정에 저장하고, 결과 화면이 목표를 저장한다.
 // - 로그인했는데 지금 버전 동의가 없는 계정(경로 가드가 보냄): ‹ 없음. "식사 사진 보관"은 지금 사진 보관이 켜져 있으면 미리 체크.
 //   동의하면 계정에 저장하고 원래 가려던 곳(기본 홈).
 // - 로그인 상태에서 소개 [시작하기](설정 "처음 화면 다시 보기"): ‹ 소개. 저장된 동의대로 체크된 채, [동의하고 계속] → 저장 → 홈.
@@ -11,7 +11,6 @@ import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import TermsSheet from '../components/terms/TermsSheet'
 import { useConsent } from '../components/terms/consentState'
-import { LoginNotice, useGoogleLogin } from '../components/terms/googleLogin'
 import { IconButton, Toast } from '../components/ui'
 import { clearConsentDraft, hasCurrentConsent, readConsentDraft, REQUIRED_KEYS, saveConsent, writeConsentDraft, type ConsentKey } from '../data/consent'
 import { subscribePrefs, type Prefs } from '../data/prefs'
@@ -38,7 +37,6 @@ export default function ConsentPage({ user }: { user: User | null }) {
   const location = useLocation()
   const [nav] = useState(() => location.state as { fromWelcome?: unknown; from?: unknown } | null)
   const fromWelcome = nav?.fromWelcome === true
-  const { inApp, busy, error, login } = useGoogleLogin()
   const [prefs, setPrefs] = useState<{ uid: string; p: Prefs } | null>(null)
   const [agree, setAgree] = useState<Agree | null>(() => (uid ? null : {}))
   const [termsKey, setTermsKey] = useState<TermsKey | null>(null)
@@ -92,11 +90,12 @@ export default function ConsentPage({ user }: { user: User | null }) {
   }
 
   async function submit() {
-    if (!ok || busy || submitted) return
+    if (!ok || submitted) return
     const choice = { photoKeep: a.keep === true, school: a.school === true }
     if (!uid) {
+      // 새 가입(D11): 로그인은 목표 질문·추천 결과 뒤 [구글로 저장하고 시작하기]에서
       writeConsentDraft(choice)
-      await login()
+      void navigate('/start', { state: { depth: 0 } })
       return
     }
     setSubmitted(true)
@@ -148,12 +147,11 @@ export default function ConsentPage({ user }: { user: User | null }) {
             )}
           </div>
         ))}
-        <LoginNotice inApp={inApp} error={error} />
       </div>
       <div className="bottom">
         <div className="inner pad">
-          <button type="button" className="btn ink" disabled={!ok || busy || submitted} onClick={() => void submit()}>
-            {busy ? '로그인 중…' : '동의하고 계속'}
+          <button type="button" className="btn ink" disabled={!ok || submitted} onClick={() => void submit()}>
+            동의하고 계속
           </button>
         </div>
       </div>

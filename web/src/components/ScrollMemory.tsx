@@ -35,6 +35,11 @@ function persist(m: Map<string, number>) {
 
 const saved = typeof window === 'undefined' ? new Map<string, number>() : load()
 
+/** 그 방문 기록 칸으로 뒤로 돌아올 때 맨 위에서 보이게 한다(목표 질문을 마치고 홈으로 돌아갈 때, D11) */
+export function resetScroll(key: string): void {
+  saved.set(key, 0)
+}
+
 /** replace인데 위치를 그대로 둘지: 같은 화면 안의 주소 바꾸기만(홈 날짜 바꾸기는 맨 위) */
 function keepOnReplace(prev: Location | null, next: Location): boolean {
   if (!prev || prev.pathname !== next.pathname) return false

@@ -1011,3 +1011,48 @@ describe('처음 동의(users/{uid}.consent, 규칙 v9, 디자인 조각 D10)', 
     await assertSucceeds(setDoc(doc(db('carol'), 'users/carol'), { prefs: { shareEaters: false } }))
   })
 })
+
+describe('첫 홈 튜토리얼(users/{uid}.prefs.tutorialDone, 규칙 v10, 디자인 조각 D11)', () => {
+  const USER = 'users/alice'
+  /** setTutorialDone(web/src/data/prefs.ts)과 같은 모양 */
+  const save = (fs, v = true, path = USER) => setDoc(doc(fs, path), { prefs: { tutorialDone: v } }, { merge: true })
+
+  test('본인 true·false 허용(다른 설정은 그대로)', async () => {
+    await seed(USER, { prefs: { shareEaters: true, keepPhotos: false } })
+    await assertSucceeds(save(alice(), true))
+    assert.deepEqual((await getDoc(doc(alice(), USER))).data().prefs, { shareEaters: true, keepPhotos: false, tutorialDone: true })
+    await assertSucceeds(save(alice(), false))
+    assert.equal((await getDoc(doc(alice(), USER))).data().prefs.tutorialDone, false)
+    // 새 문서에도 허용
+    await assertSucceeds(save(db('carol'), true, 'users/carol'))
+  })
+
+  test('bool이 아니면 거부(문자열·숫자·null·map)', async () => {
+    for (const v of ['true', 'yes', 1, 0, null, { done: true }]) await assertFails(save(alice(), v))
+  })
+
+  test('다른 uid·미로그인 거부', async () => {
+    await assertFails(save(db('bob'), true))
+    await assertFails(save(db(null), true))
+  })
+
+  test('consent·goal 있는 문서에 병합 허용(consent·goal 그대로)', async () => {
+    const consent = {
+      version: '2026-10-28', agreedAt: Timestamp.fromDate(new Date('2026-10-28T03:00:00Z')),
+      required: true, photoKeep: false, school: false,
+    }
+    const goal = {
+      input: { sex: 'female', age: 25, height_cm: 160, weight_kg: 55, activity: 'light', goal: 'maintain' },
+      override: null,
+      result: { bmr: 1300, tdee: 1790, target_kcal: 1790 },
+      targets: { target_kcal: 1790, carbs_g: 246, protein_g: 90, fat_g: 50, source: 'recommended' },
+      updatedAt: Timestamp.fromDate(new Date('2026-10-27T03:00:00Z')),
+    }
+    await seed(USER, { consent, goal, prefs: { keepPhotos: false } })
+    await assertSucceeds(save(alice(), true))
+    const d = (await getDoc(doc(alice(), USER))).data()
+    assert.deepEqual(d.consent, consent)
+    assert.deepEqual(d.goal, goal)
+    assert.deepEqual(d.prefs, { keepPhotos: false, tutorialDone: true })
+  })
+})

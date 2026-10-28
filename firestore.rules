@@ -20,6 +20,7 @@ rules_version = '2';
 //   설정 prefs.keepPhotos(bool, 없으면 아직 묻지 않음 = 꺼짐).
 // - v9(디자인 조각 D10, 2026-10-28): 처음 동의 users/{uid}.consent { version(1~20자), agreedAt, required: true, photoKeep, school }(스펙 4.10절).
 //   consent를 바꾸는 쓰기에서만 agreedAt == request.time. 목표·설정만 병합하면 저장된 consent는 다시 검사하지 않는다. consent 삭제는 거부.
+// - v10(디자인 조각 D11, 2026-10-28): 설정 prefs.tutorialDone(bool, 첫 홈 튜토리얼을 다 봤거나 건너뜀. 없으면 아직 안 봄).
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -153,11 +154,12 @@ service cloud.firestore {
       return v is number && v >= 30 && v <= 250;
     }
 
-    // 설정(v6): shareEaters(bool)·weightAskSkipKg(v7, kg)·keepPhotos(v8, bool) 모두 선택. 없으면 클라이언트가 꺼짐·없음으로 본다.
+    // 설정(v6): shareEaters(bool)·weightAskSkipKg(v7, kg)·keepPhotos(v8, bool)·tutorialDone(v10, bool) 모두 선택. 없으면 클라이언트가 꺼짐·없음으로 본다.
     function validPrefs(p) {
       return p is map
-        && p.keys().hasOnly(['shareEaters', 'weightAskSkipKg', 'keepPhotos'])
+        && p.keys().hasOnly(['shareEaters', 'weightAskSkipKg', 'keepPhotos', 'tutorialDone'])
         && (!('shareEaters' in p) || p.shareEaters is bool)
+        && (!('tutorialDone' in p) || p.tutorialDone is bool)
         && (!('keepPhotos' in p) || p.keepPhotos is bool)
         && (!('weightAskSkipKg' in p) || validKg(p.weightAskSkipKg));
     }
