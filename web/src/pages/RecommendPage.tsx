@@ -5,9 +5,9 @@
 // 추천은 analysis/recommend.ts(AI 호출 없음, 식약처 DB). 처음 끼니는 defaultRecMeal(지금 시각, 오늘 기록·먹은 후 기다림·공복 표시 끼니).
 // 목표가 없으면 상자 안에 "목표를 정하면 추천해 드려요 ›"(목표 질문 /start), 끼니 고르기·목록은 그리지 않는다(남은 양이 없어 고를 수 없다).
 // 홈 식사 띠 [음식 추천]에서 push(state.fromHome). ‹는 홈에서 왔으면 뒤로 가기(보던 위치 그대로), 아니면 홈으로 replace.
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
-import { defaultRecMeal, planFocus, recommendFoods, type Amounts, type Macro, type RecItem, type RecPlan } from '../analysis/recommend'
+import { defaultRecMeal, planFocus, recommendRanked, type Amounts, type Macro, type RecItem, type RecPlan } from '../analysis/recommend'
 import { useDayData } from '../components/day/useDayData'
 import { formatKcal, formatMacro, MEAL_TYPE_LABEL, MEAL_TYPES } from '../components/mealText'
 import { Crown, IconButton, MealArt, Segment } from '../components/ui'
@@ -23,6 +23,76 @@ const subj = (w: string) => ((w.charCodeAt(w.length - 1) - 0xac00) % 28 ? '이' 
 const MEAL_TO: Record<MealType, string> = { breakfast: '아침으로', lunch: '점심으로', dinner: '저녁으로', snack: '간식으로' }
 
 type Fetch = { key: string; items: RecItem[] | null; error: boolean }
+
+/** 한 장에 보이는 추천 수 */
+const PAGE = 4
+
+/**
+ * 추천 4개씩 한 장, 손가락으로 좌우로 밀어 넘긴다(왼쪽으로 밀면 다음, 오른쪽이면 이전). 아래 ‹ "1 / 25" ›.
+ * 첫 장에서 ‹는 흐리게, 마지막 장에서 ›는 첫 장으로(2026-10-28 사용자 요청, [다시 추천 받기] 대신 — 실수로 넘겨도 전 장을 다시 본다).
+ */
+function RecPager({ pages, page, onPage }: { pages: ReactNode[][]; page: number; onPage: (p: number) => void }) {
+  const n = pages.length
+  const start = useRef<{ x: number; y: number; id: number } | null>(null)
+  const [dx, setDx] = useState(0)
+  const go = (p: number) => {
+    setDx(0)
+    onPage(p < 0 ? 0 : p >= n ? 0 : p)
+  }
+  const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+  return (
+    <>
+      <div
+        className="recpager"
+        style={{ overflow: 'hidden', touchAction: 'pan-y' }}
+        onPointerDown={(e) => {
+          if (e.pointerType === 'mouse') return
+          start.current = { x: e.clientX, y: e.clientY, id: e.pointerId }
+          e.currentTarget.setPointerCapture?.(e.pointerId)
+        }}
+        onPointerMove={(e) => {
+          const s0 = start.current
+          if (!s0 || s0.id !== e.pointerId) return
+          const x = e.clientX - s0.x
+          if (Math.abs(x) > Math.abs(e.clientY - s0.y)) setDx(page === 0 && x > 0 ? x / 3 : x)
+        }}
+        onPointerUp={() => {
+          const x = dx
+          start.current = null
+          if (x < -50) go(page + 1)
+          else if (x > 50 && page > 0) go(page - 1)
+          else setDx(0)
+        }}
+        onPointerCancel={() => {
+          start.current = null
+          setDx(0)
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            transform: `translateX(calc(${-page * 100}% + ${dx}px))`,
+            transition: dx !== 0 || reduce ? 'none' : 'transform .28s ease',
+          }}
+        >
+          {pages.map((pg, k) => (
+            <div key={k} style={{ flex: '0 0 100%', minWidth: 0 }} aria-hidden={k !== page || undefined} inert={k !== page || undefined}>
+              {pg}
+            </div>
+          ))}
+        </div>
+      </div>
+      {n > 1 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 18, marginTop: 14 }}>
+          <IconButton icon="back" label="이전 추천" disabled={page === 0} style={{ opacity: page === 0 ? 0.35 : 1 }} onClick={() => go(page - 1)} />
+          <span className="num" style={{ color: 'var(--ink-2)', minWidth: 64, textAlign: 'center' }} aria-live="polite">{`${page + 1} / ${n}`}</span>
+          <IconButton icon="back" label="다음 추천" style={{ transform: 'scaleX(-1)' }} onClick={() => go(page + 1)} />
+        </div>
+      )}
+    </>
+  )
+}
 
 /** 남은 양 한 칸(사용자가 고른 변경 22): 위에 이름, 아래에 남은 양. 넘으면 "N 초과"(peach-deep), 0이 되는 작은 초과는 0 */
 function LeftItem({ label, left, unit }: { label: string; left: number | null; unit: 'kcal' | 'g' }) {
@@ -90,11 +160,11 @@ export default function RecommendPage({ uid }: { uid: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remKey, targets])
 
-  const fetchKey = plan.plan && meal ? `${remKey}|${plan.plan.focus.join(',')}|${plan.plan.light ? 'light' : ''}|${meal}|${page}` : ''
+  const fetchKey = plan.plan && meal ? `${remKey}|${plan.plan.focus.join(',')}|${plan.plan.light ? 'light' : ''}|${meal}` : ''
   useEffect(() => {
     if (!fetchKey || !remaining || !plan.plan || !meal) return
     let alive = true
-    recommendFoods(remaining, plan.plan, meal, page).then(
+    recommendRanked(remaining, plan.plan, meal).then(
       (items) => alive && setFetched({ key: fetchKey, items, error: false }),
       (e: unknown) => {
         console.warn('[recommend] 추천 실패', e)
@@ -130,8 +200,8 @@ export default function RecommendPage({ uid }: { uid: string }) {
   else if (plan.error || cur?.error) list = <div className="callout">추천 음식을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 추천 받아 주세요.</div>
   else if (!cur || !meal) list = <div className="callout">추천 음식을 고르는 중이에요…</div>
   else if (cur.items!.length === 0) list = <div className="callout">지금 남은 양에 맞는 음식을 찾지 못했어요.</div>
-  else
-    list = cur.items!.map((r, i) => (
+  else {
+    const row = (r: RecItem, i: number) => (
       <div className="rec" key={`${r.name}/${i}`}>
         <span className="ic" style={{ background: IC_BG[i % IC_BG.length] }}>
           <MealArt meal={meal} className="mico" style={{ width: 28, height: 28 }} />
@@ -155,7 +225,11 @@ export default function RecommendPage({ uid }: { uid: string }) {
         </span>
         <span className="num">{`${formatKcal(r.kcal)}kcal`}</span>
       </div>
-    ))
+    )
+    const items = cur.items!
+    const pages = Array.from({ length: Math.ceil(items.length / PAGE) }, (_, k) => items.slice(k * PAGE, k * PAGE + PAGE))
+    list = <RecPager pages={pages.map((pg) => pg.map(row))} page={Math.min(page, pages.length - 1)} onPage={setPage} />
+  }
 
   return (
     <main className="screen enter">
@@ -204,11 +278,6 @@ export default function RecommendPage({ uid }: { uid: string }) {
             />
             {meal && <h2 style={{ fontSize: 17, margin: '24px 0 4px' }}>{`${MEAL_TO[meal]} 이런 건 어때요`}</h2>}
             {list}
-            {(plan.error || (cur && (cur.error || (cur.items?.length ?? 0) > 0))) && (
-              <button type="button" className="btn ghost" style={{ width: '100%', marginTop: 18 }} onClick={() => setPage((p) => p + 1)}>
-                다시 추천 받기
-              </button>
-            )}
           </>
         )}
       </div>

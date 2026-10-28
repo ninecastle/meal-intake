@@ -635,14 +635,17 @@ function toItem(x: BuiltCandidate): RecItem {
   }
 }
 
-/** 색인이 이미 있을 때 쓰는 동기 버전(시험용). 규칙은 recommendFoods. */
-export function recommendFrom(
-  idx: NutritionDbIndex,
-  remaining: Amounts,
-  plan: RecPlan,
-  meal: MealType,
-  page: number,
-): RecItem[] {
+/** 추천 순서 전체(화면이 4개씩 장으로 나눠 좌우로 넘긴다, 2026-10-28 사용자 요청). 규칙은 recommendFoods. */
+export function rankedFrom(idx: NutritionDbIndex, remaining: Amounts, plan: RecPlan, meal: MealType): RecItem[] {
+  return rankedBuilt(idx, remaining, plan, meal).map(toItem)
+}
+
+/** 추천 순서 전체(비동기, 식약처 DB JSON을 처음 쓸 때 받는다) */
+export async function recommendRanked(remaining: Amounts, plan: RecPlan, meal: MealType): Promise<RecItem[]> {
+  return rankedFrom(await loadDb(), remaining, plan, meal)
+}
+
+function rankedBuilt(idx: NutritionDbIndex, remaining: Amounts, plan: RecPlan, meal: MealType): BuiltCandidate[] {
   const all = candidatesOf(idx)
   let list: BuiltCandidate[]
   if (plan.light) {
@@ -656,6 +659,18 @@ export function recommendFrom(
       .sort((a, b) => b.s - a.s || a.x.kcal - b.x.kcal || a.x.name.localeCompare(b.x.name, 'ko'))
       .map((e) => e.x)
   }
+  return list
+}
+
+/** 색인이 이미 있을 때 쓰는 동기 버전(시험용). 규칙은 recommendFoods. */
+export function recommendFrom(
+  idx: NutritionDbIndex,
+  remaining: Amounts,
+  plan: RecPlan,
+  meal: MealType,
+  page: number,
+): RecItem[] {
+  const list = rankedBuilt(idx, remaining, plan, meal)
   const n = list.length
   if (n === 0) return []
   if (n <= PAGE) return list.map(toItem)

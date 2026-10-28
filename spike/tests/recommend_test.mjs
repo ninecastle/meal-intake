@@ -200,4 +200,18 @@ await t('recommendFoods(비동기)는 recommendFrom과 같다', async () => {
   assert.deepEqual(await R.recommendFoods(rem, plan, 'lunch', 1), R.recommendFrom(idx, rem, plan, 'lunch', 1))
 })
 
+await t('rankedFrom(좌우로 넘기는 화면): 전체 순서를 4개씩 자르면 page 0~끝과 같고, light도 같다', async () => {
+  for (const rem of [A(1200, 150, 60, 40), A(-100, -5, -5, -5)]) {
+    const plan = R.planFocus(rem, T)
+    for (const m of MEALS) {
+      const all2 = R.rankedFrom(idx, rem, plan, m)
+      assert.ok(all2.length > 4)
+      for (let p = 0; p * 4 + 4 <= all2.length; p++) assert.deepEqual(all2.slice(p * 4, p * 4 + 4), R.recommendFrom(idx, rem, plan, m, p))
+      assert.equal(new Set(all2.map((x) => x.name)).size, all2.length)
+    }
+  }
+  const rem = A(800, 100, 50, 25)
+  assert.deepEqual(await R.recommendRanked(rem, R.planFocus(rem, T), 'snack'), R.rankedFrom(idx, rem, R.planFocus(rem, T), 'snack'))
+})
+
 console.log(`\nrecommend_test: ${pass}개 통과`)
