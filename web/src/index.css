@@ -136,14 +136,21 @@
   }
   /* 사용자가 고른 변경 (15, 2026-10-28): 홈 띠 최소 높이. 기준은 흰 줄 전체(아이콘 줄 + 날짜 줄)가 보일 때 그 아래 화면 높이(화면 − 흰 줄).
      나의 하루(첫 띠)는 그 높이 그대로(맨 위에서 화면 맨 아래까지), 식사·나의 변화는 그보다 20px 더.
-     제목은 시안 간격 그대로 띠 위에 붙이고, 늘어난 만큼은 띠 안 구성 사이의 빈 칸(.bgap, 한 몫·.half 반 몫)과 맨 아래(반 몫)에 나눈다.
+     제목은 띠 위에 붙이고(아래 padding-top), 늘어난 만큼은 띠 안 구성 사이의 빈 칸(.bgap, 한 몫·.half 반 몫)과 맨 아래(반 몫)에 나눈다.
      시안의 원래 간격(margin)은 그대로 두고 그 위에 더한다. 내용이 이 높이보다 길면 빈 칸은 0이라 시안과 같다.
      svh = 주소창이 보이는 작은 화면 높이(맨 위 상태와 같은 기준). svh를 모르는 브라우저는 앞 줄 vh. --home-head는 HomeDateBar useBarHeights가 잰다. */
+  /* 제목 줄은 띠 위 16px(시안 28px보다 12px 위, 2026-10-28 사용자 요청). 아래는 시안 32px 그대로 */
   .home > .band {
     display: flex;
     flex-direction: column;
+    padding-top: 16px;
     min-height: calc(100vh - var(--home-head, 0px) + 20px);
     min-height: calc(100svh - var(--home-head, 0px) + 20px);
+  }
+  /* 나의 하루 [한눈에]·[자세히](높이 40px)는 제목(22px × 줄 높이 1.5 = 33px)보다 커서 제목 줄을 7px 늘리고 제목을 3.5px 아래로 민다.
+     위아래 −3.5px로 차지하는 높이를 제목과 같게 해 세 띠 제목이 같은 자리에 오고, 버튼은 제목 가운데에 맞춰 위아래로 걸친다 */
+  .home .bandhead .seg-mini {
+    margin-block: -3.5px;
   }
   .home > .band:first-of-type {
     min-height: calc(100vh - var(--home-head, 0px));
