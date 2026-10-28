@@ -98,7 +98,7 @@ export default function RecommendPage({ uid }: { uid: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [remKey, targets])
 
-  const fetchKey = plan.plan && meal ? `${remKey}|${plan.plan.focus.join(',')}|${meal}|${page}` : ''
+  const fetchKey = plan.plan && meal ? `${remKey}|${plan.plan.focus.join(',')}|${plan.plan.light ? 'light' : ''}|${meal}|${page}` : ''
   useEffect(() => {
     if (!fetchKey || !remaining || !plan.plan || !meal) return
     let alive = true
@@ -128,6 +128,8 @@ export default function RecommendPage({ uid }: { uid: string }) {
 
   const cur = fetched && fetched.key === fetchKey ? fetched : null
   const lacking = plan.plan?.lacking ?? null
+  // 세 영양소 모두 넘었거나 칼로리를 넘었으면: 그 끼니 낮은 칼로리 순, 초록 줄 대신 안내(사용자 결정)
+  const light = plan.plan?.light ?? false
   const noGoal = targets === null
   const left = (k: keyof Amounts) => (remaining ? remaining[k] : null)
 
@@ -189,7 +191,9 @@ export default function RecommendPage({ uid }: { uid: string }) {
                 <LeftItem label="단" left={left('protein_g')} unit="g" />
                 <LeftItem label="지" left={left('fat_g')} unit="g" />
               </div>
-              {lacking && (
+              {light ? (
+                <span style={{ fontSize: 14, color: 'var(--lime-deep)', fontWeight: 700 }}>오늘 목표를 다 채웠어요. 가볍게 먹을 만한 걸 골랐어요</span>
+              ) : lacking && (
                 <span style={{ fontSize: 14, color: 'var(--lime-deep)', fontWeight: 700 }}>
                   {`${MACRO_LABEL[lacking]}${subj(MACRO_LABEL[lacking])} 가장 많이 남았어요`}
                 </span>
