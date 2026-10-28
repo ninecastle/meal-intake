@@ -36,7 +36,8 @@ const STEPS = ['sex', 'age', 'height', 'weight', 'act', 'goal'] as const
 type StepKey = (typeof STEPS)[number]
 
 /** 들어온 곳(홈·설정에서 push로) + 그 뒤 쌓은 방문 기록 칸 수 */
-type NavState = { from?: 'home' | 'settings'; backKey?: string; depth?: number }
+// from: 들어온 화면(저장하면 그 화면으로 돌아간다). recommend = 음식 추천(D12) 남은 양 상자의 목표 안내
+type NavState = { from?: 'home' | 'settings' | 'recommend'; backKey?: string; depth?: number }
 
 const SLOW_MS = 10_000
 const OFFLINE_HINT_MS = 1_500
@@ -163,7 +164,8 @@ export default function OnboardingPage({ user }: { user: User | null }) {
   function leave(flash: 'goal:saved' | 'goal:pending' | null) {
     setLeaving(true)
     clearOnboardingDraft()
-    if (flash) setFlash(flash)
+    // 추천 화면은 토스트가 없어 플래시를 남기지 않는다(나중에 홈에서 뜨지 않게)
+    if (flash && nav.from !== 'recommend') setFlash(flash)
     if (nav.from) {
       if (nav.from === 'home' && nav.backKey) resetScroll(nav.backKey)
       void navigate(-(depth + 1))

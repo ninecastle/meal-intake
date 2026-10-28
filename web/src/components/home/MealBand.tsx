@@ -4,8 +4,9 @@
 //   기록 취소는 홈에 없다(먹은 후 촬영 화면의 [기록 취소]).
 // - 카드 누르기(D3, 2026-10-27 사용자가 고른 변경): 카드는 늘 그 날짜·끼니의 끼니 화면(/day/:dateKey/:mealType, push + state.fromHome),
 //   [+]는 끼니 화면 + 식사 기록 시트(state.openRecord). 기다리는 기록이 있어도 그대로 두고, 먹은 후 시트는 끼니 화면에서 그 묶음을 누를 때만.
-// - .linkrow [음식 추천 왕관]은 프리미엄 표시만(결제 없음, D12 전까지 onSoon "준비 중이에요"). [식단 앨범](D9)은 식사 사진 보관을
-//   켰을 때만(시안 photoKeep), 끄면 시안 photoKeep=false 모양(grid-template-columns:1fr, 버튼 하나).
+// - .linkrow [음식 추천 왕관]은 음식 추천 화면(D12, /recommend, 왕관은 표시만·결제 없음). 추천은 늘 오늘 기준이라 오늘이 아닌 날짜를 볼 때는
+//   숨긴다. [식단 앨범](D9)은 식사 사진 보관을 켰을 때만(시안 photoKeep). 버튼이 하나면 시안 photoKeep=false 모양(grid-template-columns:1fr),
+//   둘 다 없으면(지난 날짜 + 보관 꺼짐) 줄 자체를 그리지 않는다.
 // - (f) 계속 보이는 알림(이어 할 기록 불러오기 오류, 공복 표시 저장 실패)은 띠 맨 위 .callout.
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
@@ -28,14 +29,16 @@ export interface MealBandProps {
   pending: MealWithId[] | null
   /** 이어 할 기록 구독 오류 */
   listError: boolean
-  /** 아직 없는 화면([음식 추천]): 홈이 "준비 중이에요" 토스트를 띄운다 */
-  onSoon: () => void
+  /** 오늘을 보고 있는지. 오늘일 때만 [음식 추천] */
+  isToday: boolean
+  /** [음식 추천] → /recommend */
+  onRecommend: () => void
   /** 식사 사진 보관을 켰는지(users/{uid}.prefs.keepPhotos === true). 켰을 때만 [식단 앨범] */
   keepPhotos: boolean
   onAlbum: () => void
 }
 
-export default function MealBand({ uid, dateKey, day, pending, listError, onSoon, keepPhotos, onAlbum }: MealBandProps) {
+export default function MealBand({ uid, dateKey, day, pending, listError, isToday, onRecommend, keepPhotos, onAlbum }: MealBandProps) {
   const navigate = useNavigate()
   const subKey = `${uid}/${dateKey}`
   // 날짜를 옮기면 예전 날짜 값을 쓰지 않도록 키와 함께 둔다(효과 안에서 바로 비우지 않는다).
@@ -93,16 +96,20 @@ export default function MealBand({ uid, dateKey, day, pending, listError, onSoon
         ))}
       </div>
       <div className="bgap" aria-hidden="true"></div>
-      <div className="linkrow" style={keepPhotos ? undefined : { gridTemplateColumns: '1fr' }}>
-        <button type="button" onClick={onSoon}>
-          음식 추천 <Crown />
-        </button>
-        {keepPhotos && (
-          <button type="button" onClick={onAlbum}>
-            식단 앨범
-          </button>
-        )}
-      </div>
+      {(isToday || keepPhotos) && (
+        <div className="linkrow" style={isToday && keepPhotos ? undefined : { gridTemplateColumns: '1fr' }}>
+          {isToday && (
+            <button type="button" onClick={onRecommend}>
+              음식 추천 <Crown />
+            </button>
+          )}
+          {keepPhotos && (
+            <button type="button" onClick={onAlbum}>
+              식단 앨범
+            </button>
+          )}
+        </div>
+      )}
     </Band>
   )
 }

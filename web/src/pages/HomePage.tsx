@@ -5,7 +5,7 @@
 // 시안에 없는 상태(2026-10-27 사용자 결정): 이어 할 기록은 그 날짜 끼니 카드 안(MealCard), 목표 없음·정하기 전·초과는 GoalStates,
 // [오늘로]·내일 막기는 DateLimits, 계속 보이는 알림은 띠 맨 위 .callout(HomeNotices), 짧은 알림은 시안 토스트(toastText).
 // 목표 고지·출처 문구·로그아웃·개발 링크는 홈에 두지 않는다(로그아웃·개발 링크는 설정 화면 맨 아래, 톱니 → /settings).
-// [한눈에]·[자세히]는 D5 화면(/glance·/detail)으로, [음식 추천]은 시안처럼 토스트 "준비 중이에요"(1.6초). 나의 변화 [기록하기]는 D6 체중 기록 시트(ChangeBand).
+// [한눈에]·[자세히]는 D5 화면(/glance·/detail)으로, [음식 추천]은 D12 화면(/recommend, 오늘을 볼 때만). 나의 변화 [기록하기]는 D6 체중 기록 시트(ChangeBand).
 import { useEffect, useState } from 'react'
 import type { User } from 'firebase/auth'
 import { useLocation, useNavigate, useSearchParams } from 'react-router'
@@ -55,8 +55,6 @@ export default function HomePage({ user }: { user: User }) {
   // 식사 사진 보관(D9): 켰을 때만 식사 띠에 [식단 앨범]
   const [keepPhotos, setKeepPhotos] = useState(false)
   useEffect(() => subscribePrefs(uid, (p) => setKeepPhotos(p.keepPhotos === true)), [uid])
-  // [음식 추천]: 화면이 아직 없어 "준비 중이에요" 토스트
-  const [soon, setSoon] = useState(0)
   // 나의 변화(D6) 짧은 알림("체중을 기록했어요" 등). at이 바뀌면 1.6초를 새로 센다
   const [note, setNote] = useState<{ text: string; at: number } | null>(null)
   // 현재 목표(users/{uid}.goal). undefined = 첫 값 전
@@ -118,13 +116,6 @@ export default function HomePage({ user }: { user: User }) {
     const t = window.setTimeout(() => setNote(null), 1600)
     return () => window.clearTimeout(t)
   }, [note])
-
-  useEffect(() => {
-    if (!soon) return
-    // 시안 toast(): 1.6초
-    const t = window.setTimeout(() => setSoon(0), 1600)
-    return () => window.clearTimeout(t)
-  }, [soon])
 
   useEffect(
     () =>
@@ -213,9 +204,7 @@ export default function HomePage({ user }: { user: User }) {
     }
   }, [])
 
-  const toastText = soon
-    ? '준비 중이에요'
-    : note
+  const toastText = note
       ? note.text
       : saved
       ? `저장했어요 · ${formatKcal(saved.consumedKcal)}kcal${saved.dateKey !== today ? ` (${shortDate(saved.dateKey)})` : ''}`
@@ -226,9 +215,6 @@ export default function HomePage({ user }: { user: User }) {
         : goalNotice === 'pending'
           ? '목표를 저장했어요. 연결되면 올라가요.'
           : null
-
-  // 다시 누르면 1.6초를 새로 센다(시안 toast()의 clearTimeout)
-  const showSoon = () => setSoon(Date.now())
 
   // 시안 render(): 화면이 바뀌면 .screen에 .enter(짧은 나타남). .home = 띠 높이(사용자가 고른 변경 15, index.css)
   return (
@@ -245,7 +231,8 @@ export default function HomePage({ user }: { user: User }) {
         onDetail={() => navigate(`/detail${isToday ? '' : `?date=${dateKey}`}`, { state: { fromHome: true } })}
       />
 
-      <MealBand uid={uid} dateKey={dateKey} day={summary} pending={pending} listError={listError} onSoon={showSoon}
+      <MealBand uid={uid} dateKey={dateKey} day={summary} pending={pending} listError={listError} isToday={isToday}
+        onRecommend={() => navigate('/recommend', { state: { fromHome: true } })}
         keepPhotos={keepPhotos}
         onAlbum={() => navigate('/album', { state: { fromHome: true } })}
       />

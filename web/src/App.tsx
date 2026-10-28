@@ -34,6 +34,8 @@ const CalendarPage = lazy(() => import('./pages/CalendarPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 // 식단 앨범(디자인 조각 D9). 홈 식사 띠 [식단 앨범](사진 보관을 켰을 때)에서 push(state.fromHome)
 const AlbumPage = lazy(() => import('./pages/AlbumPage'))
+// 음식 추천(디자인 조각 D12). 홈 식사 띠 [음식 추천](오늘을 볼 때만)에서 push(state.fromHome)
+const RecommendPage = lazy(() => import('./pages/RecommendPage'))
 // 처음 동의·설정 → 약관·개인정보(디자인 조각 D10)
 const ConsentPage = lazy(() => import('./pages/ConsentPage'))
 const TermsPage = lazy(() => import('./pages/TermsPage'))
@@ -151,6 +153,7 @@ const GlanceRoute = () => <GlancePage uid={useUser().uid} />
 const DetailRoute = () => <NutritionDetailPage uid={useUser().uid} />
 const CalendarRoute = () => <CalendarPage uid={useUser().uid} />
 const AlbumRoute = () => <AlbumPage uid={useUser().uid} />
+const RecommendRoute = () => <RecommendPage uid={useUser().uid} />
 const SettingsRoute = () => <SettingsPage user={useUser()} />
 
 const userRoutes: RouteObject[] = [
@@ -174,6 +177,8 @@ const userRoutes: RouteObject[] = [
   { path: '/settings', element: <SettingsRoute /> },
   // ?month=YYYY-MM&date=YYYY-MM-DD
   { path: '/album', element: <AlbumRoute /> },
+  // 음식 추천(D12), 늘 오늘 기준
+  { path: '/recommend', element: <RecommendRoute /> },
   // 설정 → 약관·개인정보(D10)
   { path: '/terms', element: <TermsRoute /> },
   ...(DevPage ? [{ path: '/dev', element: <DevPage /> }] : []),
