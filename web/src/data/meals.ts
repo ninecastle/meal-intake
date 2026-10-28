@@ -1,6 +1,5 @@
 import {
   collection,
-  deleteDoc,
   doc,
   getDoc,
   getDocFromCache,
@@ -11,6 +10,7 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
   type DocumentReference,
   type DocumentSnapshot,
   type Timestamp,
@@ -244,7 +244,11 @@ export async function saveMeal(
 /** 모든 상태에서 삭제할 수 있다. 호출하는 쪽이 beforePhotoStore.remove도 부른다. */
 export async function deleteMeal(uid: string, mealId: string): Promise<void> {
   try {
-    await deleteDoc(mealRef(uid, mealId))
+    // 사진 보관(D9, 스펙 4.12절): 그 기록의 사진 문서도 같은 배치로 지운다(없으면 아무 일 없음)
+    const batch = writeBatch(db)
+    batch.delete(mealRef(uid, mealId))
+    batch.delete(doc(db, 'users', uid, 'mealPhotos', mealId))
+    await batch.commit()
   } catch (e) {
     throw writeError(e)
   }

@@ -29,6 +29,7 @@ import {
 } from '../components/meal/MealSheets'
 import { afterTarget, useAfterFlow, type ReviewEntry } from '../components/meal/useAfterFlow'
 import { useBeforeFlow } from '../components/meal/useBeforeFlow'
+import { useKeepPhotosAsk } from '../components/meal/KeepPhotosAsk'
 import { formatGrams, homeHref, isDateKey, macroPct, MEAL_TYPE_LABEL, MEAL_TYPES, sourceLabel } from '../components/mealText'
 import { foodName, representativeFood } from '../lib/foodName'
 import { Icon, IconButton, MealArt, Toast } from '../components/ui'
@@ -190,16 +191,20 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
   }
   const goManual = () => navigate(`/meal/new/review?date=${dateKey}&meal=${meal}`, { replace: true })
 
+  // 식사 사진 보관(D9): 처음 사진 버튼을 누를 때 묻고, 켜져 있으면 흐름이 썸네일을 저장한다
+  const keepAsk = useKeepPhotosAsk(uid)
   const before = useBeforeFlow({
     uid,
     dateKey,
     mealType: meal,
+    keepPhotos: keepAsk.keepPhotos,
     onDone: () => setSheet(null),
     onManual: goManual,
   })
   const after = useAfterFlow({
     uid,
     target: target_,
+    keepPhotos: keepAsk.keepPhotos,
     onReview: goReview,
     onManual: () => {
       setTarget('after')
@@ -493,7 +498,7 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
         open={sheet === 'record'}
         onClose={closeSheet}
         cap={cap}
-        gate={before.gate}
+        gate={(fn) => keepAsk.gate(() => before.gate(fn))}
         error={before.error}
         onRetry={before.canRetry ? before.retry : undefined}
         onManual={goManual}
@@ -518,6 +523,7 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
         onClose={closeSheet}
         subtitle={afterSubtitle}
         cap={cap}
+        gate={keepAsk.gate}
         notices={
           <AfterNotices
             cap={cap}
@@ -551,6 +557,7 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
       {cap.elements}
       {before.elements}
       {after.elements}
+      {keepAsk.elements}
     </>
   )
 }

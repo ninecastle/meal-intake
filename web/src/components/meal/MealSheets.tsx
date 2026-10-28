@@ -237,18 +237,20 @@ export function AfterSheet(props: {
   onClose: () => void
   subtitle: string
   cap: CaptureSource
+  /** 사진 버튼을 누르기 전에 끼운다(D9 사진 보관 처음 묻기) */
+  gate?: (fn: () => void) => void
   notices: ReactNode
   onAllEaten: () => void
   onRatio: () => void
   onCancelMeal: () => void
 }) {
-  const { open, onClose, subtitle, cap, notices, onAllEaten, onRatio, onCancelMeal } = props
+  const { open, onClose, subtitle, cap, gate, notices, onAllEaten, onRatio, onCancelMeal } = props
   return (
     <BottomSheet open={open} onClose={onClose} title="남은 음식을 알려 주세요">
       <p style={{ color: 'var(--ink-2)', margin: '6px 0 0' }}>{subtitle}</p>
       {notices}
       <div className="choice">
-        <PhotoChoices cap={cap} gate={(fn) => fn()} onPicked={onClose} />
+        <PhotoChoices cap={cap} gate={gate ?? ((fn) => fn())} onPicked={onClose} />
         <button type="button" onClick={onAllEaten}>
           {CHECK}다 먹었어요
         </button>

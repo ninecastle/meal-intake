@@ -213,3 +213,8 @@
     outline-offset: 2px;
   }
 }
+
+/* 식사 사진 크게 보기(D9, mock d9_2): 화면 가득 어두운 바탕, 위 흰 닫기, 가운데 사진, 아래 이름 */
+.photoview{position:fixed;inset:0;background:rgba(31,42,46,.94);z-index:80;display:grid;grid-template-rows:auto 1fr auto;color:#fff}
+.photoview .iconbtn svg{stroke:#fff}
+.photoview .iconbtn:hover{background:rgba(255,255,255,.12)}

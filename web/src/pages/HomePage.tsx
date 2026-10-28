@@ -17,6 +17,7 @@ import { formatKcal, isDateKey } from '../components/mealText'
 import { Toast } from '../components/ui'
 import { subscribeGoal, subscribeGoalForDate, type DatedGoal, type StoredGoal } from '../data/goals'
 import { subscribeDay, subscribePending, type MealWithId } from '../data/meals'
+import { subscribePrefs } from '../data/prefs'
 import type { DaySummary } from '../data/summary'
 import { clearFlash, peekFlash } from '../lib/flash'
 import { toDateKey } from '../lib/time'
@@ -50,7 +51,10 @@ export default function HomePage({ user }: { user: User }) {
   const [day, setDay] = useState<DaySummary | null>(null)
   const [dayErrorKey, setDayErrorKey] = useState<string | null>(null)
   const [online, setOnline] = useState(() => navigator.onLine)
-  // [음식 추천]·식단 앨범: 화면이 아직 없어 "준비 중이에요" 토스트
+  // 식사 사진 보관(D9): 켰을 때만 식사 띠에 [식단 앨범]
+  const [keepPhotos, setKeepPhotos] = useState(false)
+  useEffect(() => subscribePrefs(uid, (p) => setKeepPhotos(p.keepPhotos === true)), [uid])
+  // [음식 추천]: 화면이 아직 없어 "준비 중이에요" 토스트
   const [soon, setSoon] = useState(0)
   // 나의 변화(D6) 짧은 알림("체중을 기록했어요" 등). at이 바뀌면 1.6초를 새로 센다
   const [note, setNote] = useState<{ text: string; at: number } | null>(null)
@@ -240,7 +244,10 @@ export default function HomePage({ user }: { user: User }) {
         onDetail={() => navigate(`/detail${isToday ? '' : `?date=${dateKey}`}`, { state: { fromHome: true } })}
       />
 
-      <MealBand uid={uid} dateKey={dateKey} day={summary} pending={pending} listError={listError} onSoon={showSoon} />
+      <MealBand uid={uid} dateKey={dateKey} day={summary} pending={pending} listError={listError} onSoon={showSoon}
+        keepPhotos={keepPhotos}
+        onAlbum={() => navigate('/album', { state: { fromHome: true } })}
+      />
 
       <ChangeBand uid={uid} dateKey={dateKey} today={today} goal={goal} onToast={(text) => setNote({ text, at: Date.now() })} />
 

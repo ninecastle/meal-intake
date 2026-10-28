@@ -15,6 +15,9 @@ rules_version = '2';
 // - v7(디자인 조각 D6, 2026-10-28): 체중 기록 users/{uid}/weights/{dateKey}(kg 30~250), 사용자 문서에 목표 몸무게 targetWeightKg(30~250),
 //   설정 prefs.weightAskSkipKg("목표를 다시 계산할까요?"에서 [나중에]를 누른 때의 최근 체중, 30~250). 체중은 하루 문서가 아니라 따로 둔다
 //   ("지난 기록" = 그 날짜 앞 가장 최근 체중을 dateKey 한 필드 범위·정렬로 찾게, 복합 인덱스 없이).
+// - v8(디자인 조각 D9, 2026-10-28): 식사 사진 보관 users/{uid}/mealPhotos/{mealId}(스펙 4.12절, 선택·기본 꺼짐).
+//   먹기 전·후 JPEG 썸네일 bytes(장당 100KB 이하)와 w·h(1~1000)만. 식사 기록(meals)과 분리, 본인만 읽기·쓰기·삭제.
+//   설정 prefs.keepPhotos(bool, 없으면 아직 묻지 않음 = 꺼짐).
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -148,11 +151,12 @@ service cloud.firestore {
       return v is number && v >= 30 && v <= 250;
     }
 
-    // 설정(v6): shareEaters(bool)·weightAskSkipKg(v7, kg) 모두 선택. 없으면 클라이언트가 꺼짐·없음으로 본다.
+    // 설정(v6): shareEaters(bool)·weightAskSkipKg(v7, kg)·keepPhotos(v8, bool) 모두 선택. 없으면 클라이언트가 꺼짐·없음으로 본다.
     function validPrefs(p) {
       return p is map
-        && p.keys().hasOnly(['shareEaters', 'weightAskSkipKg'])
+        && p.keys().hasOnly(['shareEaters', 'weightAskSkipKg', 'keepPhotos'])
         && (!('shareEaters' in p) || p.shareEaters is bool)
+        && (!('keepPhotos' in p) || p.keepPhotos is bool)
         && (!('weightAskSkipKg' in p) || validKg(p.weightAskSkipKg));
     }
 
@@ -250,6 +254,42 @@ service cloud.firestore {
         && request.resource.data.dateKey == dateKey
         && validKg(request.resource.data.kg)
         && request.resource.data.updatedAt == request.time;
+    }
+
+    // ---- 식사 사진 보관(v8, 디자인 조각 D9, 스펙 4.12절): 기록마다 문서 하나, id == mealId ----
+    // 쓰기는 setDoc(merge) 한 쪽씩 { before 또는 after: Bytes, w, h, updatedAt: serverTimestamp() }.
+    // createdAt은 먹기 전 사진을 쓸 때만 넣는다(먹은 후 사진만 있는 기록은 없을 수 있다. 오프라인 대기열이라 문서 유무를 미리 읽지 않음).
+    // 병합 결과 전체를 검사한다. 썸네일 한 장은 약 20~40KB라 100KB 상한은 여유가 있고, 문서 1MiB 한도도 넘지 않는다.
+    function validThumb(b) {
+      return b is bytes && b.size() > 0 && b.size() <= 100000;
+    }
+
+    function validPhotoSize(v) {
+      return v is number && v >= 1 && v <= 1000;
+    }
+
+    function validMealPhotos(d) {
+      return d.keys().hasOnly(['before', 'after', 'w', 'h', 'createdAt', 'updatedAt'])
+        && d.keys().hasAll(['w', 'h', 'updatedAt'])
+        && d.keys().hasAny(['before', 'after'])
+        && (!('before' in d) || validThumb(d.before))
+        && (!('after' in d) || validThumb(d.after))
+        && validPhotoSize(d.w)
+        && validPhotoSize(d.h)
+        && (!('createdAt' in d) || d.createdAt is timestamp)
+        && d.updatedAt == request.time;
+    }
+
+    match /users/{uid}/mealPhotos/{mealId} {
+      allow read, delete: if signedInAs(uid);
+      // 생성: createdAt이 있으면 이번 요청 시각. 수정: createdAt은 그대로이거나(먹은 후 사진) 이번 요청 시각(먹기 전 사진을 다시 씀).
+      allow create: if signedInAs(uid)
+        && validMealPhotos(request.resource.data)
+        && request.resource.data.get('createdAt', request.time) == request.time;
+      allow update: if signedInAs(uid)
+        && validMealPhotos(request.resource.data)
+        && (request.resource.data.get('createdAt', null) == resource.data.get('createdAt', null)
+            || request.resource.data.get('createdAt', null) == request.time);
     }
 
     // 위에 없는 경로는 규칙이 없으므로 거부된다.

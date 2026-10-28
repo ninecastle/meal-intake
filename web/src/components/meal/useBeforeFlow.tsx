@@ -4,6 +4,7 @@
 // 날짜·끼니는 끼니 화면의 것으로 고정(2026-10-27 사용자 결정: 끼니 카드로 들어오면 카메라 사진도 그 날짜·끼니, EXIF로 끼니를 채우지 않음).
 // 먹은 시간(D3): 카메라는 찍은 시각(지금), 앨범 사진은 사진의 찍은 시각(EXIF, 없거나 미래면 지금). EXIF는 이 계산에만 쓰고 저장하지 않는다.
 // 사진 전송 고지(스펙 7.1 U4)를 아직 확인하지 않았으면 사진 버튼 전에 한 번 보인다(gate).
+// 식사 사진 보관(D9): keepPhotos가 true면 awaiting_after 기록을 만든 뒤 같은 압축본으로 'before' 썸네일을 저장한다(기다리지 않음).
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { analyzeBefore } from '../../analysis/analyze'
 import { loadNutritionDb } from '../../analysis/nutrition/db'
@@ -22,6 +23,7 @@ import {
   type ErrorView,
 } from '../capture/captureText'
 import type { PickSource } from '../capture/useCaptureSource'
+import { keepMealPhoto } from './KeepPhotosAsk'
 import { Button } from '../ui'
 
 export type BeforeFlow = {
@@ -42,6 +44,8 @@ export function useBeforeFlow(opts: {
   uid: string
   dateKey: string
   mealType: MealType
+  /** 식사 사진 보관 설정(D9). true일 때만 먹기 전 썸네일을 저장한다 */
+  keepPhotos: boolean | null
   /** 분석이 끝나 awaiting_after 기록을 만들었다 */
   onDone: (mealId: string) => void
   /** 분석 중 덮개의 [직접 입력] */
@@ -50,9 +54,11 @@ export function useBeforeFlow(opts: {
   const { uid, dateKey, mealType } = opts
   const onDoneRef = useRef(opts.onDone)
   const onManualRef = useRef(opts.onManual)
+  const keepRef = useRef(opts.keepPhotos)
   useEffect(() => {
     onDoneRef.current = opts.onDone
     onManualRef.current = opts.onManual
+    keepRef.current = opts.keepPhotos
   })
   const pendingRef = useRef<(() => void) | null>(null)
   const busyRef = useRef(false)
@@ -108,6 +114,7 @@ export function useBeforeFlow(opts: {
       createAwaitingMeal(uid, id, { dateKey, mealType, beforeAnalysis }).catch((e: unknown) =>
         console.warn('[meal] awaiting_after 저장 실패', e),
       )
+      if (keepRef.current === true) keepMealPhoto(uid, id, 'before', photo)
       void fillMealTime(uid, dateKey, mealType, takenAt)
       abortRef.current = null
       last.current = null

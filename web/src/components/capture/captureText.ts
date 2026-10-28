@@ -4,7 +4,7 @@ import { toDateKey } from '../../lib/time'
 
 /** 스펙 7.1 U4 문구 그대로. 첫 촬영 전 1회 확인 + 촬영 화면에 늘 보인다. */
 export const PHOTO_NOTICE =
-  '사진은 앱 서버에 저장하지 않아요. 분석을 위해 Google Gemini로 보내며, 무료 등급 약관에 따라 Google이 서비스 개선에 쓸 수 있어요. 얼굴이나 개인정보가 나오지 않게 찍어 주세요.'
+  '사진 보관은 선택이에요. 켜면 작은 사진만 기록과 함께 저장하고 언제든 지울 수 있어요. 분석을 위해 Google Gemini로 보내며, 무료 등급 약관에 따라 Google이 서비스 개선에 쓸 수 있어요. 얼굴이나 개인정보가 나오지 않게 찍어 주세요.'
 
 /** 확인 여부만 기록한다(사진은 넣지 않는다). */
 const NOTICE_ACK_KEY = 'photoNoticeAck.v1'

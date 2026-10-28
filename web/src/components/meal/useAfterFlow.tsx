@@ -3,6 +3,8 @@
 //   남긴 비율이 불확실한(null) 음식이 있으면 먹기 전 사진과 awaiting_after 문서를 그대로 두고 결과 화면에 retake를 넘긴다.
 // [다 먹었어요]·[남긴 양 직접 고르기](2026-10-27 사용자 결정): 호출 B 없이 영양값만 조립하고 음식마다 고른 남긴 비율을 넣는다.
 //   사진 비교가 없으므로 "확인 필요"·그릇 안 보임(ratio_assumed) 규칙을 쓰지 않는다. 먹기 전 사진은 결과 화면으로 넘어갈 때 지운다.
+// 식사 사진 보관(D9): keepPhotos가 true면 먹은 후 분석이 끝난 뒤 같은 압축본으로 'after' 썸네일을 저장한다(기다리지 않음).
+//   다시 찍기(retake)여도 저장한다(다시 찍으면 덮어쓴다). [다 먹었어요]·[남긴 양 직접 고르기]는 먹은 후 사진이 없어 저장하지 않는다.
 // 먹은 후 사진은 이 화면 메모리에만 둔다. 먹기 전 사진은 IndexedDB에 있으면 카메라 화면에 반투명하게 겹친다(photoUrl).
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { analyzeAfter, assembleAnalysis } from '../../analysis/analyze'
@@ -15,6 +17,7 @@ import { isSamePhoto } from '../../photos/samePhoto'
 import type { BeforeAnalysis, MealIntakeAnalysis } from '../../types/analysis'
 import AnalyzingOverlay from '../capture/AnalyzingOverlay'
 import { describeAnalysisError, isAbortError, type ErrorView } from '../capture/captureText'
+import { keepMealPhoto } from './KeepPhotosAsk'
 
 /** 결과 화면(ReviewPage)에 넘기는 state */
 export type ReviewEntry = { analysis: MealIntakeAnalysis; dateKey: string; mealType: MealType; retake?: boolean }
@@ -53,6 +56,8 @@ export type AfterFlow = {
 export function useAfterFlow(opts: {
   uid: string
   target: AfterTarget | null
+  /** 식사 사진 보관 설정(D9). true일 때만 먹은 후 썸네일을 저장한다 */
+  keepPhotos: boolean | null
   onReview: (mealId: string, entry: ReviewEntry) => void
   /** 분석 중 덮개의 [남긴 양 직접 고르기] */
   onManual: () => void
@@ -127,6 +132,7 @@ export function useAfterFlow(opts: {
     const analysis = await assembleAnalysis(t.beforeAnalysis, after, { signal: ac.signal })
     lastShot.current = null
     setHasLast(false)
+    if (cbRef.current.keepPhotos === true) keepMealPhoto(uid, t.id, 'after', afterPhoto)
     if (analysis.items.some((it) => it.remaining_ratio === null)) {
       // 다시 찍을 수 있게 먹기 전 사진과 awaiting_after 문서를 그대로 둔다. 저장하면 그때 결과 화면이 사진을 지운다.
       cbRef.current.onReview(t.id, { analysis, dateKey: t.dateKey, mealType: t.mealType, retake: true })

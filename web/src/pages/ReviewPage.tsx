@@ -26,6 +26,7 @@ import {
 import { buildAnalysis } from '../analysis/compute'
 import { koreanWarnings } from '../analysis/koreanText'
 import { validateAnalysis } from '../analysis/validate'
+import EditPhotos from '../components/photos/EditPhotos'
 import ReviewEditor from '../components/review/ReviewEditor'
 import { deleteMeal, getMeal, MealStoreError, newMealId, saveMeal, type MealStoreErrorCode, type MealType } from '../data/meals'
 import { fillMealTime } from '../data/mealTimes'
@@ -462,6 +463,8 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
                 </button>
               ))}
             </div>
+            {/* 식사 사진(D9): 수정 화면에서만, 그 기록의 보관 사진이 있을 때 접힌 칸 */}
+            {isEdit && uid && <EditPhotos uid={uid} mealId={phase.initial.mealId} dateKey={draft.dateKey} mealType={draft.mealType} />}
 
             {/* 저장 중에는 편집을 잠근다(저장하는 값과 화면 값이 달라지지 않게) */}
             <fieldset disabled={saving} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>

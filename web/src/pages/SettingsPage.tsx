@@ -1,8 +1,10 @@
 // 설정(디자인 조각 D8, 시안 settings() 마크업·클래스 그대로, 2026-10-28 사용자 확인 _workspace/design/mock/d8_1~7).
 // div.screen > .topbar.sticky(‹ "설정") → .pad.slist: 계정(구글 이메일) / 내 목표(목표 칼로리·탄단지, 목표, 목표 몸무게, 키·몸무게 + 시안에 없는
 // 성별·나이, 활동량) / 기록(시안에 없는 묶음: 같이 먹은 사람 고르기) / 학교 / 사진 / 알림 / 기타(… 내 기록 전체 삭제, 로그아웃).
-// 아직 만들지 않은 기능의 줄(학교 등록 D13, 식사 사진 보관·사진 전체 삭제 D9, 끼니 기록 알림 D15, 프리미엄, 사용방법 D11,
+// 아직 만들지 않은 기능의 줄(학교 등록 D13, 끼니 기록 알림 D15, 프리미엄, 사용방법 D11,
 // 처음 화면 다시 보기·약관·개인정보 D10)은 시안처럼 보이고 누르면 "준비 중이에요"(스위치는 꺼진 채).
+// 사진(D9, 2026-10-28 사용자 확인 _workspace/design/mock/d9_4·5): 식사 사진 보관 켜기는 바로, 끄기는 "보관한 사진도 지울까요?"
+// 시트([남겨 두기]·[모두 지우기], X는 취소 = 켜진 채), 사진 전체 삭제는 확인 시트 뒤 deleteAllMealPhotos.
 // 목표가 없는 계정은 온보딩(D11) 전까지 내 목표 값이 "–"이고 누르면 목표 화면(/goal, 처음 목표 정하기)으로 간다.
 // 저장은 기다리지 않는다(오프라인이면 끝나지 않는다, 구독에는 바로 들어간다). 짧은 알림은 시안 토스트 1.6초.
 // 방문 기록: 홈 톱니에서 push(state.fromHome). ‹ = 홈에서 왔으면 navigate(-1), 아니면 홈으로 replace.
@@ -24,14 +26,15 @@ import {
 } from '../components/settings/GoalSheets'
 import { BottomSheet, Crown, IconButton, Toast } from '../components/ui'
 import { saveGoal, subscribeGoal, type StoredGoal } from '../data/goals'
-import { setShareEaters, subscribePrefs, type Prefs } from '../data/prefs'
+import { deleteAllMealPhotos } from '../data/mealPhotos'
+import { setKeepPhotos, setShareEaters, subscribePrefs, type Prefs } from '../data/prefs'
 import { deleteAllRecords } from '../data/records'
 import { setTargetWeight, subscribeWeightProfile, type WeightProfile } from '../data/weights'
 import { signOutAndClear } from '../lib/auth'
 import { clearFlash, peekFlash } from '../lib/flash'
 import { formatKg } from '../lib/weight'
 
-type SheetKey = 'kcal' | 'goal' | 'target' | 'hw' | 'sexage' | 'activity' | 'delete'
+type SheetKey = 'kcal' | 'goal' | 'target' | 'hw' | 'sexage' | 'activity' | 'delete' | 'keepoff' | 'delphotos'
 
 /** 시안 row(): span 이름 + small 값(또는 다른 오른쪽 내용) */
 function Row({ label, value, danger, disabled, onClick }: { label: string; value?: ReactNode; danger?: boolean; disabled?: boolean; onClick: () => void }) {
@@ -109,6 +112,43 @@ export default function SettingsPage({ user }: { user: User }) {
     setShareEaters(uid, !prefs.shareEaters).catch(() => say('설정을 저장하지 못했어요'))
   }
 
+  function toggleKeep() {
+    if (!prefs) return
+    if (prefs.keepPhotos === true) {
+      setSheet('keepoff')
+      return
+    }
+    setKeepPhotos(uid, true).catch(() => say('설정을 저장하지 못했어요'))
+    say('사진 보관을 켰어요')
+  }
+
+  /** 보관 끄기 시트: 둘 다 보관을 끄고, [모두 지우기]면 보관한 사진도 지운다 */
+  async function keepOff(wipe: boolean) {
+    if (deleting) return
+    setKeepPhotos(uid, false).catch(() => say('설정을 저장하지 못했어요'))
+    if (!wipe) {
+      setSheet(null)
+      say('사진 보관을 껐어요')
+      return
+    }
+    await wipePhotos()
+  }
+
+  async function wipePhotos() {
+    if (deleting) return
+    setDeleting(true)
+    try {
+      await deleteAllMealPhotos(uid)
+      setSheet(null)
+      say('사진을 모두 지웠어요')
+    } catch (e) {
+      console.warn('[settings] 사진 삭제 실패', e)
+      say('사진을 지우지 못했어요. 인터넷 연결을 확인해 주세요')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   function saveTarget(kg: number | null) {
     setSheet(null)
     setTargetWeight(uid, kg).catch(() => say('목표 몸무게를 저장하지 못했어요'))
@@ -148,6 +188,7 @@ export default function SettingsPage({ user }: { user: User }) {
   const dash = '– ›'
   const targetKg = weight?.targetKg ?? null
   const shareOn = prefs?.shareEaters === true
+  const keepOn = prefs?.keepPhotos === true
 
   return (
     <main className="screen enter">
@@ -187,8 +228,8 @@ export default function SettingsPage({ user }: { user: User }) {
         <div className="sgroup">학교</div>
         <Row label="학교 등록" value="등록 안 함 ›" onClick={soon} />
         <div className="sgroup">사진</div>
-        <Row label="식사 사진 보관" value={<Switch on={false} label="식사 사진 보관" />} onClick={soon} />
-        <Row label="사진 전체 삭제" value="" danger onClick={soon} />
+        <Row label="식사 사진 보관" value={<Switch on={keepOn} label="식사 사진 보관" />} disabled={!prefs} onClick={toggleKeep} />
+        <Row label="사진 전체 삭제" value="" danger onClick={() => setSheet('delphotos')} />
         <div className="sgroup">알림</div>
         {/* 시안은 버튼이 아닌 줄(안쪽 여백 없음). 누르면 "준비 중이에요"라 버튼으로 두고 여백만 시안처럼 없앤다 */}
         <button type="button" className="srow" style={{ padding: 0 }} onClick={soon}>
@@ -234,7 +275,7 @@ export default function SettingsPage({ user }: { user: User }) {
         onDelete={() => saveTarget(null)}
       />
       <BottomSheet open={sheet === 'delete'} onClose={() => !deleting && setSheet(null)} title="내 기록을 모두 지울까요?">
-        <p style={{ color: 'var(--ink-2)', margin: '6px 0 0' }}>식사 기록, 먹은 시간·공복 표시, 체중 기록을 모두 지워요. 지운 기록은 되돌릴 수 없어요.</p>
+        <p style={{ color: 'var(--ink-2)', margin: '6px 0 0' }}>식사 기록, 먹은 시간·공복 표시, 체중 기록, 보관한 사진을 모두 지워요. 지운 기록은 되돌릴 수 없어요.</p>
         <div className="note" style={{ marginTop: 14 }}>
           목표, 목표 몸무게, 설정은 그대로 남아요
         </div>
@@ -243,6 +284,28 @@ export default function SettingsPage({ user }: { user: User }) {
             취소
           </button>
           <button type="button" className="btn ink" style={{ flex: 1 }} disabled={deleting} onClick={() => void deleteAll()}>
+            {deleting ? '지우는 중…' : '모두 지우기'}
+          </button>
+        </div>
+      </BottomSheet>
+      <BottomSheet open={sheet === 'keepoff'} onClose={() => !deleting && setSheet(null)} title="보관한 사진도 지울까요?">
+        <p style={{ color: 'var(--ink-2)', margin: '6px 0 0' }}>앞으로 찍는 사진은 보관하지 않아요. 이미 보관한 사진은 남겨 두거나 지울 수 있어요.</p>
+        <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+          <button type="button" className="btn ghost" style={{ flex: 1 }} disabled={deleting} onClick={() => void keepOff(false)}>
+            남겨 두기
+          </button>
+          <button type="button" className="btn ink" style={{ flex: 1 }} disabled={deleting} onClick={() => void keepOff(true)}>
+            {deleting ? '지우는 중…' : '모두 지우기'}
+          </button>
+        </div>
+      </BottomSheet>
+      <BottomSheet open={sheet === 'delphotos'} onClose={() => !deleting && setSheet(null)} title="보관한 사진을 모두 지울까요?">
+        <p style={{ color: 'var(--ink-2)', margin: '6px 0 0' }}>식사 기록은 그대로 남아요. 지운 사진은 되돌릴 수 없어요.</p>
+        <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+          <button type="button" className="btn ghost" style={{ flex: 1 }} disabled={deleting} onClick={() => setSheet(null)}>
+            취소
+          </button>
+          <button type="button" className="btn ink" style={{ flex: 1 }} disabled={deleting} onClick={() => void wipePhotos()}>
             {deleting ? '지우는 중…' : '모두 지우기'}
           </button>
         </div>

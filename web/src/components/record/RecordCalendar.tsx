@@ -2,6 +2,7 @@
 // .calhead(‹ 2026년 10월 ›) → .monthsum(기록 ○일 · 하루 평균) → .cal(요일 .wd + 날짜 .cell) → .legendrow → .nchips [칼로리|탄|단|지|몸무게].
 // 2026-10-28 사용자 결정 "모두 시안대로": 카드 테두리·✓·토일 색·주 줄 › 칸·고른 주 테두리·기준량 글 없음, 앞뒤 달 날짜는 흐린 숫자만(누르지 않음).
 // 진하기는 고른 항목의 그날 목표 대비 %(lib/calendar heatLevelFor, 목표가 없는 날은 기준량) → 시안 .h1~.h4. 몸무게 칩은 체중 기록한 날 .hw + kg.
+// 식단 앨범(D9)은 bare로 .calhead + .cal만 쓴다(시안 album()에는 월 요약·범례·칩이 없다). 고른 날은 aria-pressed만(시안에 표시 없음).
 // 이번 달이면 다음 달 ›은 홈 날짜 줄 내일처럼 흐리게(.35)·누를 수 없음. 미래 날짜는 눌러도 아무 일 없음. 그리기만 한다(상태·조회는 CalendarPage).
 import type { DatedGoal } from '../../data/goals'
 import {
@@ -41,9 +42,13 @@ export interface RecordCalendarProps {
   onMoveMonth: (delta: number) => void
   onOpenDay: (dateKey: string) => void
   onNut: (n: CalNut) => void
+  /** 식단 앨범(D9): 월 요약·범례·칩 없이 달 이동 + 격자만 */
+  bare?: boolean
+  /** 식단 앨범에서 고른 날(aria-pressed) */
+  selected?: string
 }
 
-export default function RecordCalendar({ month, today, nut, ready, days, goals, weights, onMoveMonth, onOpenDay, onNut }: RecordCalendarProps) {
+export default function RecordCalendar({ month, today, nut, ready, days, goals, weights, onMoveMonth, onOpenDay, onNut, bare = false, selected }: RecordCalendarProps) {
   const [y, m] = month.split('-').map(Number)
   const isThisMonth = month === today.slice(0, 7)
   const metric = nut === 'weight' ? null : nut
@@ -62,6 +67,7 @@ export default function RecordCalendar({ month, today, nut, ready, days, goals, 
         <h2 className="num">{`${y}년 ${m}월`}</h2>
         <IconButton icon="back" label="다음 달" style={{ transform: 'scaleX(-1)' }} disabled={isThisMonth} onClick={() => onMoveMonth(1)} />
       </div>
+      {!bare && (
       <div className="monthsum">
         <span>
           {'기록 '}
@@ -72,6 +78,7 @@ export default function RecordCalendar({ month, today, nut, ready, days, goals, 
           <b className="num">{summary?.average != null ? avgText(summary.average) : '–'}</b>
         </span>
       </div>
+      )}
       <div className="cal">
         {WEEKDAYS.map((w) => (
           <div key={w} className="wd">
@@ -111,6 +118,7 @@ export default function RecordCalendar({ month, today, nut, ready, days, goals, 
               aria-label={label.join(', ')}
               aria-current={d === today ? 'date' : undefined}
               aria-disabled={future || undefined}
+              aria-pressed={selected === undefined ? undefined : selected === d}
               onClick={() => {
                 if (!future) onOpenDay(d)
               }}
@@ -121,7 +129,7 @@ export default function RecordCalendar({ month, today, nut, ready, days, goals, 
           )
         })}
       </div>
-      {nut === 'weight' ? (
+      {bare ? null : nut === 'weight' ? (
         <div className="legendrow">체중을 기록한 날에 kg으로 표시돼요</div>
       ) : (
         <div className="legendrow">
@@ -139,6 +147,7 @@ export default function RecordCalendar({ month, today, nut, ready, days, goals, 
           </span>
         </div>
       )}
+      {!bare && (
       <div className="nchips">
         {CAL_NUTS.map((k) => (
           <button key={k} type="button" className="nchip" aria-pressed={nut === k} onClick={() => onNut(k)}>
@@ -146,6 +155,7 @@ export default function RecordCalendar({ month, today, nut, ready, days, goals, 
           </button>
         ))}
       </div>
+      )}
     </>
   )
 }

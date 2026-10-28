@@ -1,4 +1,4 @@
-// firestore.rules v7 테스트(@firebase/rules-unit-testing + node:test).
+// firestore.rules v8 테스트(@firebase/rules-unit-testing + node:test).
 // 실행: firestore-tests 폴더에서 `npm test` (Firestore 에뮬레이터를 띄워 실행, JDK 21+ 필요, firebase-tools 15 기준).
 // 이미 에뮬레이터가 떠 있으면 `npm run test:running`.
 // 실제 프로젝트는 건드리지 않는다(demo- 프로젝트 ID). AI 호출 없음.
@@ -9,6 +9,7 @@ import { assertFails, assertSucceeds, initializeTestEnvironment } from '@firebas
 import {
   arrayRemove,
   arrayUnion,
+  Bytes,
   collection,
   deleteDoc,
   deleteField,
@@ -824,5 +825,97 @@ describe('체중 기록·목표 몸무게(규칙 v7, 디자인 조각 D6)', () =
     for (const v of [10, 300, '55', null, [55]]) {
       await assertFails(setDoc(doc(alice(), USER), { prefs: { weightAskSkipKg: v } }, { merge: true }))
     }
+  })
+})
+
+describe('식사 사진 보관(users/{uid}/mealPhotos/{mealId}, prefs.keepPhotos, 규칙 v8, 스펙 4.12절)', () => {
+  const USER = 'users/alice'
+  const pPath = (uid = 'alice', id = 'm1') => `users/${uid}/mealPhotos/${id}`
+  const jpeg = (n) => Bytes.fromUint8Array(new Uint8Array(n).fill(7))
+  /** 클라이언트 쓰기(mealPhotos.ts saveMealPhoto): 한 쪽씩 merge, 먹기 전만 createdAt */
+  const save = (fs, side, { n = 30000, w = 360, h = 288, extra = {}, uid = 'alice', id = 'm1' } = {}) =>
+    setDoc(
+      doc(fs, pPath(uid, id)),
+      { [side]: jpeg(n), w, h, ...(side === 'before' ? { createdAt: serverTimestamp() } : {}), updatedAt: serverTimestamp(), ...extra },
+      { merge: true },
+    )
+
+  test('본인: 먹기 전 → 먹은 후 merge 저장, 읽기, 삭제', async () => {
+    await assertSucceeds(save(alice(), 'before'))
+    await assertSucceeds(save(alice(), 'after'))
+    const d = (await getDoc(doc(alice(), pPath()))).data()
+    assert.deepEqual(Object.keys(d).sort(), ['after', 'before', 'createdAt', 'h', 'updatedAt', 'w'])
+    assert.equal(d.before.toUint8Array().length, 30000)
+    await assertSucceeds(getDocs(collection(alice(), 'users/alice/mealPhotos')))
+    await assertSucceeds(deleteDoc(doc(alice(), pPath())))
+  })
+
+  test('먹은 후 사진만(createdAt 없음) 허용, 먹기 전 사진 다시 쓰기 허용, 경계 100000B·w/h 1·1000 허용', async () => {
+    await assertSucceeds(save(alice(), 'after'))
+    await assertSucceeds(save(alice(), 'before'))
+    await assertSucceeds(save(alice(), 'before', { id: 'm2', n: 100000, w: 1, h: 1000 }))
+  })
+
+  test('100KB 초과·빈 bytes·문자열(base64) 거부', async () => {
+    await assertFails(save(alice(), 'before', { n: 100001 }))
+    await assertFails(save(alice(), 'after', { n: 0 }))
+    await assertFails(
+      setDoc(doc(alice(), pPath()), { before: 'data:image/jpeg;base64,AAAA', w: 360, h: 288, updatedAt: serverTimestamp() }),
+    )
+  })
+
+  test('w·h 범위·형식, 모르는 키, 사진 없음, 필수 키 빠짐, 시각 위조 거부', async () => {
+    for (const [w, h] of [[0, 288], [360, 1001], ['360', 288], [360, null]]) {
+      await assertFails(save(alice(), 'before', { w, h }))
+    }
+    await assertFails(save(alice(), 'before', { extra: { thumb: jpeg(10) } }))
+    await assertFails(save(alice(), 'before', { extra: { exif: 'GPS' } }))
+    await assertFails(setDoc(doc(alice(), pPath()), { w: 360, h: 288, updatedAt: serverTimestamp() }))
+    await assertFails(setDoc(doc(alice(), pPath()), { before: jpeg(10), h: 288, updatedAt: serverTimestamp() }))
+    await assertFails(setDoc(doc(alice(), pPath()), { before: jpeg(10), w: 360, h: 288 }))
+    await assertFails(save(alice(), 'before', { extra: { updatedAt: Timestamp.fromDate(new Date('2026-01-01')) } }))
+    await assertFails(save(alice(), 'before', { extra: { createdAt: Timestamp.fromDate(new Date('2026-01-01')) } }))
+    await assertSucceeds(save(alice(), 'before'))
+    // 수정 때 createdAt을 지난 다른 시각으로 바꾸기 거부
+    await assertFails(save(alice(), 'after', { extra: { createdAt: Timestamp.fromDate(new Date('2026-01-01')) } }))
+  })
+
+  test('다른 사용자·미로그인: 읽기·목록·쓰기·삭제 거부', async () => {
+    await seed(pPath(), { before: jpeg(10), w: 360, h: 288, updatedAt: Timestamp.now() })
+    for (const fs of [db('bob'), db(null)]) {
+      await assertFails(getDoc(doc(fs, pPath())))
+      await assertFails(getDocs(collection(fs, 'users/alice/mealPhotos')))
+      await assertFails(save(fs, 'after'))
+      await assertFails(deleteDoc(doc(fs, pPath())))
+    }
+  })
+
+  test('기록 삭제와 사진 삭제를 한 배치로(deleteMeal), 사진 전체 삭제 배치', async () => {
+    await seed(MEAL, doneDoc())
+    await seed(pPath(), { before: jpeg(10), w: 360, h: 288, updatedAt: Timestamp.now() })
+    await seed(pPath('alice', 'm2'), { after: jpeg(10), w: 360, h: 288, updatedAt: Timestamp.now() })
+    const fs = alice()
+    const b = writeBatch(fs)
+    b.delete(doc(fs, MEAL))
+    b.delete(doc(fs, pPath()))
+    await assertSucceeds(b.commit())
+    const rest = await getDocs(collection(fs, 'users/alice/mealPhotos'))
+    assert.deepEqual(rest.docs.map((d) => d.id), ['m2'])
+    const b2 = writeBatch(fs)
+    rest.docs.forEach((d) => b2.delete(d.ref))
+    await assertSucceeds(b2.commit())
+    assert.equal((await getDocs(collection(alice(), 'users/alice/mealPhotos'))).size, 0)
+  })
+
+  test('prefs.keepPhotos: 본인 bool 허용(다른 설정과 함께), bool 아니면 거부', async () => {
+    await assertSucceeds(setDoc(doc(alice(), USER), { prefs: { keepPhotos: true } }, { merge: true }))
+    await assertSucceeds(setDoc(doc(alice(), USER), { prefs: { shareEaters: true, weightAskSkipKg: 56 } }, { merge: true }))
+    await assertSucceeds(setDoc(doc(alice(), USER), { prefs: { keepPhotos: false } }, { merge: true }))
+    assert.deepEqual((await getDoc(doc(alice(), USER))).data().prefs, { keepPhotos: false, shareEaters: true, weightAskSkipKg: 56 })
+    for (const v of ['true', 1, null, { on: true }]) {
+      await assertFails(setDoc(doc(alice(), USER), { prefs: { keepPhotos: v } }, { merge: true }))
+    }
+    await assertFails(setDoc(doc(alice(), USER), { prefs: { keepPhotoz: true } }, { merge: true }))
+    await assertFails(setDoc(doc(db('bob'), USER), { prefs: { keepPhotos: true } }, { merge: true }))
   })
 })
