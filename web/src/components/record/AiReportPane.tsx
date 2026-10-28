@@ -359,7 +359,8 @@ function Report({
         <div>
           <b>{stats.headline}</b>
           <br />
-          <span className="aitag">AI 분석</span> <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{period}</span>
+          {/* 점수·한 줄은 앱 계산이라 "AI 분석" 표시는 아래 AI 칸에만(2026-10-29 사용자 결정) */}
+          <span style={{ fontSize: 13, color: 'var(--ink-2)' }}>{period}</span>
         </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8, marginTop: 14 }}>
