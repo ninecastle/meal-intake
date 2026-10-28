@@ -28,3 +28,6 @@ spike/*.jpeg
 spike/*.png
 spike/*.webp
 spike/results/
+
+# Claude Code 개인 설정
+.claude/settings.local.json
