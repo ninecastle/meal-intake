@@ -195,7 +195,13 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
   function finish() {
     const edits = allPendingEdits()
     // 기다리지 않는다(오프라인이면 끝나지 않는다). 쓰기는 기기에 남아 연결되면 올라간다.
-    for (const [id, e] of edits) saveMeal(uid, id, e).catch((err: unknown) => console.warn('[meal] 수정 저장 실패', err))
+    for (const [id, e] of edits) {
+      // 수정 화면에서 음식을 지워 다 남긴 음식만 남았으면 기록째(사진도) 지운다(사용자 결정, X와 같은 규칙)
+      const savedCount = meals?.find((x) => x.id === id)?.analysis?.items.length ?? 0
+      const job =
+        e.analysis.items.length < savedCount && e.analysis.items.every(isAllLeft) ? deleteMeal(uid, id) : saveMeal(uid, id, e)
+      job.catch((err: unknown) => console.warn('[meal] 수정 저장 실패', err))
+    }
     clearPendingEdits()
     leave(edits.length > 0)
   }
@@ -303,9 +309,10 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
     if (!m.analysis || !(await askConfirm({ title: `${foodName(item.name) || '이 음식'}을(를) 지울까요?`, ok: '지우기' })) || !m.analysis) return
     setActionError(null)
     const pending = getPendingEdit(m.id)
-    if (pending) {
-      const pRest = pending.analysis.items.filter((it) => it.id !== item.id)
-      if (pRest.length === 0) dropPendingEdit(m.id)
+    // 화면에 보이는 것(고치는 중이면 고친 내용) 기준으로, 남은 음식이 없거나 다 남긴 음식뿐이면 기록째 지운다
+    const pRest = pending ? pending.analysis.items.filter((it) => it.id !== item.id) : null
+    if (pending && pRest) {
+      if (pRest.every(isAllLeft)) dropPendingEdit(m.id)
       else
         setPendingEdit(m.id, {
           ...pending,
@@ -316,8 +323,11 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
     const base = meals?.find((x) => x.id === m.id)?.analysis ?? m.analysis
     const rest = base.items.filter((it) => it.id !== item.id)
     // 기다리지 않는다(오프라인이면 끝나지 않는다). 구독은 로컬 캐시로 바로 바뀐다.
+    // 남은 음식이 없거나 다 남긴 음식(목록에서 숨김)뿐이면 기록째 지운다 — 보관한 사진도 함께(사용자 결정)
+    const dropRecord = rest.length === 0 || (pRest ?? rest).every(isAllLeft)
+    if (dropRecord && pending) dropPendingEdit(m.id)
     const job =
-      rest.length === 0
+      dropRecord
         ? deleteMeal(uid, m.id)
         : saveMeal(uid, m.id, {
             dateKey: m.dateKey,
