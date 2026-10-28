@@ -151,8 +151,8 @@ export const RESPONSE_SCHEMA_A = Schema.object({
 export const GENERATION_CONFIG_A: GenerationConfig = {
   responseMimeType: 'application/json',
   responseSchema: RESPONSE_SCHEMA_A,
-  // 가장 낮은 수준. 0단계 스파이크에서 3.5 Flash-Lite가 LOW를 받았다(3.8 Flash는 MINIMAL 불가).
-  thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+  // 2026-10-29 속도(사용자 결정): LOW → MINIMAL. 실측 전후 비교는 _workspace/03_vision_eval.md "AI 응답 속도".
+  thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
   // a6: 4096 → 8192. a5 실제 호출에서 음식 6개 출력이 1,134토큰(음식당 약 190, 세부 4가지)이었다. 세부가 9가지가 되면 음식당 약 260토큰으로 보고,
   // 30개(MAX_ITEMS)면 8천 토큰 가까이 된다. 상한에 걸리면 JSON이 잘려 형식 오류 → 재시도로 한도를 두 번 쓰므로 넉넉히 둔다.
   // 상한은 실제로 나온 만큼만 세므로 짧은 응답의 비용은 그대로다.

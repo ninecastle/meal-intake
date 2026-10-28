@@ -13,6 +13,8 @@ import { WARN_NO_AFTER } from '../../analysis/assemble'
 import { buildAnalysis, setRemainingRatio } from '../../analysis/compute'
 import { deleteMeal, saveReview, type MealType, type MealWithId } from '../../data/meals'
 import { beforePhotoStore } from '../../photos/beforePhotoStore'
+import { appCheck } from '../../lib/firebase'
+import { timed, timingEnd, timingOn, timingStart } from '../../lib/timing'
 import { compressPhoto } from '../../photos/compress'
 import { isSamePhoto } from '../../photos/samePhoto'
 import type { BeforeAnalysis, MealIntakeAnalysis } from '../../types/analysis'
@@ -132,8 +134,10 @@ export function useAfterFlow(opts: {
     abortRef.current = ac
     lastShot.current = { beforePhoto, afterPhoto }
     setHasLast(true)
-    const after = await analyzeAfter({ before: t.beforeAnalysis, beforePhoto, afterPhoto }, { signal: ac.signal })
-    const analysis = await assembleAnalysis(t.beforeAnalysis, after, { signal: ac.signal })
+    if (timingOn() && appCheck) await timed('앱 확인 토큰', () => import('firebase/app-check').then((m) => m.getToken(appCheck!)).catch(() => null))
+    const after = await timed('AI 분석(먹은 후)', analyzeAfter({ before: t.beforeAnalysis, beforePhoto, afterPhoto }, { signal: ac.signal }))
+    const analysis = await timed('영양값 계산', assembleAnalysis(t.beforeAnalysis, after, { signal: ac.signal }))
+    timingEnd()
     lastShot.current = null
     setHasLast(false)
     if (cbRef.current.keepPhotos === true) keepMealPhoto(uid, t.id, 'after', afterPhoto)
@@ -163,8 +167,9 @@ export function useAfterFlow(opts: {
 
   function onPick(file: File) {
     void withOp(async (t) => {
-      const afterPhoto = await compressPhoto(file)
-      const beforePhoto = await beforePhotoStore.get(t.id).catch(() => null)
+      timingStart('먹은 후 분석')
+      const afterPhoto = await timed('사진 준비(줄이기·변환)', compressPhoto(file))
+      const beforePhoto = await timed('먹기 전 사진 꺼내기', beforePhotoStore.get(t.id).catch(() => null))
       // 분석 호출 전에 비교한다. 같으면 [그대로 분석]을 누르기 전에는 호출하지 않는다(한도 절약).
       if (beforePhoto && (await isSamePhoto(beforePhoto, afterPhoto).catch(() => false))) {
         setSame({ beforePhoto, afterPhoto })

@@ -6,7 +6,8 @@
 // → [AI 칸] 한 주 총평 · 잘한 점 · 아쉬운 점 · 다음 주 제안 · 다음 주 하루 식단 예시.
 // 숫자 칸은 늘 지금 기록으로 코드가 다시 계산한다(computeWeekStats). AI 글만 저장본(users/{uid}/reports/{weekStart}, data/reports).
 // - 처음엔 지난주. 이번 주는 "일요일이 지나면 분석해 드려요"(›는 흐리게·누를 수 없음). 기록 3일 미만은 안내만(AI 없음).
-// - 저장본이 없으면 처음 열 때 한 번 만든다(서버에서 받은 기록으로만, 진행 막대 + "한 주를 분석하고 있어요…"). 실패는 안내 + [다시 시도].
+// - 저장본이 없으면 처음 열 때 한 번 만든다(서버에서 받은 기록으로만). 만드는 동안에도 숫자 칸은 바로 보이고 "AI가 본 한 주" 자리에만
+//   진행 막대 + "AI가 한 주를 보고 있어요…"(2026-10-29 사용자 결정, 속도). 실패는 그 자리에 안내 + [다시 시도].
 // - 저장본의 inputHash가 지금과 다르면 "이 주 기록이 바뀌었어요 [다시 만들기]"(주당 3회까지, 다 쓰면 "이번 주는 더 만들 수 없어요").
 // - 만 18세 미만 = 지금 목표 input.age < 18(generateReportText under18).
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
@@ -27,6 +28,7 @@ import { axisTicks, mondayOf, shiftWeek, weekDays, weekGoalSteps } from '../../l
 import { formatKcal, MEAL_TYPE_LABEL, MEAL_TYPES } from '../mealText'
 import { BottomSheet, Crown, Mascot } from '../ui'
 import { foodName } from '../../lib/foodName'
+import { timed, timingEnd, timingMark, timingStart } from '../../lib/timing'
 
 const WEEKDAY = ['월', '화', '수', '목', '금', '토', '일']
 const md = (k: string) => `${Number(k.slice(5, 7))}.${Number(k.slice(8, 10))}`
@@ -73,6 +75,10 @@ export default function AiReportPane({ uid, today, onOpenDay }: AiReportPaneProp
   const [fasted, setFasted] = useState<{ week: string; byDate: Record<string, MealType[]> } | null>(null)
   const [report, setReport] = useState<{ week: string; state: ReportState } | null>(null)
   const autoTried = useRef(new Set<string>())
+  // 시간 재기(?timing=1 탭에서만, lib/timing): 주마다 기록 불러오기 표시·끝 표시를 한 번씩
+  const timingLoaded = useRef<string | null>(null)
+  const timingClosed = useRef<string | null>(null)
+  const timingGen = useRef<string | null>(null)
 
   useEffect(() => {
     if (isCurrent) return
@@ -104,9 +110,12 @@ export default function AiReportPane({ uid, today, onOpenDay }: AiReportPaneProp
     if (isCurrent) return
     let live = true
     setReport({ week, state: { kind: 'loading' } })
+    timingStart('AI 리포트')
     getReport(uid, week).then(
       (saved) => {
-        // 만드는 중이면 그 결과를 기다린다(아래 inflight)
+        // 시간 재기(개발 StrictMode에서 두 번 돌아도 한 번만 남게 살아 있는 쪽만)
+        if (live) timingMark('저장본 읽기', 'start')
+        // 만드는 중이면 그 결과를 기다린다(아래 inflight, generate가 상태를 바꾼다)
         if (live && !inflight.has(`${uid}/${week}`)) setReport({ week, state: saved ? { kind: 'ready', saved } : { kind: 'none' } })
       },
       () => live && setReport({ week, state: { kind: 'error', saved: null, message: '리포트를 불러오지 못했어요. 인터넷 연결을 확인해 주세요.' } }),
@@ -137,12 +146,21 @@ export default function AiReportPane({ uid, today, onOpenDay }: AiReportPaneProp
     return { cur: computeWeekStats(week, curMeals, goalFor, fastedNow), prev: computeWeekStats(prevWeek, prevMeals, goalFor, fastedNow), curMeals }
   }, [loaded, mealsNow, goalsNow, fastedNow, week, prevWeek])
   const fromServer = loaded && !mealsNow.fromCache
+  // 시간 재기: 기록·목표·공복이 서버에서 다 온 때(만들기가 기다리는 것) = 측정 시작부터
+  useEffect(() => {
+    if (isCurrent || !fromServer || timingLoaded.current === week) return
+    timingLoaded.current = week
+    timingMark('기록·목표·공복 불러오기', 'start')
+  }, [isCurrent, fromServer, week])
   const state: ReportState = report && report.week === week ? report.state : { kind: 'loading' }
 
   function generate(prevSaved: StoredReport | null) {
     if (!stats || goal === undefined) return
     const key = `${uid}/${week}`
     if (inflight.has(key)) return
+    timingGen.current = week
+    // 다시 만들기는 새 측정으로(처음 만들기는 탭을 연 때부터 이어서)
+    if (prevSaved) timingStart('AI 리포트 다시 만들기')
     const s = stats.cur
     const under18 = goal !== null && goal.input.age < 18
     const forWeek = week
@@ -151,9 +169,15 @@ export default function AiReportPane({ uid, today, onOpenDay }: AiReportPaneProp
       // 다른 기기에서 다시 만들었을 수 있으니 저장 직전 최신 genCount·createdAt을 다시 읽는다
       const latest = prevSaved ? await getReport(uid, forWeek) : null
       if (latest && latest.genCount >= REPORT_MAX_GEN) return latest
-      const r = await generateReportText(s, { under18, meals: stats.curMeals, compare: compareWeeks(s, stats.prev), goal: goal?.targets ?? null })
+      const r = await timed(
+        'AI 호출',
+        generateReportText(s, { under18, meals: stats.curMeals, compare: compareWeeks(s, stats.prev), goal: goal?.targets ?? null }),
+      )
       const { saved, committed } = saveReport(uid, forWeek, { inputHash: s.inputHash, stats: s, text: r.text, model: r.model, promptVersion: r.promptVersion }, latest)
-      committed.catch((e: unknown) => console.warn('[report] 저장 실패', e))
+      // 화면은 저장을 기다리지 않고 바로 보이고, 시간 재기만 서버 저장 확인까지
+      timed('저장', committed)
+        .catch((e: unknown) => console.warn('[report] 저장 실패', e))
+        .finally(() => timingEnd())
       return saved
     })()
     inflight.set(key, run)
@@ -161,6 +185,8 @@ export default function AiReportPane({ uid, today, onOpenDay }: AiReportPaneProp
       (saved) => setReport((cur) => (cur && cur.week !== forWeek ? cur : { week: forWeek, state: { kind: 'ready', saved } })),
       (e: unknown) => {
         console.warn('[report] 만들기 실패', e)
+        timingMark('실패')
+        timingEnd()
         setReport((cur) => (cur && cur.week !== forWeek ? cur : { week: forWeek, state: { kind: 'error', saved: prevSaved, message: failMessage(e) } }))
       },
     )
@@ -177,6 +203,22 @@ export default function AiReportPane({ uid, today, onOpenDay }: AiReportPaneProp
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canAuto, week])
 
+  // 시간 재기: AI를 부르지 않은 경우(저장본 사용·3일 미만)도 끝을 표시한다
+  const statsReady = stats !== null && fromServer
+  const recordDays = stats?.cur.recordDays ?? 0
+  useEffect(() => {
+    if (isCurrent || !statsReady || timingClosed.current === week || timingGen.current === week) return
+    if (recordDays < REPORT_MIN_DAYS) {
+      timingClosed.current = week
+      timingMark('기록 3일 미만 — AI 호출 없음')
+      timingEnd()
+    } else if (state.kind === 'ready') {
+      timingClosed.current = week
+      timingMark('저장본 사용 — AI 호출 없음')
+      timingEnd()
+    }
+  }, [isCurrent, statsReady, recordDays, state.kind, week])
+
   let body: ReactNode
   if (isCurrent) {
     body = <Notice title="이번 주는 일요일이 지나면 분석해 드려요">지난주 리포트는 ‹ 지난주에서 볼 수 있어요</Notice>
@@ -192,38 +234,39 @@ export default function AiReportPane({ uid, today, onOpenDay }: AiReportPaneProp
         {`(이 주 기록 ${stats.cur.recordDays}일)`}
       </Notice>
     )
-  } else if (state.kind === 'generating' && !state.saved) {
-    body = <Analyzing />
-  } else if (state.kind === 'error' && !state.saved) {
-    body = (
-      <Notice title={state.message}>
-        <button type="button" className="chipbtn dark" style={{ marginTop: 12 }} onClick={() => generate(null)}>
-          다시 시도
-        </button>
-      </Notice>
-    )
-  } else if (state.kind === 'loading' || (state.kind === 'none' && !fromServer)) {
-    body =
-      state.kind === 'none' && typeof navigator !== 'undefined' && !navigator.onLine ? (
-        <Notice title="인터넷에 연결되면 분석해 드려요" />
-      ) : (
-        <Notice title="불러오는 중…" />
-      )
+  } else if (state.kind === 'none' && !fromServer && typeof navigator !== 'undefined' && !navigator.onLine) {
+    body = <Notice title="인터넷에 연결되면 분석해 드려요" />
   } else {
-    const saved = state.kind === 'none' ? null : state.saved
+    // 숫자 칸은 늘 바로 보인다(2026-10-29 사용자 결정). 저장본이 없을 때 "AI가 본 한 주" 자리만:
+    // 만드는 중·곧 만들 때(none)는 진행 막대, 실패는 안내 + [다시 시도], 저장본을 읽는 중(loading)은 비움
+    const saved = state.kind === 'none' || state.kind === 'loading' ? null : state.saved
     const changed = saved !== null && fromServer && saved.inputHash !== stats.cur.inputHash
+    const aiSlot: ReactNode =
+      saved !== null || state.kind === 'loading' ? null : state.kind === 'error' ? (
+        <AiSlot>
+          <b style={{ fontSize: 15 }}>{state.message}</b>
+          <div>
+            <button type="button" className="chipbtn dark" style={{ marginTop: 12 }} onClick={() => generate(null)}>
+              다시 시도
+            </button>
+          </div>
+        </AiSlot>
+      ) : (
+        <AiWorking />
+      )
     body = (
       <Report
         stats={stats.cur}
         compare={compareWeeks(stats.cur, stats.prev)}
         prevKinds={stats.prev && stats.prev.recordDays > 0 ? stats.prev.foodKinds : null}
         text={saved?.text ?? null}
+        aiSlot={aiSlot}
         weekStart={week}
         onOpenDay={onOpenDay}
         banner={
-          state.kind === 'generating' ? (
-            <Analyzing compact />
-          ) : state.kind === 'error' ? (
+          state.kind === 'generating' && saved ? (
+            <Analyzing />
+          ) : state.kind === 'error' && saved ? (
             <Banner text={state.message} action="다시 시도" onAction={() => generate(saved)} />
           ) : changed && saved ? (
             saved.genCount >= REPORT_MAX_GEN ? (
@@ -295,30 +338,63 @@ function Notice({ title, children }: { title: string; children?: ReactNode }) {
   )
 }
 
-/** 그림 5: 진행 막대(서서히 90%까지) + "한 주를 분석하고 있어요…" */
-function Analyzing({ compact = false }: { compact?: boolean }) {
+function useCreepingPct(): number {
   const [pct, setPct] = useState(8)
   useEffect(() => {
     const t = setInterval(() => setPct((p) => p + (90 - p) * 0.08), 400)
     return () => clearInterval(t)
   }, [])
-  const bar = (
-    <div className="progress" style={{ margin: '0 auto 12px', maxWidth: 220 }} role="progressbar" aria-label="분석 진행">
-      <i style={{ width: `${pct}%`, transition: 'width .4s linear' }} />
+  return pct
+}
+
+/** 다시 만들기 중(저장본 글은 그대로 보임): 숫자 칸 아래 흰 상자에 진행 막대 + "한 주를 분석하고 있어요…" */
+function Analyzing() {
+  const pct = useCreepingPct()
+  return (
+    <div className="callout" style={{ marginTop: 14, textAlign: 'center' }} role="status">
+      <div className="progress" style={{ margin: '0 auto 12px', maxWidth: 220 }} role="progressbar" aria-label="분석 진행">
+        <i style={{ width: `${pct}%`, transition: 'width .4s linear' }} />
+      </div>
+      <b>한 주를 분석하고 있어요…</b>
     </div>
   )
-  if (compact)
-    return (
-      <div className="callout" style={{ marginTop: 14, textAlign: 'center' }} role="status">
-        {bar}
-        <b>한 주를 분석하고 있어요…</b>
-      </div>
-    )
+}
+
+/** "AI가 본 한 주" 칸 머리(마스코트 + 제목 + AI 분석) */
+function AiHead() {
   return (
-    <div style={{ textAlign: 'center', padding: '26px 8px 10px', color: 'var(--ink-2)' }} role="status">
-      {bar}
-      <b style={{ color: 'var(--ink)', fontFamily: 'var(--f-head)', fontWeight: 400, fontSize: 17 }}>한 주를 분석하고 있어요…</b>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '22px 0 0', paddingTop: 16, borderTop: '1px solid var(--line)' }}>
+      <div style={{ width: 34, flex: 'none' }}>
+        <Mascot size={34} decorative />
+      </div>
+      <b style={{ fontSize: 15 }}>AI가 본 한 주</b>
+      <span className="aitag">AI 분석</span>
     </div>
+  )
+}
+
+/** 저장본이 없을 때 "AI가 본 한 주" 자리에만 보이는 칸(숫자 칸은 위에 그대로) */
+function AiSlot({ children }: { children: ReactNode }) {
+  return (
+    <>
+      <AiHead />
+      <div data-testid="report-ai-slot" style={{ textAlign: 'center', padding: '20px 8px 6px', color: 'var(--ink)' }} role="status">
+        {children}
+      </div>
+    </>
+  )
+}
+
+/** 만드는 중: 시안 .progress(서서히 90%까지) + "AI가 한 주를 보고 있어요…" */
+function AiWorking() {
+  const pct = useCreepingPct()
+  return (
+    <AiSlot>
+      <div className="progress" style={{ margin: '0 auto 12px', maxWidth: 220 }} role="progressbar" aria-label="AI 분석 진행">
+        <i style={{ width: `${pct}%`, transition: 'width .4s linear' }} />
+      </div>
+      <b style={{ fontFamily: 'var(--f-head)', fontWeight: 400, fontSize: 17 }}>AI가 한 주를 보고 있어요…</b>
+    </AiSlot>
   )
 }
 
@@ -346,6 +422,7 @@ function Report({
   compare,
   prevKinds,
   text,
+  aiSlot = null,
   weekStart,
   onOpenDay,
   banner,
@@ -355,6 +432,8 @@ function Report({
   /** 지난주 먹은 음식 가짓수(지난주 기록이 없으면 null) */
   prevKinds: number | null
   text: ReportText | null
+  /** 글(저장본)이 없을 때 "AI가 본 한 주" 자리(만드는 중·실패) */
+  aiSlot?: ReactNode
   weekStart: string
   onOpenDay: (d: string) => void
   banner: ReactNode
@@ -570,15 +649,10 @@ function Report({
         </>
       )}
 
+      {!text && aiSlot}
       {text && (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '22px 0 0', paddingTop: 16, borderTop: '1px solid var(--line)' }}>
-            <div style={{ width: 34, flex: 'none' }}>
-              <Mascot size={34} decorative />
-            </div>
-            <b style={{ fontSize: 15 }}>AI가 본 한 주</b>
-            <span className="aitag">AI 분석</span>
-          </div>
+          <AiHead />
           {(text.summary ?? '').trim() && (
             <>
               <H4>한 주 총평</H4>

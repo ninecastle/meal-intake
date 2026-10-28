@@ -78,7 +78,8 @@ export const RESPONSE_SCHEMA_B = Schema.object({
 export const GENERATION_CONFIG_B: GenerationConfig = {
   responseMimeType: 'application/json',
   responseSchema: RESPONSE_SCHEMA_B,
-  thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+  // 2026-10-29 속도(사용자 결정): LOW → MINIMAL(03_vision_eval.md "AI 응답 속도")
+  thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
   maxOutputTokens: 4096,
 }
 

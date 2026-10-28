@@ -439,7 +439,8 @@ export const RESPONSE_SCHEMA_REPORT = Schema.object({
 export const GENERATION_CONFIG_REPORT: GenerationConfig = {
   responseMimeType: 'application/json',
   responseSchema: RESPONSE_SCHEMA_REPORT,
-  thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+  // 2026-10-29 속도(사용자 결정): LOW → MINIMAL(03_vision_eval.md "AI 응답 속도")
+  thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
   // r3: 칸이 늘어 글이 대략 두 배(한국어 1,500~2,500자) + 생각 토큰 여유
   maxOutputTokens: 4096,
 }

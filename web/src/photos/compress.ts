@@ -1,7 +1,7 @@
 import { AnalysisError } from '../analysis/errors'
 
-// 분석 호출 전 사진 압축: 긴 변 1280px, JPEG 0.8, EXIF 회전 반영 (스펙 4.2·4.3절, meal-log-frontend 구현 규칙)
-const MAX_SIDE = 1280
+// 분석 호출 전 사진 압축: 긴 변 1024px(2026-10-29 속도 결정으로 1280에서 줄임), JPEG 0.8, EXIF 회전 반영 (스펙 4.2·4.3절, meal-log-frontend 구현 규칙)
+const MAX_SIDE = 1024
 const JPEG_QUALITY = 0.8
 
 type Decoded = { image: CanvasImageSource; width: number; height: number; release: () => void }
@@ -83,7 +83,7 @@ function unsupported(cause?: unknown): AnalysisError {
   })
 }
 
-/** 긴 변 1280px, JPEG 품질 0.8, EXIF 회전 반영. HEIC/HEIF는 브라우저가 못 열 때만 변환. 오류: AnalysisError(PHOTO_INVALID, HEIC 변환 실패는 reason 'unsupported_format') */
+/** 긴 변 1024px, JPEG 품질 0.8, EXIF 회전 반영. HEIC/HEIF는 브라우저가 못 열 때만 변환. 오류: AnalysisError(PHOTO_INVALID, HEIC 변환 실패는 reason 'unsupported_format') */
 export async function compressPhoto(file: Blob): Promise<Blob> {
   if (!file || file.size === 0) throw invalid('빈 파일')
 

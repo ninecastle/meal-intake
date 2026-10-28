@@ -10,6 +10,7 @@ import { RouterProvider } from 'react-router/dom'
 import RouteErrorScreen from './components/RouteErrorScreen'
 import ScrollMemory from './components/ScrollMemory'
 import { ConfirmHost } from './components/ui'
+import TimingOverlay from './components/TimingOverlay'
 import { ConsentContext, useConsent, useConsentSubscription } from './components/terms/consentState'
 import { hasCurrentConsent } from './data/consent'
 import { useAuthUser } from './lib/auth'
@@ -66,6 +67,8 @@ function Root() {
       <ScrollMemory />
       {/* 앱 안 확인 창(브라우저 확인 창 대신, 2026-10-28 사용자 요청) */}
       <ConfirmHost />
+      {/* ?timing=1로 연 탭에서만 단계별 시간(2026-10-29 사용자 요청) */}
+      <TimingOverlay />
       <Suspense fallback={<Loading />}>
         <Outlet />
       </Suspense>

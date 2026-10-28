@@ -11,6 +11,8 @@ import { loadNutritionDb } from '../../analysis/nutrition/db'
 import { createAwaitingMeal, newMealId, type MealType } from '../../data/meals'
 import { fillMealTime } from '../../data/mealTimes'
 import { beforePhotoStore } from '../../photos/beforePhotoStore'
+import { appCheck } from '../../lib/firebase'
+import { timed, timingEnd, timingOn, timingStart } from '../../lib/timing'
 import { compressPhoto } from '../../photos/compress'
 import { readTakenAt } from '../../photos/exif'
 import AnalyzingOverlay from '../capture/AnalyzingOverlay'
@@ -88,15 +90,18 @@ export function useBeforeFlow(opts: {
     abortRef.current = ac
     let id: string | null = null
     try {
+      timingStart('먹기 전 분석')
       const takenAt = await getTakenAt()
-      const photo = await getPhoto()
+      const photo = await timed('사진 준비(줄이기·변환)', getPhoto)
       last.current = { photo, takenAt }
       setHasLast(true)
       id = newMealId(uid)
-      await beforePhotoStore.put(id, photo)
+      await timed('기기에 사진 보관', beforePhotoStore.put(id, photo))
       const menu = menuRef.current && menuRef.current.length > 0 ? menuRef.current : undefined
       if (import.meta.env.DEV) (window as unknown as { __menuCandidates?: string[] | null }).__menuCandidates = menu ?? null
-      const beforeAnalysis = await analyzeBefore(photo, { signal: ac.signal, menuCandidates: menu })
+      if (timingOn() && appCheck) await timed('앱 확인 토큰', () => import('firebase/app-check').then((m) => m.getToken(appCheck!)).catch(() => null))
+      const beforeAnalysis = await timed('AI 분석(먹기 전)', analyzeBefore(photo, { signal: ac.signal, menuCandidates: menu }))
+      timingEnd()
       // 기다리지 않는다: 오프라인이면 서버 확인이 끝나지 않는다(로컬 캐시와 끼니 화면 구독에는 바로 들어간다).
       createAwaitingMeal(uid, id, { dateKey, mealType, beforeAnalysis }).catch((e: unknown) =>
         console.warn('[meal] awaiting_after 저장 실패', e),
