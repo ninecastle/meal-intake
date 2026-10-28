@@ -59,6 +59,8 @@ export interface WeekStats {
   avgTarget: number | null
   /** (추가) 그 주에 먹은 음식 수(다 남긴 음식 제외) */
   foodCount: number
+  /** 그 주에 먹은 음식 가짓수(정리한 이름 기준, 다 남긴 음식 제외) — 리포트 "식단 다양성"(2026-10-29 사용자 결정, 자주 먹은 음식 TOP 5 대신) */
+  foodKinds: number
 }
 
 const MEAL_TYPES: readonly MealType[] = ['breakfast', 'lunch', 'dinner', 'snack']
@@ -259,6 +261,7 @@ export function computeWeekStats(
     macroAvg: { carbs_g: avg1(macroAll.carbs_g), protein_g: avg1(macroAll.protein_g), fat_g: avg1(macroAll.fat_g) },
     avgTarget: avgInt(targets),
     foodCount,
+    foodKinds: foodCounts.size,
   }
 }
 
@@ -355,6 +358,7 @@ export function buildReportUserText(stats: WeekStats, opts: Pick<ReportOpts, 'un
   L.push(`- 하루 평균: 당류 ${fmt(mi.sugar_g, 'g')}, 식이섬유 ${fmt(mi.fiber_g, 'g')}, 나트륨 ${fmt(mi.sodium_mg, 'mg')}`)
   const sh = stats.mealShare
   L.push(`- 끼니별 칼로리 비중: 아침 ${sh.breakfast}%, 점심 ${sh.lunch}%, 저녁 ${sh.dinner}%, 간식 ${sh.snack}%`)
+  L.push(`- 이번 주 먹은 음식 가짓수: ${stats.foodKinds}가지`)
   if (stats.topFoods.length) L.push(`- 자주 먹은 음식: ${stats.topFoods.map((f) => `${f.name} ${f.count}번`).join(', ')}`)
   if (stats.bestDay) L.push(`- 목표에 가장 가까웠던 날: ${md(stats.bestDay.dateKey)} ${stats.bestDay.kcal}kcal(목표의 ${stats.bestDay.pct}%)`)
   if (stats.worstDay) L.push(`- 목표에서 가장 멀었던 날: ${md(stats.worstDay.dateKey)} ${stats.worstDay.kcal}kcal(목표의 ${stats.worstDay.pct}%)`)

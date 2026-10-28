@@ -2,7 +2,7 @@
 // 시안 calendar() .chartcard.report 그대로(header 제목 + 왕관, .score, .aitag, h4·ul) + 사용자 요청으로 더 자세하게(결제하고 싶게).
 // 위에서 아래로: ‹ 지난주 · "10.19 – 10.25" · 다음 주 › → .score(점수/100, 한 줄, AI 분석, 기간) → 숫자 칸 3개(기록·하루 평균·목표 범위 안)
 // → [코드 계산] 요일별 칼로리 막대(목표 점선, 110% 초과 peach) · 영양 균형(탄·단·지 목표 대비 %, 당류·식이섬유·나트륨 평균)
-//   · 끼니별 비중 · 자주 먹은 음식 TOP 5 · 가장 좋았던 날·아쉬웠던 날(누르면 그날 홈) · 지난주와 비교(지난주 3일 이상)
+//   · 끼니별 비중 · 식단 다양성(먹은 음식 가짓수·지난주 대비) · 가장 좋았던 날·아쉬웠던 날(누르면 그날 홈) · 지난주와 비교(지난주 3일 이상)
 // → [AI 칸] 한 주 총평 · 잘한 점 · 아쉬운 점 · 다음 주 제안 · 다음 주 하루 식단 예시.
 // 숫자 칸은 늘 지금 기록으로 코드가 다시 계산한다(computeWeekStats). AI 글만 저장본(users/{uid}/reports/{weekStart}, data/reports).
 // - 처음엔 지난주. 이번 주는 "일요일이 지나면 분석해 드려요"(›는 흐리게·누를 수 없음). 기록 3일 미만은 안내만(AI 없음).
@@ -207,6 +207,7 @@ export default function AiReportPane({ uid, today, onOpenDay }: AiReportPaneProp
       <Report
         stats={stats.cur}
         compare={compareWeeks(stats.cur, stats.prev)}
+        prevKinds={stats.prev && stats.prev.recordDays > 0 ? stats.prev.foodKinds : null}
         text={saved?.text ?? null}
         weekStart={week}
         onOpenDay={onOpenDay}
@@ -326,6 +327,7 @@ const BOX = { marginTop: 0 } as const
 function Report({
   stats,
   compare,
+  prevKinds,
   text,
   weekStart,
   onOpenDay,
@@ -333,6 +335,8 @@ function Report({
 }: {
   stats: WeekStats
   compare: { kcalDiff: number; scoreDiff: number } | null
+  /** 지난주 먹은 음식 가짓수(지난주 기록이 없으면 null) */
+  prevKinds: number | null
   text: ReportText | null
   weekStart: string
   onOpenDay: (d: string) => void
@@ -442,30 +446,21 @@ function Report({
         </div>
       </div>
 
-      {stats.topFoods.length > 0 && (
+      {stats.foodKinds > 0 && (
         <>
-          <H4>자주 먹은 음식 TOP 5</H4>
-          <div className="callout" style={{ ...BOX, display: 'grid', gap: 8 }}>
-            {stats.topFoods.slice(0, 5).map((f, i) => (
-              <div key={f.name} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14 }}>
-                <b
-                  className="num"
-                  style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: 99,
-                    display: 'grid',
-                    placeItems: 'center',
-                    fontSize: 12,
-                    background: i === 0 ? 'var(--butter)' : 'var(--ground)',
-                  }}
-                >
-                  {i + 1}
-                </b>
-                <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.name}</span>
-                <span className="num" style={{ color: 'var(--ink-2)' }}>{`${f.count}회`}</span>
-              </div>
-            ))}
+          {/* 식단 다양성(2026-10-29 사용자 결정): 한 주에 같은 음식을 자주 먹지 않아 "자주 먹은 음식 TOP 5" 대신 */}
+          <H4>식단 다양성</H4>
+          <div className="callout" style={{ ...BOX, display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 14 }}>
+              이번 주 먹은 음식 <b className="num" style={{ fontSize: 22 }}>{stats.foodKinds}</b>가지
+            </span>
+            {prevKinds != null && (
+              <span style={{ fontSize: 14, color: stats.foodKinds > prevKinds ? 'var(--lime-deep)' : 'var(--ink-2)' }}>
+                {stats.foodKinds === prevKinds
+                  ? '지난주와 같아요'
+                  : `지난주보다 ${Math.abs(stats.foodKinds - prevKinds)}가지 ${stats.foodKinds > prevKinds ? '많아요' : '적어요'}`}
+              </span>
+            )}
           </div>
         </>
       )}
