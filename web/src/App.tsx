@@ -10,7 +10,7 @@ import { createBrowserRouter, Navigate, Outlet, useLocation, useNavigate, type R
 import { RouterProvider } from 'react-router/dom'
 import RouteErrorScreen from './components/RouteErrorScreen'
 import ScrollMemory from './components/ScrollMemory'
-import { ConsentContext, safeFrom, useConsent, useConsentSubscription } from './components/terms/consentState'
+import { ConsentContext, useConsent, useConsentSubscription } from './components/terms/consentState'
 import { clearConsentDraft, hasCurrentConsent, readConsentDraft, saveConsent } from './data/consent'
 import { subscribeGoal } from './data/goals'
 import { useAuthUser } from './lib/auth'
@@ -65,7 +65,6 @@ function useConsentDraftFlush() {
   const user = useContext(UserContext)
   const consent = useConsent()
   const navigate = useNavigate()
-  const loc = useLocation()
   const started = useRef<string | null>(null)
   useEffect(() => {
     if (!user || consent === undefined) return
@@ -77,7 +76,6 @@ function useConsentDraftFlush() {
     const draft = readConsentDraft()
     if (!draft || started.current === user.uid) return
     started.current = user.uid
-    const to = safeFrom(loc.state)
     saveConsent(user.uid, draft).catch((e: unknown) => console.warn('[consent] 저장 실패', e))
     let done = false
     const unsub = subscribeGoal(
@@ -86,15 +84,16 @@ function useConsentDraftFlush() {
         if (done) return
         done = true
         queueMicrotask(() => unsub())
-        void navigate(g ? to : '/goal', { replace: true })
+        // 동의 뒤에는 늘 홈 맨 위(목표가 없으면 목표 화면, 2026-10-28 사용자 요청)
+        void navigate(g ? '/' : '/goal', { replace: true })
       },
       () => {
         if (done) return
         done = true
-        void navigate(to, { replace: true })
+        void navigate('/', { replace: true })
       },
     )
-  }, [user, consent, navigate, loc.state])
+  }, [user, consent, navigate])
 }
 
 function Root() {

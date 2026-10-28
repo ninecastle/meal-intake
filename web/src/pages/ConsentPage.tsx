@@ -10,7 +10,7 @@ import type { User } from 'firebase/auth'
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import TermsSheet from '../components/terms/TermsSheet'
-import { safeFrom, useConsent } from '../components/terms/consentState'
+import { useConsent } from '../components/terms/consentState'
 import { LoginNotice, useGoogleLogin } from '../components/terms/googleLogin'
 import { IconButton, Toast } from '../components/ui'
 import { clearConsentDraft, hasCurrentConsent, readConsentDraft, REQUIRED_KEYS, saveConsent, writeConsentDraft, type ConsentKey } from '../data/consent'
@@ -64,7 +64,8 @@ export default function ConsentPage({ user }: { user: User | null }) {
   useEffect(() => {
     if (!submitted || !hasCurrentConsent(consent ?? null) || leaving.current) return
     leaving.current = true
-    void navigate(safeFrom(nav), { replace: true })
+    // 로그인한 채 동의하면 늘 홈 맨 위로(2026-10-28 사용자 요청: 원래 가려던 화면 대신)
+    void navigate('/', { replace: true })
   }, [submitted, consent, navigate, fromWelcome, nav])
 
   useEffect(() => {
