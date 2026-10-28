@@ -120,24 +120,34 @@
     font-size: 28px;
   }
 
-  /* 사용자가 고른 변경 (14, 2026-10-28): 홈 위쪽 흰 줄(.sticky: 달력·톱니 아이콘 줄 + 날짜 줄)은 아래로 스크롤하면 위로 밀려 숨고(멈춰도 숨은 채),
-     위로 스크롤하면 다시 내려온다(HomeDateBar useAutoHide가 .hide를 붙인다). 맨 위 근처에서는 늘 보인다. */
+  /* 사용자가 고른 변경 (14, 2026-10-28): 홈 위쪽 흰 줄(.sticky: 달력·톱니 아이콘 줄 + 날짜 줄)은 아래로 스크롤하면 아이콘 줄만큼 위로 밀려
+     아이콘 줄은 숨고 날짜 줄은 남는다(멈춰도 그대로). 위로 스크롤하면 다시 내려온다(HomeDateBar useAutoHide가 .hide를 붙인다). 맨 위 근처에서는 늘 다 보인다.
+     --home-top(아이콘 줄 높이)은 HomeDateBar useBarHeights가 main.home에 적는다. */
   .sticky.autohide {
     transition: transform 0.25s ease;
   }
   .sticky.autohide.hide {
-    transform: translateY(calc(-100% - env(safe-area-inset-top, 0px)));
+    transform: translateY(calc(-1 * var(--home-top, 56px)));
   }
   @media (prefers-reduced-motion: reduce) {
     .sticky.autohide {
       transition: none;
     }
   }
-  /* 사용자가 고른 변경 (15, 2026-10-28): 홈 띠(나의 하루·식사·나의 변화)는 흰 줄이 숨은 한 화면보다 조금(40px) 더 길게. 내용은 위에서부터, 남는 아래는 띠 색.
-     lvh = 주소창이 접힌 큰 화면 높이(아래로 스크롤하면 폰 브라우저 주소창이 접힌다). lvh를 모르는 브라우저는 앞 줄 vh */
+  /* 사용자가 고른 변경 (15, 2026-10-28): 홈 띠 최소 높이. 식사·나의 변화는 날짜 줄이 남은 화면(화면 − 날짜 줄)보다 조금(40px) 더 길게,
+     나의 하루(첫 띠)는 맨 위에서 흰 줄 전체 아래로 화면 맨 아래까지만. 늘어난 만큼은 위아래로 똑같이 나눈다(내용을 띠 가운데에).
+     lvh = 주소창이 접힌 큰 화면 높이(아래로 스크롤하면 폰 브라우저 주소창이 접힌다), svh = 주소창이 보이는 작은 화면 높이(맨 위 상태).
+     lvh·svh를 모르는 브라우저는 앞 줄 vh. --home-head·--home-strip은 HomeDateBar useBarHeights가 잰다. */
   .home > .band {
-    min-height: calc(100vh + 40px);
-    min-height: calc(100lvh + 40px);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: calc(100vh - var(--home-strip, 0px) + 40px);
+    min-height: calc(100lvh - var(--home-strip, 0px) + 40px);
+  }
+  .home > .band:first-of-type {
+    min-height: calc(100vh - var(--home-head, 0px));
+    min-height: calc(100svh - var(--home-head, 0px));
   }
 
   /* D3-2 결과·직접 입력 화면의 입력 상자(테두리 상자 안에 입력 칸과 단위): 키보드 포커스 테두리를 안쪽 칸 대신 상자에(시안 :focus-visible과 같은 색) */

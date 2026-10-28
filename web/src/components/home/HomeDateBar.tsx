@@ -2,8 +2,9 @@
 // 오른쪽 아이콘: cal = 그 날짜가 든 달의 S10 기록 보기(/calendar?month=YYYY-MM), gear = SETTINGS_PATH. 둘 다 push + state.fromHome.
 // 날짜 줄: 양옆 .dside 전날·다음 날(replace 이동), 가운데 .dcenter 날짜(누르면 기록 보기, CLAUDE.md "홈에서 날짜나 달력 아이콘으로 연다") + "오늘" 알약.
 // 오늘이 아닌 날의 [오늘로]와 내일 막기는 (e) 부품(DateLimits).
-// 사용자가 고른 변경 (14, 2026-10-28): 아래로 스크롤하면 이 흰 줄 전체가 위로 숨고(멈춰도 숨은 채), 위로 스크롤하면 다시 내려온다(useAutoHide, 모양은 index.css .sticky.autohide).
-import { useEffect, useRef, useState, type RefObject } from 'react'
+// 사용자가 고른 변경 (14, 2026-10-28): 아래로 스크롤하면 아이콘 줄만 위로 숨고(멈춰도 숨은 채) 날짜 줄은 남는다. 위로 스크롤하면 아이콘 줄이 다시 내려온다
+// (useAutoHide, 모양은 index.css .sticky.autohide). 홈 띠 높이(사용자가 고른 변경 15)에 쓰도록 흰 줄 높이를 화면 틀(main.home)의 CSS 변수로 적는다(useBarHeights).
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { dateKeyLabel, homeHref, shiftDateKey } from '../mealText'
 import { IconButton } from '../ui'
@@ -67,10 +68,32 @@ function useAutoHide(ref: RefObject<HTMLElement | null>): [boolean, () => void] 
   return [hidden, () => setHidden(false)]
 }
 
+/** 흰 줄 높이를 부모(main.home)에 적는다: --home-head = 아이콘 줄 + 날짜 줄, --home-strip = 날짜 줄, --home-top = 아이콘 줄(숨길 때 올리는 만큼). 글자 크기가 바뀌면 다시 잰다 */
+function useBarHeights(bar: RefObject<HTMLElement | null>, strip: RefObject<HTMLElement | null>) {
+  useLayoutEffect(() => {
+    const el = bar.current
+    const st = strip.current
+    const host = el?.parentElement
+    if (!el || !st || !host) return
+    const put = () => {
+      host.style.setProperty('--home-head', `${el.offsetHeight}px`)
+      host.style.setProperty('--home-strip', `${st.offsetHeight}px`)
+      host.style.setProperty('--home-top', `${el.offsetHeight - st.offsetHeight}px`)
+    }
+    put()
+    const ro = new ResizeObserver(put)
+    ro.observe(el)
+    ro.observe(st)
+    return () => ro.disconnect()
+  }, [bar, strip])
+}
+
 export default function HomeDateBar({ dateKey, today }: { dateKey: string; today: string }) {
   const navigate = useNavigate()
   const barRef = useRef<HTMLDivElement>(null)
+  const stripRef = useRef<HTMLElement>(null)
   const [hidden, show] = useAutoHide(barRef)
+  useBarHeights(barRef, stripRef)
   const isToday = dateKey === today
   const prev = shiftDateKey(dateKey, -1)
   const next = shiftDateKey(dateKey, 1)
@@ -85,7 +108,7 @@ export default function HomeDateBar({ dateKey, today }: { dateKey: string; today
           <IconButton icon="gear" label="설정" onClick={() => navigate(SETTINGS_PATH, { state: { fromHome: true } })} />
         </div>
       </div>
-      <nav className="datestrip pad" aria-label="날짜 이동">
+      <nav ref={stripRef} className="datestrip pad" aria-label="날짜 이동">
         <button
           type="button"
           className="dside"
