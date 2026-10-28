@@ -10,8 +10,8 @@ import { dateKeyLabel, homeHref, shiftDateKey } from '../mealText'
 import { IconButton } from '../ui'
 import { BackToToday, NextDayBlocked } from './DateLimits'
 
-/** 톱니(설정) 이동처. 설정 화면(D8)이 생길 때까지 S6 목표 설정(2026-10-27 사용자 결정) */
-const SETTINGS_PATH = '/goal'
+/** 톱니(설정) 이동처: 설정 화면(D8) */
+const SETTINGS_PATH = '/settings'
 
 const DOW = ['일', '월', '화', '수', '목', '금', '토'] as const
 

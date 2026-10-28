@@ -181,6 +181,21 @@
     flex: none;
   }
 
+  /* 시안 파일에는 preflight가 없어 설정 줄 오른쪽 값(.srow small)이 브라우저 기본 크기(smaller = 12.5px)다. preflight의 80%(12px)를 되돌린다(D8) */
+  .srow small {
+    font-size: smaller;
+  }
+  /* 같은 까닭으로 시안의 큰 숫자 칸(.field 체중·키·나이, .kval 목표 칼로리)은 입력 칸 줄 높이가 브라우저 기본(normal)이다.
+     preflight의 inherit(1.5)를 되돌린다(D8, 체중 시트 D6도 같은 칸) */
+  .field input,
+  .kval input {
+    line-height: normal;
+  }
+  /* .field 입력 칸은 브라우저 기본 안쪽 여백(1px 2px)도 시안 그대로(.kval은 시안이 padding:0을 적었다) */
+  .field input {
+    padding: 1px 2px;
+  }
+
   /* D3-2 결과·직접 입력 화면의 입력 상자(테두리 상자 안에 입력 칸과 단위): 키보드 포커스 테두리를 안쪽 칸 대신 상자에(시안 :focus-visible과 같은 색) */
   .fbox:focus-within {
     outline: 3px solid var(--sky-deep);

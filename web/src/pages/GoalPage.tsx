@@ -5,10 +5,10 @@
 // 처음 열 때 subscribeGoal의 첫 값으로만 폼을 채운다(그 뒤 스냅샷은 편집 중인 폼을 덮지 않는다).
 // 방문 기록: 홈에서 push(state.fromHome)로 들어왔으면 저장·‹ 모두 navigate(-1)로 한 칸 돌아가고(같은 화면이 두 번 쌓이지 않게),
 // 주소로 바로 열었으면 홈으로 replace. 저장 안내는 lib/flash로 넘긴다(키 'goal:saved'·'goal:pending'은 HomePage와 같다).
-// 설정 화면(D8)이 생길 때까지 맨 아래(로그아웃 위)에 설정 줄을 둔다: "같이 먹은 사람 고르기"(2026-10-27 사용자가 고른 변경, 기본 꺼짐, 계정에 저장),
-// "목표 몸무게"(D6, 2026-10-28 사용자 결정, 시안 설정 "내 목표" 줄 → 목표 몸무게 시트, users/{uid}.targetWeightKg).
+// 설정 화면(D8)이 생긴 뒤로는 처음 목표 정하기(목표가 없는 계정, 홈 "목표를 정하면 …"·설정 내 목표 줄)에만 쓴다(온보딩 D11 전까지).
+// 목표가 있으면 설정의 시트에서 고친다. 같이 먹은 사람·목표 몸무게·로그아웃 줄은 설정으로 옮겼다.
 import { useEffect, useRef, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 import {
   ADULT_AGE,
   INPUT_RANGE,
@@ -24,11 +24,7 @@ import {
 } from '../analysis/goal'
 import { formatKcal } from '../components/mealText'
 import { GoalStoreError, saveGoal, subscribeGoal, type GoalStoreErrorCode, type StoredGoal } from '../data/goals'
-import { setShareEaters, subscribePrefs, type Prefs } from '../data/prefs'
-import { setTargetWeight, subscribeWeightProfile, type WeightProfile } from '../data/weights'
-import { KgSheet } from '../components/home/WeightSheets'
-import { formatKg } from '../lib/weight'
-import { signOutAndClear } from '../lib/auth'
+import { GOAL_DISCLAIMER } from '../components/settings/GoalSheets'
 import { setFlash } from '../lib/flash'
 import { Button, IconButton, TopBar } from '../components/ui'
 
@@ -64,8 +60,6 @@ const OVERRIDE_KEYS = TARGET_FIELDS.map((f) => f.k)
 
 const MINOR_MSG = '성장기에는 감량·증량보다 고르게 잘 먹는 것이 중요해요. 목표는 유지 기준으로 보여 드려요.'
 const CLAMPED_MSG = '목표 칼로리가 기초대사량보다 낮아지지 않게 맞췄어요.'
-const DISCLAIMER =
-  '이 목표는 일반 공식(Mifflin-St Jeor)으로 계산한 참고값이며 의학적 조언이 아니에요. 질환이 있거나 임신·수유 중이면 전문가와 상의하세요.'
 
 const SAVE_ERRORS: Record<GoalStoreErrorCode, string> = {
   GOAL_INVALID: '저장할 수 없는 값이 있어요. 입력을 확인해 주세요.',
@@ -444,9 +438,7 @@ export default function GoalPage({ uid }: { uid: string }) {
               </section>
             </fieldset>
 
-            <SettingsRows uid={uid} />
-            <p className="text-xs leading-relaxed text-ink-2">{DISCLAIMER}</p>
-            <AccountRow />
+            <p className="text-xs leading-relaxed text-ink-2">{GOAL_DISCLAIMER}</p>
           </main>
 
           <footer className="shrink-0 space-y-2 border-t border-line bg-surface px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
@@ -473,100 +465,6 @@ export default function GoalPage({ uid }: { uid: string }) {
             </Button>
           </footer>
         </>
-      )}
-    </div>
-  )
-}
-
-/** 맨 아래 로그아웃(·개발) 줄. 설정 화면(D8)이 생길 때까지 홈에서 옮겨 둔다(2026-10-27 사용자 결정). 동작·오류 처리는 예전 홈 그대로. */
-/** 설정 화면(D8)이 생길 때까지 목표 화면에 두는 설정 줄. 시안 설정 화면의 .slist·.sgroup·.srow·.toggle 모양 그대로 */
-function SettingsRows({ uid }: { uid: string }) {
-  const [prefs, setPrefs] = useState<Prefs | null>(null)
-  const [weight, setWeight] = useState<WeightProfile | null>(null)
-  const [targetOpen, setTargetOpen] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  useEffect(() => subscribePrefs(uid, setPrefs), [uid])
-  useEffect(() => subscribeWeightProfile(uid, setWeight), [uid])
-  const targetKg = weight?.targetKg ?? null
-  function saveTarget(kg: number | null) {
-    setTargetOpen(false)
-    setError(null)
-    setTargetWeight(uid, kg).catch(() => setError('목표 몸무게를 저장하지 못했어요. 잠시 뒤 다시 해 주세요.'))
-  }
-  const on = prefs?.shareEaters === true
-  function toggle() {
-    if (!prefs) return
-    setError(null)
-    // 기다리지 않는다(오프라인이면 끝나지 않는다). 구독은 로컬 캐시로 바로 바뀐다.
-    setShareEaters(uid, !on).catch(() => setError('설정을 저장하지 못했어요. 잠시 뒤 다시 해 주세요.'))
-  }
-  return (
-    <div className="slist">
-      <div className="sgroup">내 목표</div>
-      <button type="button" className="srow" onClick={() => setTargetOpen(true)} disabled={!weight}>
-        <span>목표 몸무게</span>
-        <small>{targetKg === null ? '– ›' : `${formatKg(targetKg)}kg ›`}</small>
-      </button>
-      <div className="sgroup">기록</div>
-      <button type="button" className="srow" onClick={toggle} disabled={!prefs}>
-        <span>같이 먹은 사람 고르기</span>
-        <span className={on ? 'toggle' : 'toggle off'} role="switch" aria-checked={on} aria-label="같이 먹은 사람 고르기"></span>
-      </button>
-      <p className="mt-1 text-xs text-ink-3">반찬을 나눠 먹을 때 켜요. 결과 화면에서 음식마다 몇 명이 먹었는지 고를 수 있어요.</p>
-      {error && (
-        <p role="alert" className="mt-1 text-xs text-peach-deep">
-          {error}
-        </p>
-      )}
-      <KgSheet
-        open={targetOpen}
-        onClose={() => setTargetOpen(false)}
-        title="목표 몸무게"
-        sub="정해 두면 목표까지 남은 무게를 알려 드려요"
-        value={targetKg}
-        deleteLabel={targetKg === null ? undefined : '목표 지우기'}
-        onSave={(kg) => saveTarget(kg)}
-        onDelete={() => saveTarget(null)}
-      />
-    </div>
-  )
-}
-
-function AccountRow() {
-  const [loggingOut, setLoggingOut] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  async function logout() {
-    if (loggingOut) return
-    setLoggingOut(true)
-    setError(null)
-    try {
-      await signOutAndClear()
-    } catch {
-      setLoggingOut(false)
-      setError('로그아웃하지 못했어요. 다시 해 주세요.')
-    }
-  }
-  return (
-    <div className="pb-2 text-center text-[13px] text-ink-3">
-      <div className="flex flex-wrap items-center justify-center gap-x-1">
-        {import.meta.env.DEV && (
-          <Link to="/dev" className="focus-ring flex min-h-11 items-center rounded-chip px-2">
-            개발
-          </Link>
-        )}
-        <button
-          type="button"
-          onClick={() => void logout()}
-          disabled={loggingOut}
-          className="focus-ring min-h-11 rounded-chip px-2 underline disabled:opacity-35"
-        >
-          로그아웃
-        </button>
-      </div>
-      {error && (
-        <p role="alert" className="text-peach-deep">
-          {error}
-        </p>
       )}
     </div>
   )

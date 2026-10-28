@@ -22,6 +22,7 @@ const GoalPage = lazy(() => import('./pages/GoalPage'))
 const GlancePage = lazy(() => import('./pages/GlancePage'))
 const NutritionDetailPage = lazy(() => import('./pages/NutritionDetailPage'))
 const CalendarPage = lazy(() => import('./pages/CalendarPage'))
+const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 // 개발 빌드에서만 등록한다. 배포 빌드에서는 import.meta.env.DEV가 false로 바뀌어 이 import가 번들에서 빠진다.
 const DevPage = import.meta.env.DEV ? lazy(() => import('./pages/DevPage')) : null
 // 공통 부품 모음(조각 D1-a, /dev/ui). 개발 빌드에서만 등록하고, 사용자 데이터를 쓰지 않아 로그인 없이 연다.
@@ -80,6 +81,7 @@ const GoalRoute = () => <GoalPage uid={useUser().uid} />
 const GlanceRoute = () => <GlancePage uid={useUser().uid} />
 const DetailRoute = () => <NutritionDetailPage uid={useUser().uid} />
 const CalendarRoute = () => <CalendarPage uid={useUser().uid} />
+const SettingsRoute = () => <SettingsPage user={useUser()} />
 
 const userRoutes: RouteObject[] = [
   { path: '/', element: <HomeRoute /> },
@@ -99,6 +101,7 @@ const userRoutes: RouteObject[] = [
   { path: '/detail', element: <DetailRoute /> },
   // S10 달력(3단계 조각 3-1). 홈에서는 push(state.fromHome)로 들어온다. ?month=YYYY-MM
   { path: '/calendar', element: <CalendarRoute /> },
+  { path: '/settings', element: <SettingsRoute /> },
   ...(DevPage ? [{ path: '/dev', element: <DevPage /> }] : []),
   { path: '*', element: <Navigate to="/" replace /> },
 ]
