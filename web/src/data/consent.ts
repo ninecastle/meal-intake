@@ -68,35 +68,3 @@ export async function saveConsent(uid: string, choice: ConsentChoice): Promise<v
     { merge: true },
   )
 }
-
-// ── 로그인 전 임시 보관(기기에만, 로그인 뒤 saveConsent 하고 지운다) ──
-const DRAFT_KEY = 'consentDraft.v1'
-
-export function readConsentDraft(): ConsentChoice | null {
-  try {
-    const v = JSON.parse(localStorage.getItem(DRAFT_KEY) ?? 'null') as unknown
-    if (v && typeof v === 'object' && 'photoKeep' in v && 'school' in v) {
-      const o = v as Record<string, unknown>
-      return { photoKeep: o.photoKeep === true, school: o.school === true }
-    }
-  } catch {
-    // 읽지 못하면 없는 것으로(로그인 뒤 동의 화면을 한 번 더 본다)
-  }
-  return null
-}
-
-export function writeConsentDraft(c: ConsentChoice): void {
-  try {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(c))
-  } catch {
-    // 저장하지 못하면 로그인 뒤 동의 화면을 한 번 더 본다
-  }
-}
-
-export function clearConsentDraft(): void {
-  try {
-    localStorage.removeItem(DRAFT_KEY)
-  } catch {
-    // 무시
-  }
-}

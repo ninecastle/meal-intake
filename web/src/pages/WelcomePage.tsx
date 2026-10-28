@@ -1,16 +1,15 @@
 // 소개(/welcome, 디자인 조각 D10): 시안 intro() 마크업·클래스 그대로 — .screen.ob.pad > .slides(슬라이드 3장) + .dots,
-// 아래 .bottom에 [시작하기](.btn.ink)와 [이미 계정이 있어요](.link). 시안처럼 화면에 있는 동안 html.lock(스크롤 잠금), 떠나면 해제.
-// 로그인 전: [시작하기] → 처음 동의, [이미 계정이 있어요] → 구글 로그인 → 원래 가려던 곳(기본 홈. 동의가 없는 계정은 경로 가드가 동의 화면으로).
-// 로그인했는데 동의 전(기존 계정·약관 버전 바뀜, 2026-10-28 사용자 요청): 경로 가드가 여기로 보낸다 — [시작하기] → 동의(‹ 있음), [이미 계정이 있어요] → 동의(‹ 없음).
-// 로그인 상태(설정 "처음 화면 다시 보기"): [시작하기] → 처음 동의(저장된 동의대로 체크), [이미 계정이 있어요] → 홈.
+// 아래 .bottom에 [구글로 시작하기](.btn.ink, 시안 [시작하기] 자리·모양 그대로) 하나. 시안처럼 화면에 있는 동안 html.lock(스크롤 잠금), 떠나면 해제.
+// 시작 순서 바꿈(2026-10-28 사용자 결정): 로그인 전 [구글로 시작하기] → 구글 로그인(팝업, 막히면 리디렉션) →
+//   지금 약관에 동의한 계정은 홈 맨 위, 아니면 동의 화면(뒤로 없음). 동의 화면이 목표 유무로 새 계정(목표 질문)·가입한 계정(홈)을 나눈다.
+// 로그인 상태(설정 "처음 화면 다시 보기", 동의 전 계정을 경로 가드가 보냄): 로그인 창 없이 같은 곳으로(동의했으면 바로 홈).
 // 슬라이드 3의 "1,124 / 1,900kcal"는 그림 속 예시라 시안 그대로 둔다.
 import type { User } from 'firebase/auth'
 import { useEffect, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router'
+import { useNavigate } from 'react-router'
 import FoodPhoto from '../components/terms/FoodPhoto'
-import { clearConsentDraft, hasCurrentConsent } from '../data/consent'
-import { subscribeGoal } from '../data/goals'
-import { isExistingLogin, markExistingLogin, useConsent } from '../components/terms/consentState'
+import { hasCurrentConsent } from '../data/consent'
+import { isWelcomeLogin, markWelcomeLogin, useConsent } from '../components/terms/consentState'
 import { LoginNotice, useGoogleLogin } from '../components/terms/googleLogin'
 import { Crown, MealArt, Mascot } from '../components/ui'
 
@@ -73,7 +72,6 @@ const SLIDES = [
 
 export default function WelcomePage({ user }: { user: User | null }) {
   const navigate = useNavigate()
-  const location = useLocation()
   const { inApp, busy, error, login } = useGoogleLogin()
   const slidesRef = useRef<HTMLDivElement>(null)
   const [cur, setCur] = useState(0)
@@ -85,57 +83,32 @@ export default function WelcomePage({ user }: { user: User | null }) {
     return () => root.classList.remove('lock')
   }, [])
 
-  // [이미 계정이 있어요]로 로그인했으면(팝업이든 리디렉션이든, 2026-10-28 사용자 요청):
-  // - 가입한 계정(동의나 목표가 있음): 홈 맨 위. 지금 약관에 아직 동의하지 않았으면 동의 화면(뒤로 없음) 한 번 → 홈
-  // - 가입한 적 없는 계정(동의·목표 모두 없음): "가입한 기록이 없어요"를 알리고 새 가입과 같은 과정(동의 → 목표 질문 → 결과)
+  // [구글로 시작하기]로 로그인했으면(팝업이든 리디렉션이든): 동의를 불러온 뒤 홈(지금 약관에 동의함) 또는 동의 화면으로
   const consent = useConsent()
-  const checking = useRef(false)
   useEffect(() => {
-    if (!user || consent === undefined || !isExistingLogin() || checking.current) return
-    if (hasCurrentConsent(consent)) {
-      markExistingLogin(false)
-      void navigate('/', { replace: true })
-      return
-    }
-    if (consent !== null) {
-      markExistingLogin(false)
-      void navigate('/consent', { replace: true })
-      return
-    }
-    // 동의 기록이 아예 없으면 목표가 있는지 한 번 본다(D10 전에 가입한 계정은 목표만 있다)
-    checking.current = true
-    let done = false
-    const finish = (hasGoal: boolean) => {
-      if (done) return
-      done = true
-      queueMicrotask(() => unsub())
-      markExistingLogin(false)
-      checking.current = false
-      void navigate('/consent', { replace: true, state: hasGoal ? null : { newAccount: true } })
-    }
-    const unsub = subscribeGoal(user.uid, (g) => finish(g !== null), () => finish(true))
+    if (!user || consent === undefined || !isWelcomeLogin()) return
+    markWelcomeLogin(false)
+    void navigate(hasCurrentConsent(consent) ? '/' : '/consent', { replace: true })
   }, [user, consent, navigate])
+  // 리디렉션 로그인이 실패해 돌아왔으면 표시를 지운다(나중에 처음 화면 다시 보기가 저절로 넘어가지 않게)
+  useEffect(() => {
+    if (error) markWelcomeLogin(false)
+  }, [error])
 
   function onScroll() {
     const s = slidesRef.current
     if (s) setCur(Math.round(s.scrollLeft / s.clientWidth))
   }
 
-  function start() {
-    void navigate('/consent', { state: { fromWelcome: true, from: (location.state as { from?: unknown } | null)?.from } })
-  }
-
-  async function existing() {
+  async function start() {
     if (user) {
-      // 이미 로그인한 채(처음 화면 다시 보기 등): 홈 맨 위, 지금 약관에 동의하지 않았으면 동의 한 번
-      if (hasCurrentConsent(consent ?? null)) void navigate('/', { replace: true })
-      else void navigate('/consent', { replace: true })
+      // 이미 로그인한 채(처음 화면 다시 보기·동의 전 계정): 로그인 창 없이
+      if (consent === undefined) return
+      void navigate(hasCurrentConsent(consent) ? '/' : '/consent', { replace: true })
       return
     }
-    // 동의 화면에서 [동의하고 계속] 뒤 로그인 창을 닫고 남은 초안이 이 계정에 동의 화면 없이 적용되지 않게(QA 결함)
-    clearConsentDraft()
-    markExistingLogin(true)
-    if (!(await login())) markExistingLogin(false)
+    markWelcomeLogin(true)
+    if (!(await login())) markWelcomeLogin(false)
   }
 
   return (
@@ -173,11 +146,8 @@ export default function WelcomePage({ user }: { user: User | null }) {
       </div>
       <div className="bottom">
         <div className="inner pad" style={{ flexDirection: 'column', gap: 2 }}>
-          <button type="button" className="btn ink" onClick={start}>
-            시작하기
-          </button>
-          <button type="button" className="link" disabled={busy} onClick={() => void existing()}>
-            {busy ? '로그인 중…' : '이미 계정이 있어요'}
+          <button type="button" className="btn ink" disabled={busy} onClick={() => void start()}>
+            {busy ? '로그인 중…' : '구글로 시작하기'}
           </button>
           <LoginNotice inApp={inApp} error={error} />
         </div>

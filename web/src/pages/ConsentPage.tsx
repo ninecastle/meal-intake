@@ -1,18 +1,16 @@
-// 처음 동의(/consent, 디자인 조각 D10): 시안 consent() 마크업·클래스 그대로 — .topbar(‹) + .pad.q(제목·부제) + .allagree(전체 동의)
+// 처음 동의(/consent, 디자인 조각 D10): 시안 consent() 마크업·클래스 그대로 — .topbar + .pad.q(제목·부제) + .allagree(전체 동의)
 // + 항목 줄(.arow: .lbl 체크 + 필수/선택 꼬리표, [보기] → 약관 시트) + .bottom [동의하고 계속](필수 4개를 모두 체크해야 켜짐).
-// - 로그인 전(소개 [시작하기]): ‹ 소개. [동의하고 계속] → 동의 초안을 기기에 두고 목표 질문(/start, D11)으로.
-//   결과 화면에서 구글 로그인하면 App의 Root가 동의를 계정에 저장하고, 결과 화면이 목표를 저장한다.
-// - 로그인했는데 지금 버전 동의가 없는 계정(경로 가드가 보냄): ‹ 없음. "식사 사진 보관"은 지금 사진 보관이 켜져 있으면 미리 체크.
-//   동의하면 계정에 저장하고 원래 가려던 곳(기본 홈).
-// - 로그인 상태에서 소개 [시작하기](설정 "처음 화면 다시 보기"): ‹ 소개. 저장된 동의대로 체크된 채, [동의하고 계속] → 저장 → 홈.
-// 선택 "식사 사진 보관"을 체크하지 않으면 사진 보관은 꺼짐으로 저장된다(첫 촬영 질문이 다시 나오지 않음, data/consent.saveConsent).
+// 시작 순서 바꿈(2026-10-28 사용자 결정): 로그인한 계정만 온다(로그인 전이면 소개로). 지금 약관 버전 동의가 없는 계정이 한 번 보고,
+// 뒤로 버튼은 없다. [동의하고 계속]은 바로 계정에 저장하고 목표가 없는 계정(새 계정)은 목표 질문(/start), 있으면 홈 맨 위로.
+// "식사 사진 보관"은 지금 사진 보관이 켜져 있으면 미리 체크. 체크하지 않으면 사진 보관은 꺼짐으로 저장된다(data/consent.saveConsent).
 import type { User } from 'firebase/auth'
 import { useEffect, useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router'
+import { Navigate, useNavigate } from 'react-router'
 import TermsSheet from '../components/terms/TermsSheet'
 import { useConsent } from '../components/terms/consentState'
-import { IconButton, Toast } from '../components/ui'
-import { clearConsentDraft, hasCurrentConsent, readConsentDraft, REQUIRED_KEYS, saveConsent, writeConsentDraft, type ConsentKey } from '../data/consent'
+import { Toast } from '../components/ui'
+import { hasCurrentConsent, REQUIRED_KEYS, saveConsent, type ConsentKey } from '../data/consent'
+import { subscribeGoal } from '../data/goals'
 import { subscribePrefs, type Prefs } from '../data/prefs'
 import { AGREE, type TermsKey } from '../lib/terms'
 
@@ -34,13 +32,9 @@ export default function ConsentPage({ user }: { user: User | null }) {
   const uid = user?.uid ?? null
   const consent = useConsent()
   const navigate = useNavigate()
-  const location = useLocation()
-  const [nav] = useState(() => location.state as { fromWelcome?: unknown; from?: unknown } | null)
-  const fromWelcome = nav?.fromWelcome === true
-  // [이미 계정이 있어요]로 로그인했는데 가입한 기록이 없는 계정: 알리고, 동의 뒤 목표 질문으로(새 가입과 같은 과정)
-  const newAccount = (nav as { newAccount?: unknown } | null)?.newAccount === true
   const [prefs, setPrefs] = useState<{ uid: string; p: Prefs } | null>(null)
-  const [agree, setAgree] = useState<Agree | null>(() => (uid ? null : {}))
+  const [agree, setAgree] = useState<Agree | null>(null)
+  const [goal, setGoal] = useState<{ uid: string; has: boolean } | null>(null)
   const [termsKey, setTermsKey] = useState<TermsKey | null>(null)
   const [submitted, setSubmitted] = useState(false)
   const [toast, setToast] = useState<{ text: string; at: number } | null>(null)
@@ -51,8 +45,18 @@ export default function ConsentPage({ user }: { user: User | null }) {
     return subscribePrefs(uid, (p) => setPrefs({ uid, p }))
   }, [uid])
 
+  // 목표가 있는지(동의 뒤 새 계정은 목표 질문, 가입한 계정은 홈). 읽지 못하면 가입한 계정으로 본다
+  useEffect(() => {
+    if (!uid) return
+    return subscribeGoal(
+      uid,
+      (g) => setGoal({ uid, has: g !== null }),
+      () => setGoal((p) => p ?? { uid, has: true }),
+    )
+  }, [uid])
+
   // 로그인 상태: 동의·설정을 다 불러오면 한 번 체크 상태를 채운다
-  const ready = !uid || (consent !== undefined && prefs?.uid === uid)
+  const ready = !!uid && consent !== undefined && prefs?.uid === uid && goal?.uid === uid
   useEffect(() => {
     if (!uid || agree !== null || !ready || !prefs) return
     const keep = prefs.p.keepPhotos === true
@@ -60,13 +64,14 @@ export default function ConsentPage({ user }: { user: User | null }) {
     else setAgree({ keep })
   }, [uid, agree, ready, prefs, consent])
 
-  // 로그인 상태에서 저장했으면 구독에 보인 뒤(경로 가드가 다시 이 화면으로 보내지 않게) 원래 가려던 곳으로
+  // 저장했으면 구독에 보인 뒤(경로 가드가 다시 소개로 보내지 않게) 새 계정은 목표 질문, 가입한 계정은 홈 맨 위로
+  const hasGoal = goal?.has === true
   useEffect(() => {
     if (!submitted || !hasCurrentConsent(consent ?? null) || leaving.current) return
     leaving.current = true
-    // 로그인한 채 동의하면 늘 홈 맨 위로(2026-10-28 사용자 요청: 원래 가려던 화면 대신). 가입한 기록이 없던 계정은 목표 질문으로
-    void navigate(newAccount ? '/start' : '/', { replace: true })
-  }, [submitted, consent, navigate, fromWelcome, nav])
+    if (hasGoal) void navigate('/', { replace: true })
+    else void navigate('/start', { replace: true, state: { depth: 0 } })
+  }, [submitted, consent, navigate, hasGoal])
 
   useEffect(() => {
     if (!toast) return
@@ -74,33 +79,16 @@ export default function ConsentPage({ user }: { user: User | null }) {
     return () => window.clearTimeout(t)
   }, [toast])
 
-  // 로그인 전 동의 초안을 계정에 저장하는 중(App Root가 다음 화면으로 보낸다)
-  if (uid && readConsentDraft() && !hasCurrentConsent(consent ?? null)) return <Loading />
+  if (!uid) return <Navigate to="/welcome" replace />
   if (!ready || agree === null) return <Loading />
 
   const a = agree
   const all = AGREE.every(([k]) => a[k])
   const ok = REQUIRED_KEYS.every((k) => a[k])
-  // ‹: 로그인 전이거나 소개에서 왔을 때만(기존 계정이 처음 보는 동의에는 없음)
-  const showBack = !uid || fromWelcome || hasCurrentConsent(consent ?? null)
-
-  function goBack() {
-    // 로그인 전에 동의하고 로그인 창을 닫았다가 뒤로 나가면 남은 초안을 버린다
-    if (!uid) clearConsentDraft()
-    if (fromWelcome) void navigate(-1)
-    else void navigate('/welcome', { replace: true })
-  }
-
   async function submit() {
-    if (!ok || submitted) return
+    if (!uid || !ok || submitted) return
     // 학교 등록은 동의 항목에서 뺐다(D13). 규칙이 요구하는 school 칸은 false로 계속 저장한다
     const choice = { photoKeep: a.keep === true, school: false }
-    if (!uid) {
-      // 새 가입(D11): 로그인은 목표 질문·추천 결과 뒤 [구글로 저장하고 시작하기]에서
-      writeConsentDraft(choice)
-      void navigate('/start', { state: { depth: 0 } })
-      return
-    }
     setSubmitted(true)
     saveConsent(uid, choice).catch((e: unknown) => {
       console.warn('[consent] 저장 실패', e)
@@ -112,16 +100,11 @@ export default function ConsentPage({ user }: { user: User | null }) {
   return (
     <div className="screen enter">
       <div className="topbar sticky pad">
-        <div style={{ display: 'flex' }}>{showBack && <IconButton icon="back" label="뒤로" onClick={goBack} />}</div>
+        <div style={{ display: 'flex' }}></div>
         <h1></h1>
         <div style={{ display: 'flex', minWidth: 44, justifyContent: 'flex-end' }}></div>
       </div>
       <div className="pad q">
-        {newAccount && (
-          <p className="callout" role="status" style={{ margin: '8px 0 0', background: 'var(--sky-soft)' }}>
-            이 구글 계정으로 가입한 기록이 없어요. 새 계정처럼 동의와 목표 설정부터 시작할게요.
-          </p>
-        )}
         <h2>
           서비스 이용에
           <br />

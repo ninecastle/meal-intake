@@ -1,12 +1,11 @@
-// 목표 질문·추천 결과·기존 목표 선택(디자인 조각 D11, 2026-10-28 사용자 결정). 시안 quiz()·result()·sheets.goalpick·kcalEditor() 마크업·클래스 그대로.
+// 목표 질문·추천 결과(디자인 조각 D11, 2026-10-28 사용자 결정). 시안 quiz()·result()·kcalEditor() 마크업·클래스 그대로.
 // - /start?step=0~5: 성별 → 나이 → 키 → 몸무게 → 활동량 → 목표. 단계마다 push(state.depth+1)라 기기 뒤로 가기·[이전]은 이전 단계.
 //   진행 막대(.progress/.pfill)는 숫자 없이 단계마다 초록으로 약 300ms 차오른다(움직임 줄이기면 바로). 목표 다음에 누구에게나 학교 등록 단계(D13, 선택, [건너뛰기]). 사진 보관 단계는 없다(동의 화면).
 // - /start/result: 추천 목표(설정 목표 칼로리 시트와 같은 부품 useKcalEditor) + 아래 버튼.
-//   로그인 전(새 가입, 소개 → 동의 → 여기): [구글로 저장하고 시작하기] → 로그인 → (App Root가 동의 초안 저장) → 목표 저장 → 홈 맨 위.
-//   이 계정에 목표가 이미 있으면 goalpick 시트([기존 목표 유지]·[방금 입력한 값으로 바꾸기]) → 홈 맨 위.
-//   로그인했는데 목표가 없는 계정(홈 "목표를 정하면 …", 설정 내 목표 줄, 로그인 뒤 목표 없음): [저장하고 시작하기] → 저장 →
-//   들어온 곳(설정이면 설정 + "목표를 저장했어요", 홈이면 홈 맨 위, 그 밖은 홈 맨 위).
-// - 입력값은 기기 localStorage(lib/onboardingDraft)에만 두고 목표를 저장하면 지운다. 계산·검사는 analysis/goal.ts(AI 호출 없음).
+//   시작 순서 바꿈(2026-10-28 사용자 결정): 로그인·동의한 목표 없는 계정만 온다(새 계정은 소개 → 구글 로그인 → 동의 → 여기).
+//   [저장하고 시작하기] → 목표·학교 저장 → 들어온 곳(설정이면 설정 + "목표를 저장했어요", 홈이면 홈 맨 위, 새 계정은 홈 맨 위·알림 없음).
+//   목표가 이미 있는 계정은 홈으로 보낸다(기존 목표 유지/바꾸기 시트는 없앰).
+// - 입력 중 값은 새로고침해도 이어지게 기기 localStorage(lib/onboardingDraft)에 두고 목표를 저장하면 지운다. 계산·검사는 analysis/goal.ts(AI 호출 없음).
 import type { User } from 'firebase/auth'
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router'
@@ -17,17 +16,14 @@ import {
   validateGoalInput,
   type Activity,
   type GoalInput,
-  type GoalOverride,
   type GoalResult,
   type GoalType,
 } from '../analysis/goal'
 import { resetScroll } from '../components/ScrollMemory'
-import { formatKcal } from '../components/mealText'
 import { ACTIVITY_LABEL, GOAL_LABEL, MINOR_MSG, SEX_LABEL, useKcalEditor } from '../components/settings/GoalSheets'
 import { useConsent } from '../components/terms/consentState'
-import { LoginNotice, useGoogleLogin } from '../components/terms/googleLogin'
-import { BottomSheet, IconButton, Mascot } from '../components/ui'
-import { hasCurrentConsent, readConsentDraft } from '../data/consent'
+import { IconButton, Mascot } from '../components/ui'
+import { hasCurrentConsent } from '../data/consent'
 import { GoalStoreError, saveGoal, subscribeGoal, type GoalStoreErrorCode, type StoredGoal } from '../data/goals'
 import { setFlash } from '../lib/flash'
 import SchoolSearch from '../components/school/SchoolSearch'
@@ -144,14 +140,12 @@ export default function OnboardingPage({ user }: { user: User | null }) {
   }
 
   // ── 들어올 수 있는지 ──
-  if (!uid && !readConsentDraft()) return <Navigate to="/welcome" replace />
-  if (uid) {
-    if (consent === undefined) return <Loading />
-    if (!hasCurrentConsent(consent) && !readConsentDraft()) return <Navigate to="/welcome" replace />
-    if (goal?.uid !== uid) return <Loading />
-    // 목표가 이미 있는 계정은 목표 질문을 다시 하지 않는다. 입력 초안이 있으면(로그인하고 이어서 저장·기존 목표 선택 중) 그대로 둔다
-    if (goal.g && !readOnboardingDraft() && !leaving) return <Navigate to="/" replace />
-  }
+  if (!uid) return <Navigate to="/welcome" replace />
+  if (consent === undefined) return <Loading />
+  if (!hasCurrentConsent(consent)) return <Navigate to="/welcome" replace />
+  if (goal?.uid !== uid) return <Loading />
+  // 목표가 이미 있는 계정은 목표 질문을 다시 하지 않는다(저장 중·직후 구독이 먼저 와도 결과 화면이 마무리하고 옮긴다)
+  if (goal.g && !leaving) return <Navigate to="/" replace />
 
   const open = firstOpen(draft)
   const stepParam = Number(params.get('step') ?? '0')
@@ -167,11 +161,11 @@ export default function OnboardingPage({ user }: { user: User | null }) {
     void navigate(to, { state: { ...nav, depth: depth + 1 } })
   }
   /** 저장 뒤: 설정·홈에서 왔으면 들어온 칸으로(홈은 맨 위), 그 밖은 홈 맨 위 */
-  function leave(flash: 'goal:saved' | 'goal:pending' | null) {
+  function leave(flash: 'goal:saved' | 'goal:pending') {
     setLeaving(true)
     clearOnboardingDraft()
-    // 추천 화면은 토스트가 없어 플래시를 남기지 않는다(나중에 홈에서 뜨지 않게)
-    if (flash && nav.from !== 'recommend') setFlash(flash)
+    // 추천 화면은 토스트가 없어 플래시를 남기지 않는다(나중에 홈에서 뜨지 않게). 새 계정(들어온 곳 없음)도 홈에 알림 없이
+    if (nav.from && nav.from !== 'recommend') setFlash(flash)
     if (nav.from) {
       if (nav.from === 'home' && nav.backKey) resetScroll(nav.backKey)
       void navigate(-(depth + 1))
@@ -188,12 +182,12 @@ export default function OnboardingPage({ user }: { user: User | null }) {
         draft={draft}
         input={input}
         result={computeGoal(input)}
-        existing={goal?.g ?? null}
         onDraft={(d) => {
           setDraft(d)
           writeOnboardingDraft(d)
         }}
         onBack={() => prev(STEPS.length - 1)}
+        onSaving={setLeaving}
         onLeave={leave}
       />
     )
@@ -203,7 +197,7 @@ export default function OnboardingPage({ user }: { user: User | null }) {
     <QuizView
       step={step}
       draft={draft}
-      onBack={step > 0 || depth > 0 || !uid || nav.from ? () => (step > 0 ? prev(step - 1) : void navigate(-1)) : null}
+      onBack={step > 0 || depth > 0 || nav.from ? () => (step > 0 ? prev(step - 1) : void navigate(-1)) : null}
       onUpdate={update}
       onNext={() => next(step === STEPS.length - 1 ? '/start/result' : `/start?step=${step + 1}`)}
     />
@@ -420,29 +414,25 @@ function ResultView({
   draft,
   input,
   result,
-  existing,
   onDraft,
   onBack,
+  onSaving,
   onLeave,
 }: {
-  uid: string | null
+  uid: string
   draft: OnboardingDraft
   input: GoalInput
   result: GoalResult
-  existing: StoredGoal | null
   onDraft: (d: OnboardingDraft) => void
   onBack: () => void
-  onLeave: (flash: 'goal:saved' | 'goal:pending' | null) => void
+  /** 저장 중 표시(저장 직후 목표 구독이 먼저 와도 홈으로 튕기지 않고 이 화면이 초안을 지우고 옮긴다) */
+  onSaving: (on: boolean) => void
+  onLeave: (flash: 'goal:saved' | 'goal:pending') => void
 }) {
   const ed = useKcalEditor(result, draft.override)
-  const { inApp, busy, error: loginError, login } = useGoogleLogin()
-  const [pick, setPick] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<GoalStoreErrorCode | null>(null)
-  const auto = useRef(false)
   const alive = useRef(true)
-  // 로그인하고 이어서 저장하는 새 가입이면 홈에 "목표를 저장했어요"를 띄우지 않는다
-  const [fresh] = useState(() => draft.loginPending === true)
 
   useEffect(() => {
     alive.current = true
@@ -451,7 +441,7 @@ function ResultView({
     }
   }, [])
 
-  // 직접 조정은 초안에도 둔다(리디렉션 로그인으로 페이지가 다시 열려도 그대로)
+  // 직접 조정도 초안에 둔다(새로고침해도 그대로)
   const ovrJson = JSON.stringify(ed.override)
   useEffect(() => {
     // 저장하고 초안을 지운 뒤에는 다시 쓰지 않는다
@@ -459,64 +449,29 @@ function ResultView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ovrJson])
 
-  async function save(o: GoalOverride | null) {
-    if (!uid || saving) return
+  async function save() {
+    if (saving || ed.errors.length > 0) return
     setSaving(true)
+    onSaving(true)
     setSaveError(null)
+    // 시작 단계에서 고른 학교(D13): 목표와 함께 등록한다(기다리지 않음)
+    if (draft.school) setSchool(uid, draft.school).catch((e: unknown) => console.warn('[onboarding] 학교 저장 실패', e))
     let timer = 0
     const slow = new Promise<'slow'>((r) => {
       timer = window.setTimeout(() => r('slow'), navigator.onLine === false ? OFFLINE_HINT_MS : SLOW_MS)
     })
     try {
-      const r = await Promise.race([saveGoal(uid, input, o).then(() => 'ok' as const), slow])
-      if (alive.current) leave(fresh ? null : r === 'ok' ? 'goal:saved' : 'goal:pending')
+      const r = await Promise.race([saveGoal(uid, input, ed.override).then(() => 'ok' as const), slow])
+      if (alive.current) onLeave(r === 'ok' ? 'goal:saved' : 'goal:pending')
     } catch (e) {
       console.warn('[onboarding] 목표 저장 실패', e)
       if (!alive.current) return
       setSaveError(e instanceof GoalStoreError ? e.code : 'GOAL_STORE_UNAVAILABLE')
       setSaving(false)
+      onSaving(false)
     } finally {
       window.clearTimeout(timer)
     }
-  }
-
-  /** 시트가 열려 있으면 먼저 닫고(본문 스크롤 잠금을 풀고) 다음 틱에 화면을 옮긴다(홈이 맨 위에서 보이게) */
-  function leave(flash: 'goal:saved' | 'goal:pending' | null) {
-    if (!pick) {
-      onLeave(flash)
-      return
-    }
-    setPick(false)
-    window.setTimeout(() => onLeave(flash), 60)
-  }
-
-  /** 로그인한 계정: 목표가 있으면 고르게, 없으면 저장 */
-  function finish() {
-    // 시작 단계에서 고른 학교(D13): 목표를 유지하든 바꾸든 등록한다(기다리지 않음)
-    if (uid && draft.school) setSchool(uid, draft.school).catch((e: unknown) => console.warn('[onboarding] 학교 저장 실패', e))
-    if (existing) setPick(true)
-    else void save(ed.override)
-  }
-
-  // 로그인하고 돌아왔으면(팝업·리디렉션) 한 번 이어서 저장한다
-  useEffect(() => {
-    if (!uid || !draft.loginPending || auto.current || !readOnboardingDraft()?.loginPending) return
-    auto.current = true
-    onDraft({ ...draft, override: ed.override, loginPending: false })
-    finish()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [uid])
-
-  async function onButton() {
-    if (ed.errors.length > 0) return
-    if (uid) {
-      finish()
-      return
-    }
-    onDraft({ ...draft, override: ed.override, loginPending: true })
-    const ok = await login()
-    // 로그인하면 이 화면은 잠깐 내려갔다 다시 그려져 이어서 저장한다(그 뒤에는 초안을 다시 쓰지 않는다)
-    if (!ok && alive.current && readOnboardingDraft()?.loginPending === true) onDraft({ ...draft, override: ed.override, loginPending: false })
   }
 
   return (
@@ -544,38 +499,19 @@ function ResultView({
           <div style={{ color: 'var(--ink-2)' }}>하루 목표</div>
           {ed.node}
         </div>
-        {!uid && (
-          <p className="help" style={{ marginTop: 14, textAlign: 'center', color: 'var(--ink-3)' }}>
-            로그인 전 입력값은 이 기기에만 임시로 보관돼요
-          </p>
-        )}
         {saveError && (
           <p role="alert" style={{ ...ERROR_STYLE, textAlign: 'center' }}>
             {SAVE_ERRORS[saveError]}
           </p>
         )}
-        <LoginNotice inApp={inApp} error={loginError} />
       </div>
       <div className="bottom">
         <div className="inner pad">
-          <button type="button" className="btn gbtn" disabled={ed.errors.length > 0 || busy || saving} onClick={() => void onButton()}>
-            {busy ? '로그인 중…' : saving ? '저장 중…' : uid ? '저장하고 시작하기' : '구글로 저장하고 시작하기'}
+          <button type="button" className="btn gbtn" disabled={ed.errors.length > 0 || saving} onClick={() => void save()}>
+            {saving ? '저장 중…' : '저장하고 시작하기'}
           </button>
         </div>
       </div>
-      <BottomSheet open={pick && !!existing} onClose={() => setPick(false)} title="이미 저장된 목표가 있어요">
-        <p style={{ color: 'var(--ink-2)', margin: '6px 0 0' }}>
-          {`이 계정에는 하루 ${formatKcal(existing?.targets.target_kcal ?? 0)}kcal 목표가 있어요. 어떻게 할까요?`}
-        </p>
-        <div className="choice">
-          <button type="button" disabled={saving} onClick={() => leave(null)}>
-            {`기존 목표 유지 (${formatKcal(existing?.targets.target_kcal ?? 0)}kcal)`}
-          </button>
-          <button type="button" disabled={saving} onClick={() => void save(ed.override)}>
-            {`방금 입력한 값으로 바꾸기 (${formatKcal(ed.targets.target_kcal)}kcal)`}
-          </button>
-        </div>
-      </BottomSheet>
     </div>
   )
 }

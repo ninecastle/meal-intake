@@ -2,7 +2,7 @@
 // div.screen > .topbar.sticky(‹ "기록 보기") → .pad > 달력(RecordCalendar: .calhead·.monthsum·.cal·.legendrow·.nchips)
 // → .segment [주간 | 월간 👑 | AI 리포트 👑](margin-top 26px) → 고른 탭 하나(WeekPane·MonthPane·AiReportPane).
 // 2026-10-28 사용자 결정: 예전 기록 보기 모양(카드 테두리, ✓, 토일 색, 주 줄 ›, 아래로 스크롤하는 섹션 등)은 모두 시안대로,
-// [몸무게] 칩은 달력에만(그래프는 그 전에 고른 항목, 처음엔 칼로리), AI 리포트 탭은 D14 전까지 "준비 중이에요".
+// [몸무게] 칩은 달력에만(그래프는 그 전에 고른 항목, 처음엔 칼로리), AI 리포트 탭은 D14 AI 주간 리포트(AiReportPane, 주 이동은 탭 안에서).
 // 주소 /calendar?month=YYYY-MM&week=월요일&tab=month|ai(lib/calendar parseMonth, lib/week parseWeek, 탭 없거나 틀리면 주간).
 // 달·주·탭 바꾸기는 replace(state를 그대로 넘겨 fromHome을 지킨다, ScrollMemory가 같은 화면이라 스크롤 위치를 그대로 둔다).
 // 달 이동은 ?week를 빼서 그달 기본 주로. 주 이동이 격자 밖으로 나가면 monthForWeek로 달도 따라간다(고른 주는 늘 그달 격자 안 → 새 구독 없음).
@@ -228,7 +228,7 @@ export default function CalendarPage({ uid }: { uid: string }) {
         ) : tab === 'month' ? (
           <MonthPane month={month} today={today} metric={graphMetric} ready={ready} days={dayTotals} goals={goalList} />
         ) : (
-          <AiReportPane />
+          <AiReportPane uid={uid} today={today} onOpenDay={(d) => void openDay(d)} />
         )}
       </div>
     </main>

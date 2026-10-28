@@ -1142,3 +1142,83 @@ describe('학교 등록(users/{uid}.school, 규칙 v12, 디자인 조각 D13, �
     await assertFails(getDoc(doc(db('bob'), USER)))
   })
 })
+
+describe('AI 주간 리포트(users/{uid}/reports/{weekStart}, 규칙 v13, 디자인 조각 D14, 스펙 4.11절)', () => {
+  const WEEK = '2026-10-19'
+  const rPath = (uid = 'alice', key = WEEK) => `users/${uid}/reports/${key}`
+  const TEXT = {
+    summary: '한 주 동안 꾸준히 기록했어요.',
+    good: ['아침을 챙겨 먹었어요'],
+    improve: ['저녁이 조금 많았어요'],
+    next: ['점심에 현미밥과 생선구이'],
+    dayPlan: { breakfast: '오트밀', lunch: '비빔밥', dinner: '닭가슴살 샐러드', snack: '요거트' },
+  }
+  const STATS = { weekStart: WEEK, recordDays: 5, avgKcal: 1820, score: 78 }
+  /** web/src/data/reports.ts와 같은 쓰기: setDoc 덮어쓰기 */
+  const report = (genCount, createdAt, extra = {}) => ({
+    weekStart: WEEK,
+    inputHash: 'h1',
+    stats: STATS,
+    text: TEXT,
+    model: 'gemini-3.5-flash-lite',
+    promptVersion: 'r1',
+    genCount,
+    createdAt,
+    updatedAt: serverTimestamp(),
+    ...extra,
+  })
+  const createdOf = async () => (await getDoc(doc(alice(), rPath()))).data().createdAt
+
+  test('본인: 만들기(genCount 1) → 다시 만들기 2·3 → 읽기 → 지우기', async () => {
+    const fs = alice()
+    await assertSucceeds(setDoc(doc(fs, rPath()), report(1, serverTimestamp())))
+    const c = await createdOf()
+    await assertSucceeds(setDoc(doc(fs, rPath()), report(2, c, { inputHash: 'h2' })))
+    await assertSucceeds(setDoc(doc(fs, rPath()), report(3, c, { inputHash: 'h3' })))
+    const snap = await assertSucceeds(getDoc(doc(fs, rPath())))
+    assert.equal(snap.data().genCount, 3)
+    await assertSucceeds(deleteDoc(doc(fs, rPath())))
+  })
+
+  test('genCount: 처음이 1이 아니면, 건너뛰거나 같거나 4면 거부', async () => {
+    const fs = alice()
+    await assertFails(setDoc(doc(fs, rPath()), report(2, serverTimestamp())))
+    await assertFails(setDoc(doc(fs, rPath()), report(1.5, serverTimestamp())))
+    await assertSucceeds(setDoc(doc(fs, rPath()), report(1, serverTimestamp())))
+    const c = await createdOf()
+    await assertFails(setDoc(doc(fs, rPath()), report(1, c)))
+    await assertFails(setDoc(doc(fs, rPath()), report(3, c)))
+    await assertSucceeds(setDoc(doc(fs, rPath()), report(2, c)))
+    await assertSucceeds(setDoc(doc(fs, rPath()), report(3, c)))
+    await assertFails(setDoc(doc(fs, rPath()), report(4, c)))
+    // createdAt 바꾸기 거부
+    await assertFails(setDoc(doc(fs, rPath()), report(4, serverTimestamp())))
+  })
+
+  test('키·형식 거부(모르는 키, 사진, weekStart ≠ id, 긴 문장, 지난 updatedAt, id 형식)', async () => {
+    const fs = alice()
+    const bad = [
+      report(1, serverTimestamp(), { photo: 'base64' }),
+      report(1, serverTimestamp(), { weekStart: '2026-10-12' }),
+      report(1, serverTimestamp(), { text: { ...TEXT, summary: '가'.repeat(1001) } }),
+      report(1, serverTimestamp(), { text: { ...TEXT, extra: 'x' } }),
+      report(1, serverTimestamp(), { text: { ...TEXT, good: ['1', '2', '3', '4', '5', '6'] } }),
+      report(1, serverTimestamp(), { inputHash: '' }),
+      report(1, serverTimestamp(), { stats: 'x' }),
+      report(1, serverTimestamp(), { updatedAt: Timestamp.fromMillis(0) }),
+      report(1, Timestamp.fromMillis(0)),
+    ]
+    for (const d of bad) await assertFails(setDoc(doc(fs, rPath()), d))
+    await assertFails(setDoc(doc(fs, 'users/alice/reports/week1'), { ...report(1, serverTimestamp()), weekStart: 'week1' }))
+  })
+
+  test('다른 uid·미로그인 거부(읽기·쓰기·지우기)', async () => {
+    await assertFails(setDoc(doc(db('bob'), rPath()), report(1, serverTimestamp())))
+    await assertFails(setDoc(doc(db(null), rPath()), report(1, serverTimestamp())))
+    await seed(rPath(), { ...report(1, serverTimestamp()) })
+    for (const fs of [db('bob'), db(null)]) {
+      await assertFails(getDoc(doc(fs, rPath())))
+      await assertFails(deleteDoc(doc(fs, rPath())))
+    }
+  })
+})

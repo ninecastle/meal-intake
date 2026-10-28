@@ -1,21 +1,18 @@
 // 라우터(2단계 조각 4-A). 로그인 전이면 어느 경로든 소개(/welcome, 디자인 조각 D10)로 보내고, 로그인 뒤에는 원래 가려던 경로로 돌려보낸다.
-// 처음 동의(D10): 로그인했는데 지금 버전 동의가 없으면(기존 계정) 어느 경로든 /consent로 보낸다(동의하면 원래 가려던 곳).
-// 로그인 전 동의 화면에서 [동의하고 계속]을 눌렀으면 동의 초안(기기)이 있고, 로그인 뒤 Root가 계정에 저장한다.
-// 새 가입(목표 질문 결과 화면에서 로그인, D11)이면 화면은 결과 화면이 옮기고, 그 밖에는 목표가 없으면 /start, 있으면 홈으로 보낸다.
+// 처음 동의(D10): 로그인했는데 지금 버전 동의가 없으면 어느 경로든 소개로 보낸다([구글로 시작하기] → 동의 → 새 계정은 목표 질문, 가입한 계정은 홈).
+// 시작 순서 바꿈(2026-10-28 사용자 결정): 로그인은 소개 [구글로 시작하기]에서만 하고, 로그인 전 기기 초안을 로그인 뒤 넘기는 일은 없다.
 // 데이터 라우터(createBrowserRouter)를 쓴다: 결과 화면의 useBlocker(브라우저 뒤로 가기 때 "저장하지 않고 나갈까요?")가
 // 데이터 라우터에서만 동작한다. 라우터는 한 번만 만들고, 로그인 상태는 컨텍스트로 넘겨 경로 가드에서 본다.
 import type { User } from 'firebase/auth'
-import { createContext, lazy, Suspense, useContext, useEffect, useRef, type ReactNode } from 'react'
-import { createBrowserRouter, Navigate, Outlet, useLocation, useNavigate, type RouteObject } from 'react-router'
+import { createContext, lazy, Suspense, useContext, type ReactNode } from 'react'
+import { createBrowserRouter, Navigate, Outlet, useLocation, type RouteObject } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import RouteErrorScreen from './components/RouteErrorScreen'
 import ScrollMemory from './components/ScrollMemory'
 import { ConfirmHost } from './components/ui'
 import { ConsentContext, useConsent, useConsentSubscription } from './components/terms/consentState'
-import { clearConsentDraft, hasCurrentConsent, readConsentDraft, saveConsent } from './data/consent'
-import { subscribeGoal } from './data/goals'
+import { hasCurrentConsent } from './data/consent'
 import { useAuthUser } from './lib/auth'
-import { readOnboardingDraft } from './lib/onboardingDraft'
 import HomePage from './pages/HomePage'
 import WelcomePage from './pages/WelcomePage'
 
@@ -25,7 +22,7 @@ const MealPage = lazy(() => import('./pages/MealPage'))
 const ReviewPage = lazy(() => import('./pages/ReviewPage'))
 const MealIdRedirect = lazy(() => import('./pages/MealRedirects').then((m) => ({ default: m.MealIdRedirect })))
 const CaptureBeforeRedirect = lazy(() => import('./pages/MealRedirects').then((m) => ({ default: m.CaptureBeforeRedirect })))
-// 목표 질문·추천 결과(디자인 조각 D11). 로그인 전(새 가입)에도 열린다
+// 목표 질문·추천 결과(디자인 조각 D11). 로그인·동의한 계정만(새 계정은 동의 다음, 목표 없는 계정)
 const OnboardingPage = lazy(() => import('./pages/OnboardingPage'))
 // 한눈에·영양소 상세(디자인 조각 D5)
 const GlancePage = lazy(() => import('./pages/GlancePage'))
@@ -62,50 +59,7 @@ function Loading() {
   return <main className="flex min-h-dvh items-center justify-center p-4 text-sm text-ink-2">불러오는 중…</main>
 }
 
-/**
- * 로그인 전 동의 초안을 계정에 저장한다(로그인 직후 한 번). 저장한 동의가 구독에 보이면 초안을 지운다.
- * 저장을 시작하면 목표 유무를 한 번 읽어 목표가 없으면 목표 질문(/start), 있으면 홈으로 보낸다.
- * 목표 질문 중에 로그인했으면(/start에 입력 초안이 있음) 화면을 옮기지 않는다(결과 화면이 목표를 저장하고 옮긴다).
- */
-function useConsentDraftFlush() {
-  const user = useContext(UserContext)
-  const consent = useConsent()
-  const navigate = useNavigate()
-  const started = useRef<string | null>(null)
-  useEffect(() => {
-    if (!user || consent === undefined) return
-    if (hasCurrentConsent(consent)) {
-      // 이미 저장됨(쓰기 직후 캐시 포함) — 초안은 더 필요 없다
-      if (readConsentDraft()) clearConsentDraft()
-      return
-    }
-    const draft = readConsentDraft()
-    if (!draft || started.current === user.uid) return
-    started.current = user.uid
-    saveConsent(user.uid, draft).catch((e: unknown) => console.warn('[consent] 저장 실패', e))
-    // 목표 질문 결과 화면에서 로그인했으면 결과 화면이 이어서 목표를 저장하고 화면을 옮긴다
-    if (window.location.pathname.startsWith('/start') && readOnboardingDraft()) return
-    let done = false
-    const unsub = subscribeGoal(
-      user.uid,
-      (g) => {
-        if (done) return
-        done = true
-        queueMicrotask(() => unsub())
-        // 동의 뒤에는 늘 홈 맨 위(목표가 없으면 목표 질문, 2026-10-28 사용자 요청)
-        void navigate(g ? '/' : '/start', { replace: true })
-      },
-      () => {
-        if (done) return
-        done = true
-        void navigate('/', { replace: true })
-      },
-    )
-  }, [user, consent, navigate])
-}
-
 function Root() {
-  useConsentDraftFlush()
   return (
     <Frame>
       {/* 뒤로 가기로 돌아오면 보던 위치, 새 화면·홈 날짜 바꾸기는 맨 위(2026-10-27 사용자가 고른 변경) */}
@@ -124,8 +78,8 @@ function RequireUser() {
   const loc = useLocation()
   const consent = useConsent()
   if (!user) return <Navigate to="/welcome" replace state={{ from: loc.pathname + loc.search }} />
-  // 동의를 불러오는 중이거나, 로그인 전 동의 초안을 계정에 저장하는 중(Root가 다음 화면으로 보낸다)
-  if (consent === undefined || (!hasCurrentConsent(consent) && readConsentDraft())) return <Loading />
+  // 동의를 불러오는 중
+  if (consent === undefined) return <Loading />
   // 동의 전 계정도 소개부터(2026-10-28 사용자 요청: 처음 화면 다시 보기를 누르지 않아도 동의 전에 소개)
   if (!hasCurrentConsent(consent)) return <Navigate to="/welcome" replace state={{ from: loc.pathname + loc.search }} />
   return <Outlet />
@@ -196,10 +150,10 @@ const router = createBrowserRouter([
     ),
     children: [
       { path: '/login', element: <LoginRedirect /> },
-      // 소개·처음 동의(D10): 로그인 없이 열린다(로그인 상태면 설정 "처음 화면 다시 보기"·기존 계정 동의)
+      // 소개(D10): 로그인 없이 열린다(로그인 상태면 설정 "처음 화면 다시 보기"·동의 전 계정). 동의는 로그인한 계정만(화면 안에서 가드)
       { path: '/welcome', element: <WelcomeRoute /> },
       { path: '/consent', element: <ConsentRoute /> },
-      // 목표 질문(?step=0~5)·추천 결과(D11): 새 가입은 로그인 전, 목표 없는 계정은 로그인한 채
+      // 목표 질문(?step=0~6)·추천 결과(D11): 로그인·동의한 목표 없는 계정(화면 안에서 가드)
       { path: '/start', element: <OnboardingRoute /> },
       { path: '/start/result', element: <OnboardingRoute /> },
       ...(UiGalleryPage ? [{ path: '/dev/ui', element: <UiGalleryPage /> }] : []),

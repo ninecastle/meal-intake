@@ -18,10 +18,10 @@ export function useConsentSubscription(uid: string | null): ConsentState {
   return uid && s.uid === uid ? s.c : undefined
 }
 
-// 소개 [이미 계정이 있어요]로 로그인을 시작했다는 표시. 팝업이 막혀 리디렉션 로그인으로 페이지가 다시 열려도 홈으로 보내려고
-// sessionStorage에 둔다(탭을 닫으면 사라진다).
-const EXISTING_KEY = 'welcome.loginExisting'
-export function markExistingLogin(on: boolean): void {
+// 소개 [구글로 시작하기]로 로그인을 시작했다는 표시. 팝업이 막혀 리디렉션 로그인으로 페이지가 다시 열려도 다음 화면(홈·동의)으로
+// 보내려고 sessionStorage에 둔다(탭을 닫으면 사라진다). 처음 화면 다시 보기(이미 로그인)에서는 버튼을 누르기 전까지 소개에 머문다.
+const EXISTING_KEY = 'welcome.loginStart'
+export function markWelcomeLogin(on: boolean): void {
   try {
     if (on) sessionStorage.setItem(EXISTING_KEY, '1')
     else sessionStorage.removeItem(EXISTING_KEY)
@@ -29,7 +29,7 @@ export function markExistingLogin(on: boolean): void {
     // 저장소를 못 쓰면 팝업 로그인만 이어진다
   }
 }
-export function isExistingLogin(): boolean {
+export function isWelcomeLogin(): boolean {
   try {
     return sessionStorage.getItem(EXISTING_KEY) === '1'
   } catch {

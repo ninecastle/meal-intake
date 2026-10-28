@@ -421,3 +421,38 @@ export async function listRecentMeals(uid: string, n: number): Promise<MealWithI
     throw readError(e)
   }
 }
+
+/**
+ * AI 주간 리포트(디자인 조각 D14): startKey~endKey(둘 다 포함, 42일 이하) done 기록 문서(음식별 값·끼니가 필요해 요약 대신 문서).
+ * subscribeDaysInRange와 같은 쿼리(dateKey 범위 하나, 단일 필드 인덱스). fromCache는 서버 확인 전 기기 캐시 값인지 —
+ * 리포트를 새로 만들 때(AI 호출)는 서버 값으로만 만들게 화면이 이 값을 본다.
+ */
+export function subscribeMealsInRange(
+  uid: string,
+  startKey: string,
+  endKey: string,
+  cb: (meals: MealWithId[], fromCache: boolean) => void,
+  onError?: (code: MealStoreErrorCode) => void,
+): () => void {
+  if (!validRange(startKey, endKey)) {
+    let live = true
+    queueMicrotask(() => live && onError?.('MEAL_STORE_UNAVAILABLE'))
+    return () => {
+      live = false
+    }
+  }
+  const q = query(mealsCol(uid), where('dateKey', '>=', startKey), where('dateKey', '<=', endKey))
+  return onSnapshot(
+    q,
+    { includeMetadataChanges: true },
+    (snap) =>
+      cb(
+        newestFirst(snap.docs.map(toMeal).filter((m) => m.status === 'done')).reverse(),
+        snap.metadata.fromCache,
+      ),
+    (e) => {
+      console.warn('[meals] subscribeMealsInRange 오류', e)
+      onError?.('MEAL_STORE_UNAVAILABLE')
+    },
+  )
+}
