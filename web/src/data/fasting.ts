@@ -140,3 +140,28 @@ export async function autoFillFasting(uid: string, todayKey: string): Promise<vo
     // 무시
   }
 }
+
+/** 리포트(D14)용: start~end(둘 다 포함) 날짜별 공복 끼니. dateKey 한 필드 범위라 복합 인덱스 없음 */
+export function subscribeFastedInRange(
+  uid: string,
+  startKey: string,
+  endKey: string,
+  onData: (byDate: Record<string, MealType[]>) => void,
+): () => void {
+  const q = query(collection(db, 'users', uid, 'days'), where('dateKey', '>=', startKey), where('dateKey', '<=', endKey))
+  return onSnapshot(
+    q,
+    (s) => {
+      const out: Record<string, MealType[]> = {}
+      for (const d of s.docs) {
+        const v = (d.data() as { dateKey?: unknown; fasted?: unknown })
+        if (typeof v.dateKey === 'string' && Array.isArray(v.fasted)) out[v.dateKey] = MEAL_TYPES.filter((m) => (v.fasted as unknown[]).includes(m))
+      }
+      onData(out)
+    },
+    (e) => {
+      console.warn('[fasting] 범위 구독 오류', e)
+      onData({})
+    },
+  )
+}

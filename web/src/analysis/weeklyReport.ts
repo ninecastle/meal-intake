@@ -14,7 +14,7 @@ import { AnalysisError } from './errors.ts'
 import { isKoreanText } from './koreanText.ts'
 
 export const REPORT_MIN_DAYS = 3
-export const PROMPT_VERSION_REPORT = 'r1'
+export const PROMPT_VERSION_REPORT = 'r2'
 export const MOCK_REPORT_MODEL = 'mock'
 
 // ───────────────────────── 숫자 계산(AI 없음) ─────────────────────────
@@ -61,6 +61,8 @@ export interface WeekStats {
   foodCount: number
   /** 그 주에 먹은 음식 가짓수(정리한 이름 기준, 다 남긴 음식 제외) — 리포트 "식단 다양성"(2026-10-29 사용자 결정, 자주 먹은 음식 TOP 5 대신) */
   foodKinds: number
+  /** 그 주 공복으로 표시한 끼니 횟수(그 끼니에 기록이 없는 것만, 직접·자동 공복 모두, 2026-10-29 사용자 결정) */
+  fastCount: { breakfast: number; lunch: number; dinner: number; snack: number }
 }
 
 const MEAL_TYPES: readonly MealType[] = ['breakfast', 'lunch', 'dinner', 'snack']
@@ -151,6 +153,8 @@ export function computeWeekStats(
   weekStart: string,
   meals: MealWithId[],
   goalFor: (dateKey: string) => WeekGoal | null,
+  /** 날짜별 공복 표시 끼니(users/{uid}/days fasted). 없으면 공복 0 */
+  fasted: Readonly<Record<string, readonly MealType[]>> = {},
 ): WeekStats {
   const keys = weekDays(weekStart)
   const days: WeekStats['days'] = []
@@ -239,6 +243,17 @@ export function computeWeekStats(
     if (!best || d < Math.abs(best.ratio - 1)) best = r
     if (!worst || d > Math.abs(worst.ratio - 1)) worst = r
   }
+  // 공복: 그 끼니에 기록이 없는 공복 표시만 센다
+  const fastCount = { breakfast: 0, lunch: 0, dinner: 0, snack: 0 }
+  const fastLines: string[] = []
+  for (const k of keys) {
+    const list = fasted[k] ?? []
+    const eaten = new Set(meals.filter((m) => m.dateKey === k).map((m) => m.mealType))
+    const f = (['breakfast', 'lunch', 'dinner', 'snack'] as const).filter((mt) => list.includes(mt) && !eaten.has(mt))
+    for (const mt of f) fastCount[mt]++
+    if (f.length) fastLines.push(`fast|${k}|${f.join(',')}`)
+  }
+  const fastHash = fastLines.length ? `\n${fastLines.join('\n')}` : ''
   const dayOut = (r: (typeof ranked)[number] | null) => (r ? { dateKey: r.dateKey, kcal: r.kcal, pct: Math.round(r.ratio * 100) } : null)
   const recordDays = recKcal.length
   const score = scoreFor(recordDays, inRangeDays, macroPct)
@@ -257,11 +272,12 @@ export function computeWeekStats(
     worstDay: best && worst && worst.dateKey !== best.dateKey ? dayOut(worst) : null,
     score,
     headline: headlineFor(score),
-    inputHash: stableHash(`${weekStart}\n${hashLines.join('\n')}`),
+    inputHash: stableHash(`${weekStart}\n${hashLines.join('\n')}${fastHash}`),
     macroAvg: { carbs_g: avg1(macroAll.carbs_g), protein_g: avg1(macroAll.protein_g), fat_g: avg1(macroAll.fat_g) },
     avgTarget: avgInt(targets),
     foodCount,
     foodKinds: foodCounts.size,
+    fastCount,
   }
 }
 
@@ -293,6 +309,7 @@ export const SYSTEM_INSTRUCTION_REPORT = [
   '- next: 다음 주 제안 1~3개. 항목마다 구체적인 음식 예시를 넣는다(예: "점심에 현미밥과 고등어구이를 곁들여 보세요").',
   '- dayPlan: 다음 주 하루 식단 예시. breakfast·lunch·dinner·snack에 메뉴 이름만 쓴다(숫자·양·칼로리 없이, 예: "현미밥, 된장국, 시금치나물").',
   '기록에 있는 음식을 근거로 구체적으로 쓰고, 기록에 없는 사실은 만들지 않는다.',
+  '공복으로 표시한 끼니는 한 주를 이해하는 참고 자료다. 꼭 언급할 필요는 없고, 공복이 잦거나 다른 내용과 이어질 때만 자연스럽게 한두 번 쓴다. 쓸 때는 "공복이었던 아침이 있었어요"처럼 "공복"이라는 말로만 쓰고(거르다·건너뛰다·빼먹다는 쓰지 않는다), 필요하면 바쁜 날 간단히 챙길 수 있는 음식을 제안한다. 끼니를 거르라고 하지 않는다.',
 ].join('\n')
 
 const STR_ARR = Schema.array({ items: Schema.string() })
@@ -359,6 +376,11 @@ export function buildReportUserText(stats: WeekStats, opts: Pick<ReportOpts, 'un
   const sh = stats.mealShare
   L.push(`- 끼니별 칼로리 비중: 아침 ${sh.breakfast}%, 점심 ${sh.lunch}%, 저녁 ${sh.dinner}%, 간식 ${sh.snack}%`)
   L.push(`- 이번 주 먹은 음식 가짓수: ${stats.foodKinds}가지`)
+  {
+    const fc = stats.fastCount
+    if (fc.breakfast + fc.lunch + fc.dinner + fc.snack > 0)
+      L.push(`- 공복(먹지 않음)으로 표시한 끼니: 아침 ${fc.breakfast}번, 점심 ${fc.lunch}번, 저녁 ${fc.dinner}번, 간식 ${fc.snack}번`)
+  }
   if (stats.topFoods.length) L.push(`- 자주 먹은 음식: ${stats.topFoods.map((f) => `${f.name} ${f.count}번`).join(', ')}`)
   if (stats.bestDay) L.push(`- 목표에 가장 가까웠던 날: ${md(stats.bestDay.dateKey)} ${stats.bestDay.kcal}kcal(목표의 ${stats.bestDay.pct}%)`)
   if (stats.worstDay) L.push(`- 목표에서 가장 멀었던 날: ${md(stats.worstDay.dateKey)} ${stats.worstDay.kcal}kcal(목표의 ${stats.worstDay.pct}%)`)

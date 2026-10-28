@@ -19,6 +19,7 @@ import {
   type WeekStats,
 } from '../../analysis/weeklyReport'
 import { subscribeGoal, subscribeGoalsUpTo, type DatedGoal, type StoredGoal } from '../../data/goals'
+import { subscribeFastedInRange } from '../../data/fasting'
 import { subscribeMealsInRange, type MealType, type MealWithId } from '../../data/meals'
 import { getReport, REPORT_MAX_GEN, saveReport, type StoredReport } from '../../data/reports'
 import { goalForDate, RANGE_HIGH } from '../../lib/calendar'
@@ -67,6 +68,8 @@ export default function AiReportPane({ uid, today, onOpenDay }: AiReportPaneProp
   const [meals, setMeals] = useState<{ week: string; list: MealWithId[]; fromCache: boolean } | { week: string; error: true } | null>(null)
   const [goals, setGoals] = useState<{ week: string; list: DatedGoal[] } | null>(null)
   const [goal, setGoal] = useState<StoredGoal | null | undefined>(undefined)
+  // 공복 표시(2026-10-29 사용자 결정: 리포트·AI에 반영)
+  const [fasted, setFasted] = useState<{ week: string; byDate: Record<string, MealType[]> } | null>(null)
   const [report, setReport] = useState<{ week: string; state: ReportState } | null>(null)
   const autoTried = useRef(new Set<string>())
 
@@ -90,6 +93,10 @@ export default function AiReportPane({ uid, today, onOpenDay }: AiReportPaneProp
     )
   }, [uid, week, weekEnd, isCurrent])
   useEffect(() => subscribeGoal(uid, setGoal, () => setGoal(null)), [uid])
+  useEffect(() => {
+    if (isCurrent) return
+    return subscribeFastedInRange(uid, prevWeek, weekEnd, (byDate) => setFasted({ week, byDate }))
+  }, [uid, week, prevWeek, weekEnd, isCurrent])
 
   // 저장본 읽기(주마다 한 번)
   useEffect(() => {
@@ -119,14 +126,15 @@ export default function AiReportPane({ uid, today, onOpenDay }: AiReportPaneProp
 
   const mealsNow = meals && meals.week === week ? meals : null
   const goalsNow = goals && goals.week === week ? goals : null
-  const loaded = mealsNow !== null && 'list' in mealsNow && goalsNow !== null
+  const fastedNow = fasted && fasted.week === week ? fasted.byDate : null
+  const loaded = mealsNow !== null && 'list' in mealsNow && goalsNow !== null && fastedNow !== null
   const stats = useMemo<{ cur: WeekStats; prev: WeekStats; curMeals: MealWithId[] } | null>(() => {
     if (!loaded) return null
     const goalFor = (d: string) => goalForDate(goalsNow.list, d)
     const curMeals = mealsNow.list.filter((m) => m.dateKey >= week)
     const prevMeals = mealsNow.list.filter((m) => m.dateKey < week)
-    return { cur: computeWeekStats(week, curMeals, goalFor), prev: computeWeekStats(prevWeek, prevMeals, goalFor), curMeals }
-  }, [loaded, mealsNow, goalsNow, week, prevWeek])
+    return { cur: computeWeekStats(week, curMeals, goalFor, fastedNow), prev: computeWeekStats(prevWeek, prevMeals, goalFor, fastedNow), curMeals }
+  }, [loaded, mealsNow, goalsNow, fastedNow, week, prevWeek])
   const fromServer = loaded && !mealsNow.fromCache
   const state: ReportState = report && report.week === week ? report.state : { kind: 'loading' }
 
@@ -218,9 +226,14 @@ export default function AiReportPane({ uid, today, onOpenDay }: AiReportPaneProp
             <Banner text={state.message} action="다시 시도" onAction={() => generate(saved)} />
           ) : changed && saved ? (
             saved.genCount >= REPORT_MAX_GEN ? (
-              <Banner text="이 주 기록이 바뀌었어요" note="이번 주는 더 만들 수 없어요" />
+              <Banner text={`${week === shiftWeek(thisWeek, -1) ? '지난주' : '이 주'} 기록이 바뀌었어요`} note="이 주는 더 분석할 수 없어요" />
             ) : (
-              <Banner text="이 주 기록이 바뀌었어요" action="다시 만들기" onAction={() => generate(saved)} />
+              // 2026-10-29 사용자 결정: 바뀐 기록을 새로 분석할지 묻고 남은 횟수를 보인다
+              <Banner
+                text={`${week === shiftWeek(thisWeek, -1) ? '지난주' : '이 주'} 기록이 바뀌었어요. 새로 분석할까요? (남은 횟수 ${REPORT_MAX_GEN - saved.genCount}번)`}
+                action="새로 분석하기"
+                onAction={() => generate(saved)}
+              />
             )
           ) : null
         }
@@ -444,6 +457,14 @@ function Report({
             </div>
           ))}
         </div>
+        {stats.fastCount.breakfast + stats.fastCount.lunch + stats.fastCount.dinner + stats.fastCount.snack > 0 && (
+          <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--line)', fontSize: 13, color: 'var(--ink-2)', textAlign: 'center' }}>
+            {'공복 '}
+            {MEAL_TYPES.filter((m) => m !== 'snack' || stats.fastCount.snack > 0)
+              .map((m) => `${MEAL_TYPE_LABEL[m]} ${stats.fastCount[m]}번`)
+              .join(' · ')}
+          </div>
+        )}
       </div>
 
       {stats.foodKinds > 0 && (

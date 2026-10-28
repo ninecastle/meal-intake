@@ -298,7 +298,24 @@ await t('기록 3일 미만은 호출하지 않음', async () => {
   const s = W.computeWeekStats(MON, [meal(day(0), 'lunch', 500, [item('비빔밥')])], () => GOAL)
   await assert.rejects(W.generateReportText(s, { under18: false, meals: [] }), (e) => e.code === 'ANALYSIS_UNAVAILABLE' && e.reason === 'bad_request')
   assert.equal(W.REPORT_MIN_DAYS, 3)
-  assert.equal(W.PROMPT_VERSION_REPORT, 'r1')
+  assert.equal(W.PROMPT_VERSION_REPORT, 'r2') // r2: 공복 끼니 입력(2026-10-29)
+})
+
+await t('공복(2026-10-29): 기록 없는 끼니의 공복만 세고, 해시·AI 입력에 반영', () => {
+  const meals = [0, 1, 2].flatMap(perfectDay)
+  const base = W.computeWeekStats(MON, meals, () => GOAL)
+  assert.deepEqual(base.fastCount, { breakfast: 0, lunch: 0, dinner: 0, snack: 0 })
+  const lunchEaten = meals.some((m) => m.dateKey === day(0) && m.mealType === 'lunch')
+  const fasted = { [day(3)]: ['breakfast', 'dinner'], [day(4)]: ['breakfast'], [day(0)]: ['lunch'], '2026-10-30': ['breakfast'] }
+  const s = W.computeWeekStats(MON, meals, () => GOAL, fasted)
+  assert.equal(s.fastCount.breakfast, 2)
+  assert.equal(s.fastCount.dinner, 1)
+  assert.equal(s.fastCount.lunch, lunchEaten ? 0 : 1) // 기록이 있는 끼니의 공복 표시는 세지 않는다
+  assert.notEqual(s.inputHash, base.inputHash)
+  assert.equal(s.score, base.score) // 점수는 공복과 상관없음
+  const txt = W.buildReportUserText(s, { under18: false, meals })
+  assert.ok(txt.includes('공복') && txt.includes('아침 2번'))
+  assert.ok(!W.buildReportUserText(base, { under18: false, meals }).includes('공복'))
 })
 
 console.log(`weekly_report_test: ${pass} passed`)
