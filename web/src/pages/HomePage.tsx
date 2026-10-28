@@ -225,9 +225,9 @@ export default function HomePage({ user }: { user: User }) {
   // 다시 누르면 1.6초를 새로 센다(시안 toast()의 clearTimeout)
   const showSoon = () => setSoon(Date.now())
 
-  // 시안 render(): 화면이 바뀌면 .screen에 .enter(짧은 나타남)
+  // 시안 render(): 화면이 바뀌면 .screen에 .enter(짧은 나타남). .home = 띠 높이(사용자가 고른 변경 15, index.css)
   return (
-    <main className="screen enter">
+    <main className="screen enter home">
       <HomeDateBar dateKey={dateKey} today={today} />
 
       <DayBand
