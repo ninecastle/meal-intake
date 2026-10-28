@@ -3,8 +3,8 @@
 // 성별·나이, 활동량) / 기록(시안에 없는 묶음: 같이 먹은 사람 고르기) / 학교 / 사진 / 알림 / 기타(… 내 기록 전체 삭제, 로그아웃).
 // 아직 만들지 않은 기능의 줄(학교 등록 D13, 끼니 기록 알림 D15, 프리미엄, 사용방법 D11)은 시안처럼 보이고 누르면 "준비 중이에요"(스위치는 꺼진 채).
 // 처음 화면 다시 보기(/welcome)·약관·개인정보(/terms)는 D10에서 연결했다.
-// 사진(D9, 2026-10-28 사용자 확인 _workspace/design/mock/d9_4·5): 식사 사진 보관 켜기는 바로, 끄기는 "보관한 사진도 지울까요?"
-// 시트([남겨 두기]·[모두 지우기], X는 취소 = 켜진 채), 사진 전체 삭제는 확인 시트 뒤 deleteAllMealPhotos.
+// 사진(D9, 2026-10-28 사용자 확인 _workspace/design/mock/d9_5): 식사 사진 보관 켜기·끄기는 바로(끄면 앞으로 찍는 사진만 보관하지 않고
+// 보관한 사진은 남긴다, D10 때 사용자 결정으로 "보관한 사진도 지울까요?" 시트 없앰), 사진 전체 삭제는 확인 시트 뒤 deleteAllMealPhotos.
 // 목표가 없는 계정은 온보딩(D11) 전까지 내 목표 값이 "–"이고 누르면 목표 화면(/goal, 처음 목표 정하기)으로 간다.
 // 저장은 기다리지 않는다(오프라인이면 끝나지 않는다, 구독에는 바로 들어간다). 짧은 알림은 시안 토스트 1.6초.
 // 방문 기록: 홈 톱니에서 push(state.fromHome). ‹ = 홈에서 왔으면 navigate(-1), 아니면 홈으로 replace.
@@ -34,7 +34,7 @@ import { signOutAndClear } from '../lib/auth'
 import { clearFlash, peekFlash } from '../lib/flash'
 import { formatKg } from '../lib/weight'
 
-type SheetKey = 'kcal' | 'goal' | 'target' | 'hw' | 'sexage' | 'activity' | 'delete' | 'keepoff' | 'delphotos'
+type SheetKey = 'kcal' | 'goal' | 'target' | 'hw' | 'sexage' | 'activity' | 'delete' | 'delphotos'
 
 /** 시안 row(): span 이름 + small 값(또는 다른 오른쪽 내용) */
 function Row({ label, value, danger, disabled, onClick }: { label: string; value?: ReactNode; danger?: boolean; disabled?: boolean; onClick: () => void }) {
@@ -114,24 +114,9 @@ export default function SettingsPage({ user }: { user: User }) {
 
   function toggleKeep() {
     if (!prefs) return
-    if (prefs.keepPhotos === true) {
-      setSheet('keepoff')
-      return
-    }
-    setKeepPhotos(uid, true).catch(() => say('설정을 저장하지 못했어요'))
-    say('사진 보관을 켰어요')
-  }
-
-  /** 보관 끄기 시트: 둘 다 보관을 끄고, [모두 지우기]면 보관한 사진도 지운다 */
-  async function keepOff(wipe: boolean) {
-    if (deleting) return
-    setKeepPhotos(uid, false).catch(() => say('설정을 저장하지 못했어요'))
-    if (!wipe) {
-      setSheet(null)
-      say('사진 보관을 껐어요')
-      return
-    }
-    await wipePhotos()
+    const on = prefs.keepPhotos !== true
+    setKeepPhotos(uid, on).catch(() => say('설정을 저장하지 못했어요'))
+    say(on ? '사진 보관을 켰어요' : '사진 보관을 껐어요')
   }
 
   async function wipePhotos() {
@@ -285,17 +270,6 @@ export default function SettingsPage({ user }: { user: User }) {
             취소
           </button>
           <button type="button" className="btn ink" style={{ flex: 1 }} disabled={deleting} onClick={() => void deleteAll()}>
-            {deleting ? '지우는 중…' : '모두 지우기'}
-          </button>
-        </div>
-      </BottomSheet>
-      <BottomSheet open={sheet === 'keepoff'} onClose={() => !deleting && setSheet(null)} title="보관한 사진도 지울까요?">
-        <p style={{ color: 'var(--ink-2)', margin: '6px 0 0' }}>앞으로 찍는 사진은 보관하지 않아요. 이미 보관한 사진은 남겨 두거나 지울 수 있어요.</p>
-        <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-          <button type="button" className="btn ghost" style={{ flex: 1 }} disabled={deleting} onClick={() => void keepOff(false)}>
-            남겨 두기
-          </button>
-          <button type="button" className="btn ink" style={{ flex: 1 }} disabled={deleting} onClick={() => void keepOff(true)}>
             {deleting ? '지우는 중…' : '모두 지우기'}
           </button>
         </div>
