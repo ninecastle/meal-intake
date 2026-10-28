@@ -29,7 +29,8 @@ import { saveGoal, subscribeGoal, type StoredGoal } from '../data/goals'
 import { deleteAllMealPhotos } from '../data/mealPhotos'
 import { setKeepPhotos, setShareEaters, subscribePrefs, type Prefs } from '../data/prefs'
 import { deleteAllRecords } from '../data/records'
-import { setTargetWeight, subscribeWeightProfile, type WeightProfile } from '../data/weights'
+import { setTargetWeight, setWeight as saveWeightEntry, subscribeWeightProfile, type WeightProfile } from '../data/weights'
+import { toDateKey } from '../lib/time'
 import { signOutAndClear } from '../lib/auth'
 import { clearFlash, peekFlash } from '../lib/flash'
 import { formatKg } from '../lib/weight'
@@ -247,7 +248,17 @@ export default function SettingsPage({ user }: { user: User }) {
           />
           <GoalTypeSheet open={sheet === 'goal'} goal={g} onPick={(v: GoalType) => recalc({ goal: v }, '목표를 바꿨어요')} onClose={() => setSheet(null)} />
           <ActivitySheet open={sheet === 'activity'} goal={g} onPick={(v: Activity) => recalc({ activity: v })} onClose={() => setSheet(null)} />
-          <HeightWeightSheet open={sheet === 'hw'} goal={g} onSave={(input) => save(input, null, '목표를 다시 계산했어요')} onClose={() => setSheet(null)} />
+          <HeightWeightSheet
+            open={sheet === 'hw'}
+            goal={g}
+            onSave={(input) => {
+              // 몸무게를 바꾸면 오늘 체중 기록(나의 변화)도 그 값으로(사용자가 고른 변경 26, 하루 3kg 검사 없음)
+              if (input.weight_kg !== g.input.weight_kg)
+                saveWeightEntry(uid, toDateKey(new Date()), input.weight_kg).catch((e: unknown) => console.warn('[settings] 오늘 체중 저장 실패', e))
+              save(input, null, '목표를 다시 계산했어요')
+            }}
+            onClose={() => setSheet(null)}
+          />
           <SexAgeSheet open={sheet === 'sexage'} goal={g} onSave={(input) => save(input, null, '목표를 다시 계산했어요')} onClose={() => setSheet(null)} />
         </>
       )}
