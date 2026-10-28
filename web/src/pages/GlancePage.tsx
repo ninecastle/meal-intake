@@ -12,7 +12,7 @@ import { shortDateLabel, useDayData } from '../components/day/useDayData'
 import { formatDetail, homeHref, macroPct, MEAL_TYPE_LABEL, MEAL_TYPES } from '../components/mealText'
 import { IconButton, Mascot, MealArt, Toast } from '../components/ui'
 import type { MealType } from '../data/meals'
-import { foodName } from '../lib/foodName'
+import { foodName, isAllLeft } from '../lib/foodName'
 import { shareElementImage } from '../lib/share'
 
 /** 시안 meals[k].card(끼니 색) */
@@ -87,7 +87,7 @@ export default function GlancePage({ uid }: { uid: string }) {
   const itemsOf = (meal: MealType) =>
     (meals ?? [])
       .filter((m) => m.mealType === meal && m.analysis)
-      .flatMap((m) => m.analysis!.items.map((it) => ({ key: `${m.id}/${it.id}`, name: foodName(it.name), grams: Math.round(it.consumed_grams) })))
+      .flatMap((m) => m.analysis!.items.filter((it) => !isAllLeft(it)).map((it) => ({ key: `${m.id}/${it.id}`, name: foodName(it.name), grams: Math.round(it.consumed_grams) })))
 
   const day = (
     <div className="gcard" ref={cardRef}>

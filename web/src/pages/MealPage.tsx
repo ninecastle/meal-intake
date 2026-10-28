@@ -31,8 +31,8 @@ import { afterTarget, useAfterFlow, type ReviewEntry } from '../components/meal/
 import { useBeforeFlow } from '../components/meal/useBeforeFlow'
 import { useKeepPhotosAsk } from '../components/meal/KeepPhotosAsk'
 import { formatGrams, homeHref, isDateKey, macroPct, MEAL_TYPE_LABEL, MEAL_TYPES, sourceLabel } from '../components/mealText'
-import { foodName, representativeFood } from '../lib/foodName'
-import { Icon, IconButton, MealArt, Toast } from '../components/ui'
+import { foodName, isAllLeft, representativeFood } from '../lib/foodName'
+import { IconButton, MealArt, Toast } from '../components/ui'
 import { deleteMeal, saveMeal, subscribeMealsFor, type MealType, type MealWithId } from '../data/meals'
 import { sumDetail } from '../data/summary'
 import { setMealTime, subscribeMealTimes, toHm, type MealTimes } from '../data/mealTimes'
@@ -292,10 +292,13 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
   const groups: Group[] = []
   for (const m of meals ?? []) {
     if (m.status === 'done' && m.analysis) {
+      // 다 남긴 음식(남긴 비율 100%)은 줄을 숨긴다. 기록의 음식이 모두 그렇면 묶음도 숨긴다(사용자가 고른 변경 18, 수정 화면에는 그대로)
+      const shownItems = m.analysis.items.filter((it) => !isAllLeft(it))
+      if (shownItems.length === 0) continue
       groups.push({
         key: m.id,
         done: true,
-        rows: m.analysis.items.map((it) => ({
+        rows: shownItems.map((it) => ({
           key: `${m.id}/${it.id}`,
           name: foodName(it.name),
           src: sourceLabel(it),
@@ -363,9 +366,7 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
           <div className="art">
             <MealArt meal={meal} className="mico" size={110} style={{ width: 110, height: 110 }} />
           </div>
-          <button type="button" className="cam" aria-label="사진 찍기" onClick={openRecord}>
-            <Icon name="camera" bare />
-          </button>
+          {/* 위쪽 카메라 버튼(시안 .cam)은 없앤다 — 새 음식은 아래 [음식 추가](사용자가 고른 변경 19) */}
         </div>
         <div className="sheetbody pad">
           {(loadError || actionError) && (

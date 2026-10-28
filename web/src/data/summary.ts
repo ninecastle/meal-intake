@@ -1,5 +1,6 @@
 import type { DetailKey, MealIntakeAnalysis, Nutrients } from '../types/analysis'
 import type { MealType, MealWithId } from './meals'
+import { isAllLeft } from '../lib/foodName.ts'
 
 // 하루 요약(스펙 4.3절 summary.ts, 4.6절 하루 요약). 순수 함수: Firestore·브라우저 API를 쓰지 않는다.
 // 서버 집계(daily/*) 없이 그날 done 문서들의 analysis.totals.consumed를 클라이언트에서 더한다(CLAUDE.md).
@@ -135,7 +136,11 @@ export function summarizeDay(dateKey: string, meals: MealWithId[]): DaySummary {
       createdAt: toDate(m.createdAt),
       editedAt: toDate(m.editedAt),
       consumed,
-      itemNames: items.map((it) => (typeof it.name === 'string' ? it.name.trim() : '')).filter((s) => s.length > 0),
+      // 다 남긴 음식은 이름에서 뺀다(사용자가 고른 변경 18)
+      itemNames: items
+        .filter((it) => !isAllLeft(it))
+        .map((it) => (typeof it.name === 'string' ? it.name.trim() : ''))
+        .filter((s) => s.length > 0),
     })
   }
 

@@ -51,3 +51,11 @@ export function representativeFood(names: string[]): string {
   const main = shown.find((n) => !isPlainRice(n)) ?? shown[0]
   return `${main}${shown.length > 1 ? ` 외 ${shown.length - 1}개` : ''}`
 }
+
+/**
+ * 먹은 후까지 기록한 음식 가운데 다 남긴 것(남긴 비율 100%, 먹은 양 0)인지. 끼니 화면·홈 끼니 카드·한눈에 목록에서 숨긴다
+ * (2026-10-28 사용자가 고른 변경 (18). 원래 칼로리가 0인 음식은 남긴 비율이 100%가 아니면 그대로 보인다). 수정 화면에는 그대로 있다.
+ */
+export function isAllLeft(it: { remaining_ratio?: number | null }): boolean {
+  return (it.remaining_ratio ?? 0) >= 1
+}
