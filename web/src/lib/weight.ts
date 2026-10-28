@@ -67,3 +67,30 @@ export function shouldAskRecalc(goalKg: number, latestKg: number, skipKg: number
   if (Math.abs(tenths(latestKg) - tenths(goalKg)) < RECALC_DIFF_KG * 10) return false
   return skipKg === null || Math.abs(tenths(latestKg) - tenths(skipKg)) >= RECALC_SKIP_KG * 10
 }
+
+/** 하루에 바뀔 수 있는 체중 한도(2026-10-28 사용자 결정: 하루 3kg 넘게 바뀐 기록은 저장하지 않는다. 설정 몸무게는 막지 않음) */
+export const MAX_DAILY_KG = 3
+
+/** 두 dateKey("YYYY-MM-DD") 사이 날수(절댓값) */
+function daysApart(a: string, b: string): number {
+  const t = (k: string) => Date.UTC(Number(k.slice(0, 4)), Number(k.slice(5, 7)) - 1, Number(k.slice(8, 10)))
+  return Math.round(Math.abs(t(a) - t(b)) / 864e5)
+}
+
+/**
+ * 체중 기록이 바로 앞·뒤 기록과 "3kg × 떨어진 날수"보다 많이 다르면 그 기록과 허용 폭을 돌려준다(앞 기록 먼저). 괜찮으면 null.
+ * 앞뒤 기록이 없으면 30~250kg 범위만 본다(parseKg).
+ */
+export function weightJump(
+  kg: number,
+  dateKey: string,
+  before: { dateKey: string; kg: number } | null,
+  after: { dateKey: string; kg: number } | null,
+): { ref: { dateKey: string; kg: number }; limitKg: number } | null {
+  for (const ref of [before, after]) {
+    if (!ref || ref.dateKey === dateKey) continue
+    const limitKg = MAX_DAILY_KG * daysApart(ref.dateKey, dateKey)
+    if (Math.abs(tenths(kg) - tenths(ref.kg)) > limitKg * 10) return { ref, limitKg }
+  }
+  return null
+}

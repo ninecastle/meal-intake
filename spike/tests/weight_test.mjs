@@ -60,4 +60,17 @@ eq(W.shouldAskRecalc(58.4, 57.4, 56.4), false) // 1kg 다시 늘었지만 목표
 eq(W.shouldAskRecalc(58.4, 61.4, 60.4), true)
 eq(W.weightGap(58.4, 54), 4.4)
 eq(W.weightGap(58.4, 56.4), 2)
+// weightJump: 하루 3kg × 떨어진 날수(앞·뒤 기록), 경계는 0.1kg 정수로(2026-10-28 사용자 결정)
+const P = { dateKey: '2026-10-27', kg: 58 }
+eq(W.weightJump(61, '2026-10-28', P, null), null)
+eq(W.weightJump(55, '2026-10-28', P, null), null)
+eq(W.weightJump(61.1, '2026-10-28', P, null), { ref: P, limitKg: 3 })
+eq(W.weightJump(54.9, '2026-10-28', P, null), { ref: P, limitKg: 3 })
+eq(W.weightJump(70, '2026-11-01', P, null), null) // 5일 → ±15
+eq(W.weightJump(73.1, '2026-11-01', P, null), { ref: P, limitKg: 15 })
+const N = { dateKey: '2026-10-29', kg: 58 }
+eq(W.weightJump(62, '2026-10-28', null, N), { ref: N, limitKg: 3 }) // 뒤 기록과도 비교
+eq(W.weightJump(62, '2026-10-28', null, null), null)
+eq(W.weightJump(70, '2026-10-27', P, null), null) // 같은 날 기록은 비교하지 않음
+eq(W.weightJump(61.1, '2026-11-28', { dateKey: '2026-10-31', kg: 58 }, null), null) // 달 넘김 28일
 console.log(`weight_test: ${n}개 통과`)

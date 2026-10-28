@@ -13,12 +13,13 @@ import {
   setWeight,
   subscribeLatestWeight,
   subscribeWeight,
+  subscribeWeightAfter,
   subscribeWeightBefore,
   subscribeWeightProfile,
   type WeightEntry,
   type WeightProfile,
 } from '../../data/weights'
-import { deltaText, formatKg, goalTagText, shouldAskRecalc } from '../../lib/weight'
+import { deltaText, formatKg, goalTagText, shouldAskRecalc, weightJump } from '../../lib/weight'
 import { shortDateLabel } from '../day/useDayData'
 import { Band } from '../ui'
 import { KgSheet, RecalcSheet, type RecalcView } from './WeightSheets'
@@ -41,6 +42,7 @@ export default function ChangeBand({
 }) {
   const [entry, setEntry] = useState<Keyed<WeightEntry | null> | null>(null)
   const [prev, setPrev] = useState<Keyed<WeightEntry | null> | null>(null)
+  const [next, setNext] = useState<Keyed<WeightEntry | null> | null>(null)
   const [latest, setLatest] = useState<WeightEntry | null>(null)
   const [profile, setProfile] = useState<WeightProfile>({ targetKg: null, skipKg: null })
   const [sheet, setSheet] = useState(false)
@@ -48,12 +50,14 @@ export default function ChangeBand({
 
   useEffect(() => subscribeWeight(uid, dateKey, (e) => setEntry({ forDate: dateKey, value: e })), [uid, dateKey])
   useEffect(() => subscribeWeightBefore(uid, dateKey, (e) => setPrev({ forDate: dateKey, value: e })), [uid, dateKey])
+  useEffect(() => subscribeWeightAfter(uid, dateKey, (e) => setNext({ forDate: dateKey, value: e })), [uid, dateKey])
   useEffect(() => subscribeLatestWeight(uid, today, setLatest), [uid, today])
   useEffect(() => subscribeWeightProfile(uid, setProfile), [uid])
 
   // 날짜를 옮긴 직후에는 이전 날짜 값을 보이지 않는다
   const cur = entry?.forDate === dateKey ? entry.value : null
   const before = prev?.forDate === dateKey ? prev.value : null
+  const after = next?.forDate === dateKey ? next.value : null
   const isToday = dateKey === today
 
   function save(kg: number) {
@@ -146,6 +150,13 @@ export default function ChangeBand({
           )
         }
         deleteLabel={cur ? '기록 지우기' : undefined}
+        check={(kg) => {
+          // 하루 3kg 넘게 바뀐 기록은 저장하지 않는다(사용자 결정). 앞·뒤 기록 × 떨어진 날수
+          const j = weightJump(kg, dateKey, before, after)
+          return j
+            ? `${shortDateLabel(j.ref.dateKey)} 기록(${formatKg(j.ref.kg)}kg)보다 ${j.limitKg}kg 넘게 달라요. 하루에 3kg 넘게 바뀌기는 어려워요`
+            : null
+        }}
         onSave={save}
         onDelete={remove}
       />

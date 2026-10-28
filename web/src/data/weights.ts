@@ -58,6 +58,16 @@ function subscribeNearest(uid: string, dateKey: string, before: boolean, onData:
 export const subscribeWeightBefore = (uid: string, dateKey: string, onData: (e: WeightEntry | null) => void) =>
   subscribeNearest(uid, dateKey, true, onData)
 
+/** 그 날짜 뒤 가장 가까운 체중(하루 3kg 검사, 지난 날짜에 끼워 넣을 때). 없으면 null */
+export function subscribeWeightAfter(uid: string, dateKey: string, onData: (e: WeightEntry | null) => void): () => void {
+  const q = query(weightsCol(uid), where('dateKey', '>', dateKey), orderBy('dateKey', 'asc'), limit(1))
+  return onSnapshot(
+    q,
+    (s) => onData(readEntry(s.docs[0]?.data())),
+    (e) => console.warn('[weights] 다음 기록 구독 오류', e),
+  )
+}
+
 /** "최근 기록": 그 날짜(오늘)까지 가장 최근 체중 */
 export const subscribeLatestWeight = (uid: string, upToKey: string, onData: (e: WeightEntry | null) => void) =>
   subscribeNearest(uid, upToKey, false, onData)

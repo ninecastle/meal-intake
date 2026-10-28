@@ -20,6 +20,8 @@ export function KgSheet(props: {
   hint?: ReactNode
   /** 있으면 주황 글자 버튼(기록 지우기·목표 지우기) */
   deleteLabel?: string
+  /** 있으면 저장 전 검사: 문구를 돌려주면 주황 글자로 보이고 [저장]을 막는다(체중 기록 하루 3kg) */
+  check?: (kg: number) => string | null
   onSave: (kg: number) => void
   onDelete?: () => void
 }) {
@@ -30,11 +32,12 @@ export function KgSheet(props: {
   )
 }
 
-function KgForm({ sub, value, hint, deleteLabel, onSave, onDelete }: Parameters<typeof KgSheet>[0]) {
+function KgForm({ sub, value, hint, deleteLabel, check, onSave, onDelete }: Parameters<typeof KgSheet>[0]) {
   const [raw, setRaw] = useState(value === null ? '' : formatKg(value))
   const kg = parseKg(raw)
   const wrong = kgInputLooksWrong(raw)
-  const save = () => kg !== null && onSave(kg)
+  const problem = kg !== null && check ? check(kg) : null
+  const save = () => kg !== null && !problem && onSave(kg)
   return (
     <>
       <p style={{ color: 'var(--ink-2)', margin: '6px 0 0' }}>{sub}</p>
@@ -46,7 +49,7 @@ function KgForm({ sub, value, hint, deleteLabel, onSave, onDelete }: Parameters<
           enterKeyHint="done"
           placeholder="58.0"
           aria-label="kg"
-          aria-invalid={wrong || undefined}
+          aria-invalid={wrong || !!problem || undefined}
           className="num"
           value={raw}
           onChange={(e) => setRaw(e.target.value.replace(/[^0-9.,]/g, '').slice(0, 6))}
@@ -64,10 +67,14 @@ function KgForm({ sub, value, hint, deleteLabel, onSave, onDelete }: Parameters<
         <p role="alert" style={{ fontSize: 14, color: 'var(--peach-deep)', margin: '10px 0 0' }}>
           {`${WEIGHT_MIN}~${WEIGHT_MAX}kg 사이로 적어 주세요`}
         </p>
+      ) : problem ? (
+        <p role="alert" style={{ fontSize: 14, color: 'var(--peach-deep)', margin: '10px 0 0' }}>
+          {problem}
+        </p>
       ) : (
         hint && <p style={{ fontSize: 14, color: 'var(--ink-3)', margin: '10px 0 0' }}>{hint}</p>
       )}
-      <button type="button" className="btn ink" style={{ width: '100%', marginTop: 18 }} disabled={kg === null} onClick={save}>
+      <button type="button" className="btn ink" style={{ width: '100%', marginTop: 18 }} disabled={kg === null || !!problem} onClick={save}>
         저장
       </button>
       {deleteLabel && onDelete && (
