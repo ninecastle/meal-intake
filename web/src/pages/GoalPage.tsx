@@ -24,7 +24,6 @@ import {
 } from '../analysis/goal'
 import { formatKcal } from '../components/mealText'
 import { GoalStoreError, saveGoal, subscribeGoal, type GoalStoreErrorCode, type StoredGoal } from '../data/goals'
-import { GOAL_DISCLAIMER } from '../components/settings/GoalSheets'
 import { setFlash } from '../lib/flash'
 import { Button, IconButton, TopBar } from '../components/ui'
 
@@ -437,8 +436,6 @@ export default function GoalPage({ uid }: { uid: string }) {
                 )}
               </section>
             </fieldset>
-
-            <p className="text-xs leading-relaxed text-ink-2">{GOAL_DISCLAIMER}</p>
           </main>
 
           <footer className="shrink-0 space-y-2 border-t border-line bg-surface px-4 pt-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">

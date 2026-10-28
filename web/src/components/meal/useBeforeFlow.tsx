@@ -3,7 +3,7 @@
 // → 그 끼니 먹은 시간이 비어 있으면 채움 → onDone. 사진 선택 1회 = 분석 1회, 자동 재호출 없음.
 // 날짜·끼니는 끼니 화면의 것으로 고정(2026-10-27 사용자 결정: 끼니 카드로 들어오면 카메라 사진도 그 날짜·끼니, EXIF로 끼니를 채우지 않음).
 // 먹은 시간(D3): 카메라는 찍은 시각(지금), 앨범 사진은 사진의 찍은 시각(EXIF, 없거나 미래면 지금). EXIF는 이 계산에만 쓰고 저장하지 않는다.
-// 사진 전송 고지(스펙 7.1 U4)를 아직 확인하지 않았으면 사진 버튼 전에 한 번 보인다(gate).
+// 사진 전송 고지는 처음 동의 화면으로 옮겨 여기서는 묻지 않는다(D10, 반복 안내 줄이기). gate는 분석 중 잠금만 한다.
 // 식사 사진 보관(D9): keepPhotos가 true면 awaiting_after 기록을 만든 뒤 같은 압축본으로 'before' 썸네일을 저장한다(기다리지 않음).
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { analyzeBefore } from '../../analysis/analyze'
@@ -17,14 +17,10 @@ import AnalyzingOverlay from '../capture/AnalyzingOverlay'
 import {
   describeAnalysisError,
   isAbortError,
-  PHOTO_NOTICE,
-  readNoticeAck,
-  writeNoticeAck,
   type ErrorView,
 } from '../capture/captureText'
 import type { PickSource } from '../capture/useCaptureSource'
 import { keepMealPhoto } from './KeepPhotosAsk'
-import { Button } from '../ui'
 
 export type BeforeFlow = {
   busy: boolean
@@ -33,10 +29,10 @@ export type BeforeFlow = {
   canRetry: boolean
   onPick: (file: File, source: PickSource) => void
   retry: () => void
-  /** 사진 버튼을 누르기 전에 끼운다(고지 확인 창) */
+  /** 사진 버튼을 누르기 전에 끼운다(분석 중이면 무시) */
   gate: (fn: () => void) => void
   clearError: () => void
-  /** 고지 확인 창·분석 중 덮개. 화면 아무 곳에 한 번 넣는다 */
+  /** 분석 중 덮개. 화면 아무 곳에 한 번 넣는다 */
   elements: ReactNode
 }
 
@@ -60,13 +56,11 @@ export function useBeforeFlow(opts: {
     onManualRef.current = opts.onManual
     keepRef.current = opts.keepPhotos
   })
-  const pendingRef = useRef<(() => void) | null>(null)
   const busyRef = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
   // 분당 한도 뒤 [다시 시도]용 압축본과 그 사진의 먹은 시각. 이 화면 메모리에만 둔다(누를 때만 다시 호출).
   const last = useRef<{ photo: Blob; takenAt: Date } | null>(null)
   const [busy, setBusy] = useState(false)
-  const [showNotice, setShowNotice] = useState(false)
   const [error, setError] = useState<ErrorView | null>(null)
   const [hasLast, setHasLast] = useState(false)
 
@@ -78,20 +72,7 @@ export function useBeforeFlow(opts: {
 
   function gate(fn: () => void) {
     if (busyRef.current) return
-    if (!readNoticeAck()) {
-      pendingRef.current = fn
-      setShowNotice(true)
-      return
-    }
     fn()
-  }
-
-  function acceptNotice() {
-    writeNoticeAck()
-    setShowNotice(false)
-    const fn = pendingRef.current
-    pendingRef.current = null
-    fn?.()
   }
 
   async function run(getPhoto: () => Promise<Blob>, getTakenAt: () => Promise<Date>) {
@@ -152,24 +133,6 @@ export function useBeforeFlow(opts: {
 
   const elements = (
     <>
-      {showNotice && (
-        <div role="dialog" aria-modal="true" className="fixed inset-0 z-40 flex items-end justify-center bg-ink/40 p-4">
-          <div className="w-full max-w-[430px] rounded-card bg-surface p-4">
-            <p>사진을 보내기 전에 알려 드려요</p>
-            <p className="mt-2 text-sm leading-relaxed text-ink">{PHOTO_NOTICE}</p>
-            <Button full type="button" onClick={acceptNotice} className="mt-4">
-              확인하고 찍기
-            </Button>
-            <button
-              type="button"
-              onClick={() => setShowNotice(false)}
-              className="focus-ring mt-1 flex min-h-11 w-full items-center justify-center text-sm text-ink-2"
-            >
-              닫기
-            </button>
-          </div>
-        </div>
-      )}
       {busy && <AnalyzingOverlay label="음식을 알아보고 있어요" manualLabel="직접 입력" onManual={manualFromOverlay} />}
     </>
   )

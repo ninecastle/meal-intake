@@ -156,7 +156,7 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
   useEffect(() => {
     if (loading) return
     if (!uid) {
-      navRef.current('/login', { replace: true })
+      navRef.current('/welcome', { replace: true })
       return
     }
     let live = true
@@ -221,7 +221,7 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
   const analysisJson = useMemo(() => (analysis ? JSON.stringify(analysis) : ''), [analysis])
   const check = useMemo(() => (analysis ? validateAnalysis(analysis) : null), [analysis])
   // Gemini 경고가 영어면 일반 안내로 바꾼다(예전에 저장·캐시된 분석도 여기서 걸러진다)
-  const warnings = useMemo(() => (analysis ? koreanWarnings(analysis.warnings) : []), [analysis])
+  const warnings = useMemo(() => (analysis ? koreanWarnings(analysis.warnings ?? []) : []), [analysis])
   const unpicked = analysis ? analysis.items.filter((it) => it.remaining_ratio === null).length : 0
   const dirty =
     phase.kind === 'ready' &&

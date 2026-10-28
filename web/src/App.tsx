@@ -1,15 +1,21 @@
-// 라우터(2단계 조각 4-A). 로그인 전이면 어느 경로든 /login으로 보내고, 로그인 뒤에는 원래 가려던 경로로 돌려보낸다.
+// 라우터(2단계 조각 4-A). 로그인 전이면 어느 경로든 소개(/welcome, 디자인 조각 D10)로 보내고, 로그인 뒤에는 원래 가려던 경로로 돌려보낸다.
+// 처음 동의(D10): 로그인했는데 지금 버전 동의가 없으면(기존 계정) 어느 경로든 /consent로 보낸다(동의하면 원래 가려던 곳).
+// 로그인 전 동의 화면에서 [동의하고 계속]을 눌렀으면 동의 초안(기기)이 있고, 로그인 뒤 Root가 계정에 저장한 뒤
+// 목표가 없으면 /goal(D11 목표 질문이 들어갈 자리), 있으면 원래 가려던 곳(기본 홈)으로 보낸다.
 // 데이터 라우터(createBrowserRouter)를 쓴다: 결과 화면의 useBlocker(브라우저 뒤로 가기 때 "저장하지 않고 나갈까요?")가
 // 데이터 라우터에서만 동작한다. 라우터는 한 번만 만들고, 로그인 상태는 컨텍스트로 넘겨 경로 가드에서 본다.
 import type { User } from 'firebase/auth'
-import { createContext, lazy, Suspense, useContext, type ReactNode } from 'react'
-import { createBrowserRouter, Navigate, Outlet, useLocation, type RouteObject } from 'react-router'
+import { createContext, lazy, Suspense, useContext, useEffect, useRef, type ReactNode } from 'react'
+import { createBrowserRouter, Navigate, Outlet, useLocation, useNavigate, type RouteObject } from 'react-router'
 import { RouterProvider } from 'react-router/dom'
 import RouteErrorScreen from './components/RouteErrorScreen'
 import ScrollMemory from './components/ScrollMemory'
+import { ConsentContext, safeFrom, useConsent, useConsentSubscription } from './components/terms/consentState'
+import { clearConsentDraft, hasCurrentConsent, readConsentDraft, saveConsent } from './data/consent'
+import { subscribeGoal } from './data/goals'
 import { useAuthUser } from './lib/auth'
 import HomePage from './pages/HomePage'
-import LoginPage from './pages/LoginPage'
+import WelcomePage from './pages/WelcomePage'
 
 // 촬영·결과 화면은 분석 모듈(Firebase AI)을 끌어오므로 첫 화면 번들에서 뺀다.
 // 끼니 화면(D3)이 먹기 전·후 촬영과 분석을 맡는다(예전 촬영 화면 S2·S3과 기록 상세 S7은 없애고 주소만 끼니 화면으로 보낸다).
@@ -25,6 +31,9 @@ const CalendarPage = lazy(() => import('./pages/CalendarPage'))
 const SettingsPage = lazy(() => import('./pages/SettingsPage'))
 // 식단 앨범(디자인 조각 D9). 홈 식사 띠 [식단 앨범](사진 보관을 켰을 때)에서 push(state.fromHome)
 const AlbumPage = lazy(() => import('./pages/AlbumPage'))
+// 처음 동의·설정 → 약관·개인정보(디자인 조각 D10)
+const ConsentPage = lazy(() => import('./pages/ConsentPage'))
+const TermsPage = lazy(() => import('./pages/TermsPage'))
 // 개발 빌드에서만 등록한다. 배포 빌드에서는 import.meta.env.DEV가 false로 바뀌어 이 import가 번들에서 빠진다.
 const DevPage = import.meta.env.DEV ? lazy(() => import('./pages/DevPage')) : null
 // 공통 부품 모음(조각 D1-a, /dev/ui). 개발 빌드에서만 등록하고, 사용자 데이터를 쓰지 않아 로그인 없이 연다.
@@ -48,7 +57,48 @@ function Loading() {
   return <main className="flex min-h-dvh items-center justify-center p-4 text-sm text-ink-2">불러오는 중…</main>
 }
 
+/**
+ * 로그인 전 동의 초안을 계정에 저장한다(로그인 직후 한 번). 저장한 동의가 구독에 보이면 초안을 지운다.
+ * 저장을 시작하면 목표 유무를 한 번 읽어 목표가 없으면 /goal, 있으면 원래 가려던 곳으로 보낸다.
+ */
+function useConsentDraftFlush() {
+  const user = useContext(UserContext)
+  const consent = useConsent()
+  const navigate = useNavigate()
+  const loc = useLocation()
+  const started = useRef<string | null>(null)
+  useEffect(() => {
+    if (!user || consent === undefined) return
+    if (hasCurrentConsent(consent)) {
+      // 이미 저장됨(쓰기 직후 캐시 포함) — 초안은 더 필요 없다
+      if (readConsentDraft()) clearConsentDraft()
+      return
+    }
+    const draft = readConsentDraft()
+    if (!draft || started.current === user.uid) return
+    started.current = user.uid
+    const to = safeFrom(loc.state)
+    saveConsent(user.uid, draft).catch((e: unknown) => console.warn('[consent] 저장 실패', e))
+    let done = false
+    const unsub = subscribeGoal(
+      user.uid,
+      (g) => {
+        if (done) return
+        done = true
+        queueMicrotask(() => unsub())
+        void navigate(g ? to : '/goal', { replace: true })
+      },
+      () => {
+        if (done) return
+        done = true
+        void navigate(to, { replace: true })
+      },
+    )
+  }, [user, consent, navigate, loc.state])
+}
+
 function Root() {
+  useConsentDraftFlush()
   return (
     <Frame>
       {/* 뒤로 가기로 돌아오면 보던 위치, 새 화면·홈 날짜 바꾸기는 맨 위(2026-10-27 사용자가 고른 변경) */}
@@ -63,17 +113,22 @@ function Root() {
 function RequireUser() {
   const user = useContext(UserContext)
   const loc = useLocation()
-  if (!user) return <Navigate to="/login" replace state={{ from: loc.pathname + loc.search }} />
+  const consent = useConsent()
+  if (!user) return <Navigate to="/welcome" replace state={{ from: loc.pathname + loc.search }} />
+  // 동의를 불러오는 중이거나, 로그인 전 동의 초안을 계정에 저장하는 중(Root가 다음 화면으로 보낸다)
+  if (consent === undefined || (!hasCurrentConsent(consent) && readConsentDraft())) return <Loading />
+  if (!hasCurrentConsent(consent)) return <Navigate to="/consent" replace state={{ from: loc.pathname + loc.search }} />
   return <Outlet />
 }
 
-function LoginRoute() {
-  const user = useContext(UserContext)
-  const from = (useLocation().state as { from?: unknown } | null)?.from
-  if (!user) return <LoginPage />
-  const to = typeof from === 'string' && from.startsWith('/') && !from.startsWith('/login') ? from : '/'
-  return <Navigate to={to} replace />
+/** 예전 로그인 주소는 소개로(가려던 곳은 그대로 넘긴다) */
+function LoginRedirect() {
+  return <Navigate to="/welcome" replace state={useLocation().state as unknown} />
 }
+
+const WelcomeRoute = () => <WelcomePage user={useContext(UserContext)} />
+const ConsentRoute = () => <ConsentPage user={useContext(UserContext)} />
+const TermsRoute = () => <TermsPage uid={useUser().uid} />
 
 const HomeRoute = () => <HomePage user={useUser()} />
 const MealRoute = () => <MealPage uid={useUser().uid} />
@@ -107,6 +162,8 @@ const userRoutes: RouteObject[] = [
   { path: '/settings', element: <SettingsRoute /> },
   // ?month=YYYY-MM&date=YYYY-MM-DD
   { path: '/album', element: <AlbumRoute /> },
+  // 설정 → 약관·개인정보(D10)
+  { path: '/terms', element: <TermsRoute /> },
   ...(DevPage ? [{ path: '/dev', element: <DevPage /> }] : []),
   { path: '*', element: <Navigate to="/" replace /> },
 ]
@@ -121,7 +178,10 @@ const router = createBrowserRouter([
       </Frame>
     ),
     children: [
-      { path: '/login', element: <LoginRoute /> },
+      { path: '/login', element: <LoginRedirect /> },
+      // 소개·처음 동의(D10): 로그인 없이 열린다(로그인 상태면 설정 "처음 화면 다시 보기"·기존 계정 동의)
+      { path: '/welcome', element: <WelcomeRoute /> },
+      { path: '/consent', element: <ConsentRoute /> },
       ...(UiGalleryPage ? [{ path: '/dev/ui', element: <UiGalleryPage /> }] : []),
       { element: <RequireUser />, children: userRoutes },
     ],
@@ -130,6 +190,7 @@ const router = createBrowserRouter([
 
 export default function App() {
   const { user, loading } = useAuthUser()
+  const consent = useConsentSubscription(user?.uid ?? null)
   if (loading)
     return (
       <Frame>
@@ -138,7 +199,9 @@ export default function App() {
     )
   return (
     <UserContext.Provider value={user}>
-      <RouterProvider router={router} />
+      <ConsentContext.Provider value={consent}>
+        <RouterProvider router={router} />
+      </ConsentContext.Provider>
     </UserContext.Provider>
   )
 }

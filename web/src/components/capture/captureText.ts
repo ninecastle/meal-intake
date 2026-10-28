@@ -1,29 +1,6 @@
-// 촬영 화면(S2·S3) 공용 문구: 사진 전송 고지(스펙 7.1 U4), 분석 오류 안내(스펙 4.4·5.1).
+// 촬영 화면(S2·S3) 공용 문구: 분석 오류 안내(스펙 4.4·5.1). 사진 전송 고지는 처음 동의 화면·설정 약관으로 옮겼다(D10).
 import { AnalysisError } from '../../analysis/errors'
 import { toDateKey } from '../../lib/time'
-
-/** 스펙 7.1 U4 문구 그대로. 첫 촬영 전 1회 확인 + 촬영 화면에 늘 보인다. */
-export const PHOTO_NOTICE =
-  '사진 보관은 선택이에요. 켜면 작은 사진만 기록과 함께 저장하고 언제든 지울 수 있어요. 분석을 위해 Google Gemini로 보내며, 무료 등급 약관에 따라 Google이 서비스 개선에 쓸 수 있어요. 얼굴이나 개인정보가 나오지 않게 찍어 주세요.'
-
-/** 확인 여부만 기록한다(사진은 넣지 않는다). */
-const NOTICE_ACK_KEY = 'photoNoticeAck.v1'
-
-export function readNoticeAck(): boolean {
-  try {
-    return localStorage.getItem(NOTICE_ACK_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-
-export function writeNoticeAck(): void {
-  try {
-    localStorage.setItem(NOTICE_ACK_KEY, '1')
-  } catch {
-    // 저장하지 못해도 이번 촬영은 진행한다(다음에 한 번 더 묻는다).
-  }
-}
 
 export function isAbortError(e: unknown): boolean {
   return typeof e === 'object' && e !== null && (e as { name?: unknown }).name === 'AbortError'

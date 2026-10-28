@@ -18,6 +18,8 @@ rules_version = '2';
 // - v8(디자인 조각 D9, 2026-10-28): 식사 사진 보관 users/{uid}/mealPhotos/{mealId}(스펙 4.12절, 선택·기본 꺼짐).
 //   먹기 전·후 JPEG 썸네일 bytes(장당 100KB 이하)와 w·h(1~1000)만. 식사 기록(meals)과 분리, 본인만 읽기·쓰기·삭제.
 //   설정 prefs.keepPhotos(bool, 없으면 아직 묻지 않음 = 꺼짐).
+// - v9(디자인 조각 D10, 2026-10-28): 처음 동의 users/{uid}.consent { version(1~20자), agreedAt, required: true, photoKeep, school }(스펙 4.10절).
+//   consent를 바꾸는 쓰기에서만 agreedAt == request.time. 목표·설정만 병합하면 저장된 consent는 다시 검사하지 않는다. consent 삭제는 거부.
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -171,10 +173,39 @@ service cloud.firestore {
         && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['goal']);
     }
 
+    // 처음 동의(v9): 다섯 키 모두, 필수 동의는 true만. agreedAt은 이번 요청 시각(serverTimestamp).
+    // 쓰기는 saveConsent: setDoc(userRef, {consent, prefs: {keepPhotos}}, {merge: true}).
+    function validConsent(c) {
+      return c is map
+        && c.keys().hasOnly(['version', 'agreedAt', 'required', 'photoKeep', 'school'])
+        && c.keys().hasAll(['version', 'agreedAt', 'required', 'photoKeep', 'school'])
+        && c.version is string && c.version.size() >= 1 && c.version.size() <= 20
+        && c.required == true
+        && c.photoKeep is bool
+        && c.school is bool
+        && c.agreedAt is timestamp
+        && c.agreedAt == request.time;
+    }
+
+    // goalUntouched와 같은 이유: 저장된 consent.agreedAt은 다음 쓰기의 request.time과 다르다.
+    function consentUntouched() {
+      return resource != null
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['consent']);
+    }
+
+    // 있던 consent를 없애는 쓰기(deleteField 등) 거부
+    function consentKept() {
+      return resource == null
+        || !('consent' in resource.data)
+        || ('consent' in request.resource.data);
+    }
+
     match /users/{uid} {
       allow read: if signedInAs(uid);
       allow create, update: if signedInAs(uid)
-        && request.resource.data.keys().hasOnly(['goal', 'prefs', 'targetWeightKg'])
+        && request.resource.data.keys().hasOnly(['goal', 'prefs', 'targetWeightKg', 'consent'])
+        && consentKept()
+        && (!('consent' in request.resource.data) || consentUntouched() || validConsent(request.resource.data.consent))
         && (!('goal' in request.resource.data) || goalUntouched() || validGoal(request.resource.data.goal))
         && (!('prefs' in request.resource.data) || validPrefs(request.resource.data.prefs))
         && (!('targetWeightKg' in request.resource.data) || validKg(request.resource.data.targetWeightKg));

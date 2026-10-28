@@ -1,8 +1,8 @@
 // 설정(디자인 조각 D8, 시안 settings() 마크업·클래스 그대로, 2026-10-28 사용자 확인 _workspace/design/mock/d8_1~7).
 // div.screen > .topbar.sticky(‹ "설정") → .pad.slist: 계정(구글 이메일) / 내 목표(목표 칼로리·탄단지, 목표, 목표 몸무게, 키·몸무게 + 시안에 없는
 // 성별·나이, 활동량) / 기록(시안에 없는 묶음: 같이 먹은 사람 고르기) / 학교 / 사진 / 알림 / 기타(… 내 기록 전체 삭제, 로그아웃).
-// 아직 만들지 않은 기능의 줄(학교 등록 D13, 끼니 기록 알림 D15, 프리미엄, 사용방법 D11,
-// 처음 화면 다시 보기·약관·개인정보 D10)은 시안처럼 보이고 누르면 "준비 중이에요"(스위치는 꺼진 채).
+// 아직 만들지 않은 기능의 줄(학교 등록 D13, 끼니 기록 알림 D15, 프리미엄, 사용방법 D11)은 시안처럼 보이고 누르면 "준비 중이에요"(스위치는 꺼진 채).
+// 처음 화면 다시 보기(/welcome)·약관·개인정보(/terms)는 D10에서 연결했다.
 // 사진(D9, 2026-10-28 사용자 확인 _workspace/design/mock/d9_4·5): 식사 사진 보관 켜기는 바로, 끄기는 "보관한 사진도 지울까요?"
 // 시트([남겨 두기]·[모두 지우기], X는 취소 = 켜진 채), 사진 전체 삭제는 확인 시트 뒤 deleteAllMealPhotos.
 // 목표가 없는 계정은 온보딩(D11) 전까지 내 목표 값이 "–"이고 누르면 목표 화면(/goal, 처음 목표 정하기)으로 간다.
@@ -239,8 +239,9 @@ export default function SettingsPage({ user }: { user: User }) {
         <div className="sgroup">기타</div>
         <Row label="프리미엄" value={<Crown />} onClick={soon} />
         <Row label="사용방법" onClick={soon} />
-        <Row label="처음 화면 다시 보기" onClick={soon} />
-        <Row label="약관·개인정보" onClick={soon} />
+        {/* D10: 처음 화면(소개)은 로그인 상태로, 약관·개인정보는 /terms */}
+        <Row label="처음 화면 다시 보기" onClick={() => void navigate('/welcome')} />
+        <Row label="약관·개인정보" onClick={() => void navigate('/terms', { state: { fromSettings: true } })} />
         <Row label="내 기록 전체 삭제" value="" danger onClick={() => setSheet('delete')} />
         <Row label="로그아웃" value="" disabled={loggingOut} onClick={() => void logout()} />
         {import.meta.env.DEV && (

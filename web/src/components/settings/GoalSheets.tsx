@@ -1,7 +1,7 @@
 // 설정 "내 목표" 아래 시트들(디자인 조각 D8, 2026-10-28 사용자 확인, _workspace/design/mock/d8_2~6).
 // - 목표 칼로리·탄단지: 시안 sheets.kcal + kcalEditor 그대로(.kedit·.krow·.kstep·.kval·.kmeta·.kcust·.kinfo·.macro3·.kwhy).
 //   사용자가 고른 변경: 탄·단·지 g도 눌러 직접 바꾸고 그때 칼로리는 세 값의 합(lib/goalEdit). 시안처럼 X도 [저장]과 같다(바꾼 값이 맞으면 저장).
-//   "의학적 조언이 아니에요"는 처음 동의 화면(D10) 전까지 시트 아래 작은 글씨.
+//   "의학적 조언이 아니에요"는 처음 동의 화면·설정 약관으로 옮겨 시트에는 두지 않는다(D10, 반복 안내 줄이기).
 // - 목표: 시안 sheets.goaltype 그대로(고르면 바로 저장). 활동량: 같은 모양에 시안 온보딩 질문의 활동량 .opt 5개.
 // - 키·몸무게, 성별·나이: 시안 온보딩 질문 부품(.field 큰 숫자 칸, .opts.two)에 [저장], 하루 목표 전 → 후 미리보기(체중 다시 계산 안내와 같은 .callout).
 // 신체 정보·목표를 바꾸면 추천값으로 다시 계산한다(직접 정한 값이 있으면 "추천값으로 바뀌어요" 안내). 저장은 부르는 화면(SettingsPage)이 한다.
@@ -48,8 +48,6 @@ const WHY: Record<GoalType, string> = {
   maintain: '유지 목표라 탄·단·지를 고르게 나눴어요',
   gain: '증량 목표라 탄수화물을 넉넉하게 잡았어요',
 }
-export const GOAL_DISCLAIMER =
-  '이 목표는 일반 공식(Mifflin-St Jeor)으로 계산한 참고값이며 의학적 조언이 아니에요. 질환이 있거나 임신·수유 중이면 전문가와 상의하세요.'
 const MINOR_MSG = '성장기에는 감량·증량보다 고르게 잘 먹는 것이 중요해요. 목표는 유지 기준으로 보여 드려요.'
 const RECALC_HELP = '바꾸면 하루 추천 칼로리와 탄·단·지도 다시 계산해요'
 const CUSTOM_NOTE = '직접 정한 목표 칼로리·탄단지는 추천값으로 바뀌어요'
@@ -165,7 +163,6 @@ function KcalForm({ goal, onSave, onClose }: { goal: StoredGoal; onSave: (o: Goa
           <p className="kwhy">{WHY[result.goal_applied]}</p>
         </div>
       </div>
-      <p style={{ margin: '14px 0 0', fontSize: 13, color: 'var(--ink-3)', textAlign: 'center' }}>{GOAL_DISCLAIMER}</p>
       <button type="button" className="btn ink" style={{ width: '100%', marginTop: 16 }} disabled={errors.length > 0} onClick={close}>
         저장
       </button>

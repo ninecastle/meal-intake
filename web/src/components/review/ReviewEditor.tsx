@@ -2,7 +2,7 @@
 // 계산은 모두 analysis/compute.ts 함수로 한다(화면에서 공식을 다시 구현하지 않는다). 사진은 다시 분석하지 않는다.
 // 규칙: 스펙 2.3절 표, CLAUDE.md "결과 수정 규칙".
 // 모양(디자인 조각 D3-2, 사용자 확인 d32_4_review·d32_5_manual): 시안 .mtotal(총 kcal · 먹기 전 kcal) → .stack·.legend 탄단지 →
-// notice(확인할 점, 부르는 화면이 줌) → 음식 카드 → [+ 음식 추가](.btn ghost) → 출처 한 줄. 음식이 없으면 "어떤 음식을 먹었나요?" + 이름 찾기.
+// notice(확인할 점, 부르는 화면이 줌) → 음식 카드 → [+ 음식 추가](.btn ghost). 식약처 출처 한 줄은 설정 약관으로 옮겼다(D10). 음식이 없으면 "어떤 음식을 먹었나요?" + 이름 찾기.
 // 지운 음식 되돌리기는 시안 토스트 모양(.toast) 알약에 [되돌리기].
 import { foodName } from '../../lib/foodName'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
@@ -308,10 +308,6 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
             되돌리기
           </button>
         </div>
-      )}
-
-      {shown.length > 0 && (
-        <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: '14px 0 0' }}>영양 정보: 식품의약품안전처 식품영양성분 DB(2026-10-06 갱신본)</p>
       )}
     </>
   )

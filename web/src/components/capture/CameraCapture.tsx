@@ -14,7 +14,6 @@ import {
   type CameraFailReason,
   type Facing,
 } from '../../lib/cameraSupport'
-import { PHOTO_NOTICE } from './captureText'
 
 export type CameraCaptureProps = {
   title: string
@@ -275,8 +274,6 @@ export default function CameraCapture({ title, hint, onShot, onAlbum, onClose, o
         >
           {showOverlay ? OVERLAY_HINT : hint}
         </p>
-        {/* 사진 전송 고지(스펙 7.1 U4)는 촬영 화면에 늘 보인다 */}
-        <p className="mx-auto mt-1.5 max-w-md px-1 text-center text-[11px] leading-snug text-white/75">{PHOTO_NOTICE}</p>
       </div>
 
       {/* 셔터 줄: 세로 = 아래 가로줄(사진첩 · 셔터 · 전환), 가로 = 오른쪽 세로줄(위 전환 · 셔터 · 아래 사진첩) */}

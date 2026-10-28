@@ -1,4 +1,4 @@
-// firestore.rules v8 테스트(@firebase/rules-unit-testing + node:test).
+// firestore.rules v9 테스트(@firebase/rules-unit-testing + node:test).
 // 실행: firestore-tests 폴더에서 `npm test` (Firestore 에뮬레이터를 띄워 실행, JDK 21+ 필요, firebase-tools 15 기준).
 // 이미 에뮬레이터가 떠 있으면 `npm run test:running`.
 // 실제 프로젝트는 건드리지 않는다(demo- 프로젝트 ID). AI 호출 없음.
@@ -917,5 +917,97 @@ describe('식사 사진 보관(users/{uid}/mealPhotos/{mealId}, prefs.keepPhotos
     }
     await assertFails(setDoc(doc(alice(), USER), { prefs: { keepPhotoz: true } }, { merge: true }))
     await assertFails(setDoc(doc(db('bob'), USER), { prefs: { keepPhotos: true } }, { merge: true }))
+  })
+})
+
+describe('처음 동의(users/{uid}.consent, 규칙 v9, 디자인 조각 D10)', () => {
+  const USER = 'users/alice'
+  const consent = (extra = {}) => ({
+    version: '2026-10-28', agreedAt: serverTimestamp(), required: true, photoKeep: false, school: false, ...extra,
+  })
+  /** saveConsent와 같은 모양 */
+  const save = (fs, c = consent(), keepPhotos = c.photoKeep) =>
+    setDoc(doc(fs, USER), { consent: c, prefs: { keepPhotos } }, { merge: true })
+  const stored = () => ({
+    version: '2026-10-28', agreedAt: Timestamp.fromDate(new Date('2026-10-28T03:00:00Z')),
+    required: true, photoKeep: true, school: false,
+  })
+  const goal = () => ({
+    input: { sex: 'female', age: 25, height_cm: 160, weight_kg: 55, activity: 'light', goal: 'maintain' },
+    override: null,
+    result: { bmr: 1300, tdee: 1790, target_kcal: 1790 },
+    targets: { target_kcal: 1790, carbs_g: 246, protein_g: 90, fat_g: 50, source: 'recommended' },
+    updatedAt: serverTimestamp(),
+  })
+
+  test('정상 저장(새 문서·기존 prefs 문서·다시 동의)과 읽기 허용', async () => {
+    await assertSucceeds(save(alice(), consent({ photoKeep: true, school: true })))
+    const c = (await assertSucceeds(getDoc(doc(alice(), USER)))).data()
+    assert.equal(c.consent.required, true)
+    assert.equal(c.prefs.keepPhotos, true)
+    await assertSucceeds(save(alice(), consent({ version: '2026-11-01' })))
+    await seed('users/carol', { prefs: { shareEaters: true } })
+    await assertSucceeds(setDoc(doc(db('carol'), 'users/carol'), { consent: consent(), prefs: { keepPhotos: false } }, { merge: true }))
+  })
+
+  test('키 빠짐·키 더함 거부', async () => {
+    for (const k of ['version', 'agreedAt', 'required', 'photoKeep', 'school']) {
+      const c = consent()
+      delete c[k]
+      await assertFails(save(alice(), c, false))
+    }
+    await assertFails(save(alice(), consent({ photo: 'data:image/jpeg;base64,AAAA' })))
+    await assertFails(save(alice(), consent({ marketing: true })))
+  })
+
+  test('required가 true가 아니면 거부, photoKeep·school은 bool만', async () => {
+    for (const v of [false, 'true', 1, null]) await assertFails(save(alice(), consent({ required: v })))
+    for (const v of ['yes', 1, null]) {
+      await assertFails(save(alice(), consent({ photoKeep: v }), false))
+      await assertFails(save(alice(), consent({ school: v })))
+    }
+  })
+
+  test('version 형식: 1~20자 문자열만', async () => {
+    await assertSucceeds(save(alice(), consent({ version: 'v' })))
+    await assertSucceeds(save(alice(), consent({ version: 'x'.repeat(20) })))
+    for (const v of ['', 'x'.repeat(21), 20261028, null, ['2026-10-28']]) {
+      await assertFails(save(alice(), consent({ version: v })))
+    }
+  })
+
+  test('agreedAt이 이번 요청 시각이 아니면 거부(지난 시각·문자열)', async () => {
+    await assertFails(save(alice(), consent({ agreedAt: Timestamp.fromDate(new Date('2026-10-28T03:00:00Z')) })))
+    await assertFails(save(alice(), consent({ agreedAt: '2026-10-28T03:00:00Z' })))
+    // 저장된 consent의 한 칸만 바꾸면서 agreedAt을 그대로 두는 것도 거부
+    await seed(USER, { consent: stored() })
+    await assertFails(updateDoc(doc(alice(), USER), { 'consent.school': true }))
+  })
+
+  test('다른 uid·미로그인: 쓰기·읽기 거부', async () => {
+    await seed(USER, { consent: stored() })
+    for (const fs of [db('bob'), db(null)]) {
+      await assertFails(save(fs))
+      await assertFails(getDoc(doc(fs, USER)))
+    }
+  })
+
+  test('consent 있는 문서에 prefs·goal·targetWeightKg만 병합하면 허용(consent 그대로)', async () => {
+    await seed(USER, { consent: stored(), prefs: { keepPhotos: true } })
+    await assertSucceeds(setDoc(doc(alice(), USER), { prefs: { shareEaters: true } }, { merge: true }))
+    await assertSucceeds(setDoc(doc(alice(), USER), { goal: goal() }, { mergeFields: ['goal'] }))
+    await assertSucceeds(setDoc(doc(alice(), USER), { targetWeightKg: 52 }, { merge: true }))
+    const d = (await getDoc(doc(alice(), USER))).data()
+    assert.deepEqual(d.consent, stored())
+    assert.deepEqual(d.prefs, { keepPhotos: true, shareEaters: true })
+  })
+
+  test('consent 지우기 거부(deleteField·덮어쓰기), 동의 없는 문서는 그대로 허용', async () => {
+    await seed(USER, { consent: stored(), prefs: { keepPhotos: true } })
+    await assertFails(updateDoc(doc(alice(), USER), { consent: deleteField() }))
+    await assertFails(setDoc(doc(alice(), USER), { prefs: { keepPhotos: false } }))
+    await assertFails(deleteDoc(doc(alice(), USER)))
+    await seed('users/carol', { prefs: { shareEaters: true } })
+    await assertSucceeds(setDoc(doc(db('carol'), 'users/carol'), { prefs: { shareEaters: false } }))
   })
 })
