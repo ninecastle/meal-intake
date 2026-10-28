@@ -68,7 +68,7 @@ function useAutoHide(ref: RefObject<HTMLElement | null>): [boolean, () => void] 
   return [hidden, () => setHidden(false)]
 }
 
-/** 흰 줄 높이를 부모(main.home)에 적는다: --home-head = 아이콘 줄 + 날짜 줄, --home-strip = 날짜 줄, --home-top = 아이콘 줄(숨길 때 올리는 만큼). 글자 크기가 바뀌면 다시 잰다 */
+/** 흰 줄 높이를 부모(main.home)에 적는다: --home-head = 아이콘 줄 + 날짜 줄(띠 높이 기준), --home-top = 아이콘 줄(숨길 때 올리는 만큼). 글자 크기가 바뀌면 다시 잰다 */
 function useBarHeights(bar: RefObject<HTMLElement | null>, strip: RefObject<HTMLElement | null>) {
   useLayoutEffect(() => {
     const el = bar.current
@@ -77,7 +77,6 @@ function useBarHeights(bar: RefObject<HTMLElement | null>, strip: RefObject<HTML
     if (!el || !st || !host) return
     const put = () => {
       host.style.setProperty('--home-head', `${el.offsetHeight}px`)
-      host.style.setProperty('--home-strip', `${st.offsetHeight}px`)
       host.style.setProperty('--home-top', `${el.offsetHeight - st.offsetHeight}px`)
     }
     put()

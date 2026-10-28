@@ -134,16 +134,15 @@
       transition: none;
     }
   }
-  /* 사용자가 고른 변경 (15, 2026-10-28): 홈 띠 최소 높이. 식사·나의 변화는 날짜 줄이 남은 화면(화면 − 날짜 줄)보다 조금(40px) 더 길게,
-     나의 하루(첫 띠)는 맨 위에서 흰 줄 전체 아래로 화면 맨 아래까지만. 늘어난 만큼은 위아래로 똑같이 나눈다(내용을 띠 가운데에).
-     lvh = 주소창이 접힌 큰 화면 높이(아래로 스크롤하면 폰 브라우저 주소창이 접힌다), svh = 주소창이 보이는 작은 화면 높이(맨 위 상태).
-     lvh·svh를 모르는 브라우저는 앞 줄 vh. --home-head·--home-strip은 HomeDateBar useBarHeights가 잰다. */
+  /* 사용자가 고른 변경 (15, 2026-10-28): 홈 띠 최소 높이. 기준은 흰 줄 전체(아이콘 줄 + 날짜 줄)가 보일 때 그 아래 화면 높이(화면 − 흰 줄).
+     나의 하루(첫 띠)는 그 높이 그대로(맨 위에서 화면 맨 아래까지), 식사·나의 변화는 그보다 20px 더. 늘어난 만큼은 위아래로 똑같이 나눈다(내용을 띠 가운데에).
+     svh = 주소창이 보이는 작은 화면 높이(맨 위 상태와 같은 기준). svh를 모르는 브라우저는 앞 줄 vh. --home-head는 HomeDateBar useBarHeights가 잰다. */
   .home > .band {
     display: flex;
     flex-direction: column;
     justify-content: center;
-    min-height: calc(100vh - var(--home-strip, 0px) + 40px);
-    min-height: calc(100lvh - var(--home-strip, 0px) + 40px);
+    min-height: calc(100vh - var(--home-head, 0px) + 20px);
+    min-height: calc(100svh - var(--home-head, 0px) + 20px);
   }
   .home > .band:first-of-type {
     min-height: calc(100vh - var(--home-head, 0px));
