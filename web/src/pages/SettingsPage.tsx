@@ -1,7 +1,7 @@
 // 설정(디자인 조각 D8, 시안 settings() 마크업·클래스 그대로, 2026-10-28 사용자 확인 _workspace/design/mock/d8_1~7).
 // div.screen > .topbar.sticky(‹ "설정") → .pad.slist: 계정(구글 이메일) / 내 목표(목표 칼로리·탄단지, 목표, 목표 몸무게, 키·몸무게 + 시안에 없는
 // 성별·나이, 활동량) / 기록(시안에 없는 묶음: 같이 먹은 사람 고르기) / 학교 / 사진 / 알림 / 기타(… 내 기록 전체 삭제, 로그아웃).
-// 아직 만들지 않은 기능의 줄(학교 등록 D13, 끼니 기록 알림 D15, 프리미엄)은 시안처럼 보이고 누르면 "준비 중이에요"(스위치는 꺼진 채).
+// 학교 등록(D13)은 학교 찾기 시트(components/school/SchoolSheet). 아직 만들지 않은 기능의 줄(끼니 기록 알림 D15, 프리미엄)은 시안처럼 보이고 누르면 "준비 중이에요"(스위치는 꺼진 채).
 // 처음 화면 다시 보기(/welcome)·약관·개인정보(/terms)는 D10에서 연결했다.
 // 사진(D9, 2026-10-28 사용자 확인 _workspace/design/mock/d9_5): 식사 사진 보관 켜기·끄기는 바로(끄면 앞으로 찍는 사진만 보관하지 않고
 // 보관한 사진은 남긴다, D10 때 사용자 결정으로 "보관한 사진도 지울까요?" 시트 없앰), 사진 전체 삭제는 확인 시트 뒤 deleteAllMealPhotos.
@@ -29,13 +29,15 @@ import { saveGoal, subscribeGoal, type StoredGoal } from '../data/goals'
 import { deleteAllMealPhotos } from '../data/mealPhotos'
 import { setKeepPhotos, setShareEaters, subscribePrefs, type Prefs } from '../data/prefs'
 import { deleteAllRecords } from '../data/records'
+import { subscribeSchool, type School } from '../data/school'
+import SchoolSheet from '../components/school/SchoolSheet'
 import { setTargetWeight, setWeight as saveWeightEntry, subscribeWeightProfile, type WeightProfile } from '../data/weights'
 import { toDateKey } from '../lib/time'
 import { signOutAndClear } from '../lib/auth'
 import { clearFlash, peekFlash } from '../lib/flash'
 import { formatKg } from '../lib/weight'
 
-type SheetKey = 'kcal' | 'goal' | 'target' | 'hw' | 'sexage' | 'activity' | 'delete' | 'delphotos'
+type SheetKey = 'school' | 'kcal' | 'goal' | 'target' | 'hw' | 'sexage' | 'activity' | 'delete' | 'delphotos'
 
 /** 시안 row(): span 이름 + small 값(또는 다른 오른쪽 내용) */
 function Row({ label, value, danger, disabled, onClick }: { label: string; value?: ReactNode; danger?: boolean; disabled?: boolean; onClick: () => void }) {
@@ -76,6 +78,9 @@ export default function SettingsPage({ user }: { user: User }) {
   useEffect(() => subscribeGoal(uid, setGoal, () => setGoal((g) => (g === undefined ? null : g))), [uid])
   useEffect(() => subscribePrefs(uid, setPrefs), [uid])
   useEffect(() => subscribeWeightProfile(uid, setWeight), [uid])
+  // 학교(D13): 불러오기 전 undefined, 없으면 null
+  const [school, setSchoolState] = useState<School | null | undefined>(undefined)
+  useEffect(() => subscribeSchool(uid, setSchoolState), [uid])
   useEffect(() => {
     if (!toast) return
     const t = window.setTimeout(() => setToast(null), 1600)
@@ -212,7 +217,7 @@ export default function SettingsPage({ user }: { user: User }) {
         <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--ink-3)' }}>반찬을 나눠 먹을 때 켜요. 결과 화면에서 음식마다 몇 명이 먹었는지 고를 수 있어요.</p>
 
         <div className="sgroup">학교</div>
-        <Row label="학교 등록" value="등록 안 함 ›" onClick={soon} />
+        <Row label="학교 등록" value={school ? `${school.name} ›` : school === null ? '등록 안 함 ›' : '– ›'} disabled={school === undefined} onClick={() => setSheet('school')} />
         <div className="sgroup">사진</div>
         <Row label="식사 사진 보관" value={<Switch on={keepOn} label="식사 사진 보관" />} disabled={!prefs} onClick={toggleKeep} />
         <Row label="사진 전체 삭제" value="" danger onClick={() => setSheet('delphotos')} />
@@ -297,6 +302,7 @@ export default function SettingsPage({ user }: { user: User }) {
           </button>
         </div>
       </BottomSheet>
+      <SchoolSheet open={sheet === 'school'} onClose={() => setSheet(null)} uid={uid} school={school ?? null} onSaid={say} />
       <Toast message={toast?.text ?? null} />
     </main>
   )

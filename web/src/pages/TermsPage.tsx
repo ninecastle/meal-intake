@@ -39,7 +39,6 @@ export default function TermsPage({ uid }: { uid: string }) {
   // 경로 가드가 지금 버전 동의가 있는 계정만 들여보낸다. 서버 시각이 아직 안 왔으면(저장 직후) 오늘
   const at = consent?.agreedAt ?? new Date()
   const keep = prefs ? (prefs.keepPhotos === true ? '동의함' : '동의 안 함') : '–'
-  const school = consent ? (consent.school ? '동의함' : '동의 안 함') : '–'
 
   return (
     <main className="screen enter">
@@ -62,7 +61,6 @@ export default function TermsPage({ uid }: { uid: string }) {
         </div>
         <div className="sgroup">선택</div>
         <Row k="keep" label="식사 사진 보관" value={keep} onOpen={setTermsKey} />
-        <Row k="school" label="학교 등록" value={school} onOpen={setTermsKey} />
         <p style={{ fontSize: 14, color: 'var(--ink-3)', margin: '14px 0 0' }}>
           {at.getFullYear()}년 {at.getMonth() + 1}월 {at.getDate()}일에 동의했어요. 선택 항목은 설정의 각 스위치로 바꿀 수 있어요.
         </p>

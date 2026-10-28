@@ -2,20 +2,20 @@
 // 문구는 시안 그대로이고, 실제 앱과 맞지 않는 네 곳만 고쳤다(사용자 확인 _workspace/design/mock/d10_3·d10_4):
 // ai "어떻게 분석하나요" 둘째 줄(무료 등급 약관), ai "결과가 틀리면"(「AI 추정」 표시), keep 첫 줄(식단 앨범·기록 수정 화면),
 // priv "보관 기간"(탈퇴 대신 내 기록 전체 삭제).
+// 선택 "학교 등록"은 뺐다(D13, 2026-10-28 사용자 결정: 학교는 설정·시작 단계에서 등록. consent.school은 false로 계속 저장).
 import type { ConsentKey } from '../data/consent'
 
 /** [키, 이름, 필수 여부] — 시안 AGREE 순서 */
-export const AGREE: readonly (readonly [ConsentKey, string, boolean])[] = [
+export const AGREE: readonly (readonly [Exclude<ConsentKey, 'school'>, string, boolean])[] = [
   ['svc', '서비스 이용 안내 (의학적 조언이 아니에요)', true],
   ['priv', '개인정보 수집·이용', true],
   ['ai', '사진 AI 분석', true],
   ['age', '만 14세 이상이에요', true],
   ['keep', '식사 사진 보관', false],
-  ['school', '학교 등록', false],
 ]
 
 /** 약관이 있는 항목(만 14세 줄은 [보기] 없음) */
-export type TermsKey = Exclude<ConsentKey, 'age'>
+export type TermsKey = Exclude<ConsentKey, 'age' | 'school'>
 
 /** [시트 제목, [소제목, 줄들][]] */
 export const TERMS: Record<TermsKey, readonly [string, readonly (readonly [string, readonly string[]])[]]> = {
@@ -62,13 +62,6 @@ export const TERMS: Record<TermsKey, readonly [string, readonly (readonly [strin
     [
       ['무엇을 보관하나요', ['먹기 전·후 사진을 작게 줄여 보관해서 식단 앨범과 기록 수정 화면에서 다시 볼 수 있어요.']],
       ['언제든 바꿀 수 있어요', ['설정에서 보관을 끄거나 사진을 한 번에 지울 수 있어요.', '동의하지 않아도 기록은 그대로 쓸 수 있고, 식단 앨범만 보이지 않아요.']],
-    ],
-  ],
-  school: [
-    '학교 등록',
-    [
-      ['왜 필요한가요', ['등록한 학교의 공개 급식 메뉴를 불러와서, 급식을 먹은 날 한 번에 기록할 수 있어요.']],
-      ['저장하는 정보', ['학교 이름만 저장하고, 학년·반·번호는 받지 않아요.', '설정에서 언제든 해제할 수 있어요.']],
     ],
   ],
 }

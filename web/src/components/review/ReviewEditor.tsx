@@ -33,6 +33,8 @@ export interface ReviewEditorProps {
   notice?: ReactNode
   /** 설정 "같이 먹은 사람 고르기"(기본 꺼짐, 2026-10-27 사용자가 고른 변경) */
   showEaters?: boolean
+  /** 총 kcal 아래 작은 참고 줄(D13 "학교 기준 1인분 ○○kcal", 양 보정 없음) */
+  refLine?: string | null
 }
 
 const UNDO_MS = 3000
@@ -55,7 +57,7 @@ function omit<T>(rec: Record<string, T>, key: string): Record<string, T> {
 type Ask = { id: string; name: string; dbCode?: string }
 type Undo = { item: MealItem; index: number }
 
-export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 'review', notice, showEaters = false }: ReviewEditorProps) {
+export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 'review', notice, showEaters = false, refLine = null }: ReviewEditorProps) {
   // 비동기 조회가 끝났을 때 최신 분석 위에 고치도록 ref로 들고 있는다
   const latest = useRef(analysis)
   const onChangeRef = useRef(onChange)
@@ -233,6 +235,7 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
               <span className="num">{`${Math.round(t.before_kcal)}kcal`}</span>
             </span>
           </div>
+          {refLine && <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--ink-2)' }}>{refLine}</p>}
           <div className="stack">
             <div style={{ flex: pct.c, background: 'var(--carb)' }} className="num">{`${pct.c}%`}</div>
             <div style={{ flex: pct.p, background: 'var(--prot)' }} className="num">{`${pct.p}%`}</div>

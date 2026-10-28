@@ -1068,3 +1068,77 @@ describe('첫 홈 튜토리얼(users/{uid}.prefs.tutorialDone, 규칙 v10, 디�
     assert.deepEqual(d.prefs, { keepPhotos: false, tutorialDone: true })
   })
 })
+
+describe('학교 등록(users/{uid}.school, 규칙 v12, 디자인 조각 D13, 스펙 4.9절)', () => {
+  const USER = 'users/alice'
+  const SCHOOL = { atpt: 'B10', code: '7010057', name: '서울고등학교' }
+  /** setSchool·deleteSchool(web/src/data/school.ts)과 같은 모양 */
+  const save = (fs, s = SCHOOL, path = USER) => setDoc(doc(fs, path), { school: s }, { merge: true })
+  const remove = (fs, path = USER) => updateDoc(doc(fs, path), { school: deleteField() })
+
+  test('본인 저장·다른 학교로 바꾸기·지우기 허용(다른 필드는 그대로)', async () => {
+    await seed(USER, { prefs: { shareEaters: true } })
+    await assertSucceeds(save(alice()))
+    assert.deepEqual((await getDoc(doc(alice(), USER))).data(), { prefs: { shareEaters: true }, school: SCHOOL })
+    const other = { atpt: 'J10', code: '7530001', name: '가'.repeat(50) }
+    await assertSucceeds(save(alice(), other))
+    assert.deepEqual((await getDoc(doc(alice(), USER))).data().school, other)
+    await assertSucceeds(remove(alice()))
+    assert.deepEqual((await getDoc(doc(alice(), USER))).data(), { prefs: { shareEaters: true } })
+    // 새 문서에도 허용
+    await assertSucceeds(save(db('carol'), SCHOOL, 'users/carol'))
+  })
+
+  test('consent·goal 있는 문서에 병합·지우기 허용(consent·goal 그대로)', async () => {
+    const consent = {
+      version: '2026-10-28', agreedAt: Timestamp.fromDate(new Date('2026-10-28T03:00:00Z')),
+      required: true, photoKeep: false, school: false,
+    }
+    const goal = {
+      input: { sex: 'female', age: 16, height_cm: 160, weight_kg: 55, activity: 'light', goal: 'maintain' },
+      override: null,
+      result: { bmr: 1300, tdee: 1790, target_kcal: 1790 },
+      targets: { target_kcal: 1790, carbs_g: 246, protein_g: 90, fat_g: 50, source: 'recommended' },
+      updatedAt: Timestamp.fromDate(new Date('2026-10-27T03:00:00Z')),
+    }
+    await seed(USER, { consent, goal })
+    await assertSucceeds(save(alice()))
+    await assertSucceeds(remove(alice()))
+    const d = (await getDoc(doc(alice(), USER))).data()
+    assert.deepEqual(d, { consent, goal })
+  })
+
+  test('틀린 형식 거부(atpt·code·name·모르는 키·빠진 키·map 아님)', async () => {
+    const bad = [
+      { ...SCHOOL, atpt: 'b10' },
+      { ...SCHOOL, atpt: 'B1' },
+      { ...SCHOOL, atpt: 'B100' },
+      { ...SCHOOL, atpt: 10 },
+      { ...SCHOOL, code: '701005' },
+      { ...SCHOOL, code: '70100571' },
+      { ...SCHOOL, code: '701005A' },
+      { ...SCHOOL, code: 7010057 },
+      { ...SCHOOL, name: '' },
+      { ...SCHOOL, name: '가'.repeat(51) },
+      { ...SCHOOL, name: 1 },
+      { ...SCHOOL, address: '서울' },
+      { atpt: 'B10', code: '7010057' },
+      'B10/7010057',
+      ['B10', '7010057', '서울고등학교'],
+      true,
+    ]
+    for (const s of bad) await assertFails(save(alice(), s))
+    // 저장된 학교의 한 칸만 틀린 값으로 바꾸는 것도 거부
+    await seed(USER, { school: SCHOOL })
+    await assertFails(updateDoc(doc(alice(), USER), { 'school.code': '123' }))
+    await assertFails(updateDoc(doc(alice(), USER), { 'school.extra': 'x' }))
+  })
+
+  test('다른 uid·미로그인 거부(쓰기·지우기·읽기)', async () => {
+    await assertFails(save(db('bob')))
+    await assertFails(save(db(null)))
+    await seed(USER, { school: SCHOOL })
+    await assertFails(remove(db('bob')))
+    await assertFails(getDoc(doc(db('bob'), USER)))
+  })
+})

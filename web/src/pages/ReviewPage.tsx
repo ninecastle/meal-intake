@@ -38,6 +38,10 @@ import { beforePhotoStore } from '../photos/beforePhotoStore'
 import type { MealIntakeAnalysis } from '../types/analysis'
 import type { MealReturn } from '../components/meal/useAfterFlow'
 import { getPendingEdit, setPendingEdit } from '../lib/pendingEdits'
+import { schoolMealOf, type SchoolMeal } from '../lib/neis'
+import { formatKcal } from '../components/mealText'
+import { plausibleSchoolKcal } from '../lib/neisParse'
+import { NO_MENU, SchoolMenuContext } from '../components/review/schoolMenu'
 
 const MEAL_TYPES: { value: MealType; label: string }[] = [
   { value: 'breakfast', label: '아침' },
@@ -128,6 +132,14 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
   const entryDate = useRef(searchParams.get('date'))
   // 홈 끼니 카드에서 [직접 입력]으로 오면 ?meal(디자인 조각 D2, 끼니는 누른 카드)
   const entryMeal = useRef(searchParams.get('meal'))
+  // 학교 급식(D13): 직접 입력은 끼니 화면이 넘긴 급식, 사진 기록은 기기에 남긴 표시(mealId). Firestore에는 넣지 않는다
+  const [schoolMeal] = useState<SchoolMeal | null>(() => {
+    if (isEdit) return null
+    const sm = (entryState.current as { schoolMeal?: SchoolMeal } | null)?.schoolMeal
+    if (sm && Array.isArray(sm.menu)) return sm
+    return routeId ? schoolMealOf(routeId) : null
+  })
+  const schoolKcal = plausibleSchoolKcal(schoolMeal?.kcal)
   const navRef = useRef(navigate)
   useEffect(() => {
     navRef.current = navigate
@@ -491,14 +503,17 @@ export default function ReviewPage({ mode = 'review' }: { mode?: 'review' | 'edi
 
             {/* 저장 중에는 편집을 잠근다(저장하는 값과 화면 값이 달라지지 않게) */}
             <fieldset disabled={saving} style={{ border: 0, margin: 0, padding: 0, minWidth: 0 }}>
+              <SchoolMenuContext.Provider value={schoolMeal?.menu ?? NO_MENU}>
               <ReviewEditor
                 analysis={draft.analysis}
                 onChange={onAnalysis}
                 onBusyChange={setEditorBusy}
                 mode={mode}
                 notice={notice}
+                refLine={schoolKcal !== null ? `학교 기준 1인분 ${formatKcal(schoolKcal)}kcal` : null}
                 showEaters={shareEaters}
               />
+              </SchoolMenuContext.Provider>
             </fieldset>
 
             {canCancel && (

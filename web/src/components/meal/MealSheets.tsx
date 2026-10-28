@@ -1,6 +1,6 @@
 // 끼니 화면(D3)의 아래 시트들. 시안 sheets.record·time·mealinfo 마크업·클래스·인라인 style·문구 그대로, 시안에 없는 두 시트는
 // 사용자가 확인한 모양(2026-10-27, _workspace/design/mock/1_after_sheet·2_ratio_sheet)대로 시안 부품(.choice·.segment·.btn)으로 그린다.
-// - 식사 기록: 급식 카드(.school)는 D13(급식 연동) 전까지 그리지 않는다. PC는 [사진 파일 고르기], 웹캠이 있을 때만 [카메라로 찍기](CLAUDE.md 촬영 화면).
+// - 식사 기록: 맨 위 급식 질문(.school)은 부르는 화면이 top으로 준다(D13, SchoolMealAsk). PC는 [사진 파일 고르기], 웹캠이 있을 때만 [카메라로 찍기](CLAUDE.md 촬영 화면).
 // - 끼니 영양정보: 시안 nutrientTable에서 정한 행만(총 열량·탄수화물(당류·식이섬유)·단백질·지방(포화지방)·나트륨). 세부 4가지는 D4 전까지 "–".
 // - 오류·같은 사진·카메라 권한 안내는 D3-2(분석 중·카메라 화면 다시 그리기) 전까지 예전 촬영 화면의 상자 모양 그대로 시트 맨 위에 둔다.
 import { useRef, useState, type CSSProperties, type ReactNode } from 'react'
@@ -73,13 +73,15 @@ export function RecordSheet(props: {
   error: ErrorView | null
   onRetry?: () => void
   onManual: () => void
+  /** 맨 위 급식 질문 상자(D13) */
+  top?: ReactNode
 }) {
-  const { open, onClose, cap, gate, error, onRetry, onManual } = props
+  const { open, onClose, cap, gate, error, onRetry, onManual, top } = props
   return (
     <BottomSheet open={open} onClose={onClose} title="식사 기록">
       {error && <ErrorBox error={error} onRetry={onRetry} />}
       <CameraHelp cap={cap} />
-      {/* .school "오늘 점심 급식인가요?"는 D13(급식 연동)에서 이 자리에 */}
+      {top}
       <div className="choice">
         <PhotoChoices cap={cap} gate={gate} onPicked={onClose} />
         <button

@@ -4,7 +4,8 @@
 // 카드(선 1px·모서리 r-lg, 확인할 음식은 butter 2px) → 이름 .fn + .srcb(+ 확인 필요) · X → 먹기 전 무게·먹은 kcal 칸(시안 먹은 시간 칸 모양)
 // → 남긴 양 .segment [다 먹음|반 남김|그대로|직접 %](밀어서 고르는 막대 대신) → 같이 먹은 사람 .segment [1명~5명+] → 먹은 양·탄단지 줄.
 // 이름 고치기·직접 입력은 FoodSearch(이름 칸 + DB 후보 .rec 줄 + [그대로 쓰기]).
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type Ref } from 'react'
+import { useContext, useEffect, useRef, useState, type CSSProperties, type FormEvent, type Ref } from 'react'
+import { SchoolMenuContext } from './schoolMenu'
 import { MAX_EATERS } from '../../analysis/compute'
 import { listFoodVariants, searchFoodNames, type FoodSuggestion } from '../../analysis/nutrition'
 import { foodName } from '../../lib/foodName'
@@ -379,6 +380,8 @@ export function FoodSearch(props: {
   const [sugs, setSugs] = useState<FoodSuggestion[]>([])
   const [variants, setVariants] = useState<FoodSuggestion[] | null>(null)
   const [filter, setFilter] = useState('')
+  // 급식 기록이면(D13) 급식 메뉴를 바로 고르는 후보로. 입력하면 그 글자가 든 메뉴만
+  const schoolMenu = useContext(SchoolMenuContext)
 
   useEffect(() => {
     const q = draft.trim()
@@ -436,6 +439,31 @@ export function FoodSearch(props: {
           />
         </label>
       </form>
+
+      {schoolMenu.length > 0 && (() => {
+        const c = compact(draft)
+        const menu = schoolMenu.filter((m) => !c || compact(m).includes(c))
+        return (
+          menu.length > 0 && (
+            <div style={{ marginTop: 4 }} aria-label="급식 메뉴">
+              {menu.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  className="rec"
+                  onClick={() => onConfirm(m)}
+                  style={{ width: '100%', textAlign: 'left', gridTemplateColumns: '1fr auto', padding: '14px 0' }}
+                >
+                  <span>
+                    <b style={{ fontFamily: 'var(--f-head)' }}>{m}</b>
+                  </span>
+                  <span style={{ fontSize: 14, color: 'var(--ink-2)' }}>급식 메뉴</span>
+                </button>
+              ))}
+            </div>
+          )
+        )
+      })()}
 
       {sugs.length > 0 && (
         <div style={{ marginTop: 4 }}>

@@ -30,6 +30,8 @@ import {
 import { afterTarget, useAfterFlow, type MealReturn, type ReviewEntry } from '../components/meal/useAfterFlow'
 import { useBeforeFlow } from '../components/meal/useBeforeFlow'
 import { useKeepPhotosAsk } from '../components/meal/KeepPhotosAsk'
+import { useSchoolMealAsk } from '../components/meal/SchoolMealAsk'
+import { markSchoolMeal } from '../lib/neis'
 import { formatGrams, homeHref, isDateKey, macroPct, MEAL_TYPE_LABEL, MEAL_TYPES, sourceLabel } from '../components/mealText'
 import { foodName, isAllLeft, representativeFood } from '../lib/foodName'
 import { askConfirm, IconButton, MealArt, Toast } from '../components/ui'
@@ -240,7 +242,12 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
   function goReview(mealId: string, e: ReviewEntry) {
     navigate(`/meal/${mealId}/review`, { replace: true, state: { ...e, ...backToMeal() } })
   }
-  const goManual = () => navigate(`/meal/new/review?date=${dateKey}&meal=${meal}`, { replace: true, state: backToMeal() })
+  // 학교 급식(D13): 식사 기록 시트 맨 위 질문. 불러온 급식은 그 기록(먹기 전 분석·직접 입력)에 쓴다
+  const schoolAsk = useSchoolMealAsk(uid, dateKey, meal, sheet === 'record')
+  const goManual = () => {
+    const schoolMeal = schoolAsk.take()
+    navigate(`/meal/new/review?date=${dateKey}&meal=${meal}`, { replace: true, state: { ...backToMeal(), ...(schoolMeal ? { schoolMeal } : {}) } })
+  }
   /** 결과 화면이 끝나면 이 끼니 화면으로, 보던 위치 그대로 돌아오게(2026-10-28 사용자 요청) */
   function backToMeal(): MealReturn {
     return { mealReturn: { dateKey, mealType: meal, fromHome, scrollY: window.scrollY } }
@@ -253,7 +260,12 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
     dateKey,
     mealType: meal,
     keepPhotos: keepAsk.keepPhotos,
-    onDone: () => setSheet(null),
+    menuCandidates: schoolAsk.loaded?.menu,
+    onDone: (id) => {
+      const sm = schoolAsk.take()
+      if (sm) markSchoolMeal(id, sm)
+      setSheet(null)
+    },
     onManual: goManual,
   })
   const after = useAfterFlow({
@@ -575,6 +587,7 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
         error={before.error}
         onRetry={before.canRetry ? before.retry : undefined}
         onManual={goManual}
+        top={schoolAsk.box}
       />
       <TimeSheet
         open={sheet === 'time'}

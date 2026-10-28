@@ -15,6 +15,8 @@ export interface OnboardingDraft {
   /** 결과 화면 목표 칼로리·탄단지 직접 조정(없으면 추천값) */
   override: GoalOverride | null
   loginPending?: boolean
+  /** 학교 단계에서 고른 학교(D13, 선택). 로그인·목표 저장 때 users/{uid}.school로 저장한다 */
+  school?: { atpt: string; code: string; name: string } | null
 }
 
 export const EMPTY_DRAFT: OnboardingDraft = { sex: null, age: '', height: '', weight: '', activity: null, goal: null, override: null }
@@ -35,10 +37,17 @@ export function readOnboardingDraft(): OnboardingDraft | null {
       goal: typeof v.goal === 'string' ? v.goal : null,
       override: v.override && typeof v.override === 'object' ? v.override : null,
       loginPending: v.loginPending === true,
+      school: readSchool(v.school),
     }
   } catch {
     return null
   }
+}
+
+function readSchool(x: unknown): OnboardingDraft['school'] {
+  if (!x || typeof x !== 'object') return null
+  const { atpt, code, name } = x as Record<string, unknown>
+  return typeof atpt === 'string' && typeof code === 'string' && typeof name === 'string' ? { atpt, code, name } : null
 }
 
 export function writeOnboardingDraft(d: OnboardingDraft): void {

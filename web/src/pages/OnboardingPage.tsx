@@ -1,6 +1,6 @@
 // 목표 질문·추천 결과·기존 목표 선택(디자인 조각 D11, 2026-10-28 사용자 결정). 시안 quiz()·result()·sheets.goalpick·kcalEditor() 마크업·클래스 그대로.
 // - /start?step=0~5: 성별 → 나이 → 키 → 몸무게 → 활동량 → 목표. 단계마다 push(state.depth+1)라 기기 뒤로 가기·[이전]은 이전 단계.
-//   진행 막대(.progress/.pfill)는 숫자 없이 단계마다 초록으로 약 300ms 차오른다(움직임 줄이기면 바로). 학교 등록·사진 보관 단계는 없다(D13·동의 화면).
+//   진행 막대(.progress/.pfill)는 숫자 없이 단계마다 초록으로 약 300ms 차오른다(움직임 줄이기면 바로). 목표 다음에 누구에게나 학교 등록 단계(D13, 선택, [건너뛰기]). 사진 보관 단계는 없다(동의 화면).
 // - /start/result: 추천 목표(설정 목표 칼로리 시트와 같은 부품 useKcalEditor) + 아래 버튼.
 //   로그인 전(새 가입, 소개 → 동의 → 여기): [구글로 저장하고 시작하기] → 로그인 → (App Root가 동의 초안 저장) → 목표 저장 → 홈 맨 위.
 //   이 계정에 목표가 이미 있으면 goalpick 시트([기존 목표 유지]·[방금 입력한 값으로 바꾸기]) → 홈 맨 위.
@@ -30,9 +30,11 @@ import { BottomSheet, IconButton, Mascot } from '../components/ui'
 import { hasCurrentConsent, readConsentDraft } from '../data/consent'
 import { GoalStoreError, saveGoal, subscribeGoal, type GoalStoreErrorCode, type StoredGoal } from '../data/goals'
 import { setFlash } from '../lib/flash'
+import SchoolSearch from '../components/school/SchoolSearch'
+import { setSchool } from '../data/school'
 import { clearOnboardingDraft, EMPTY_DRAFT, readOnboardingDraft, writeOnboardingDraft, type OnboardingDraft } from '../lib/onboardingDraft'
 
-const STEPS = ['sex', 'age', 'height', 'weight', 'act', 'goal'] as const
+const STEPS = ['sex', 'age', 'height', 'weight', 'act', 'goal', 'school'] as const
 type StepKey = (typeof STEPS)[number]
 
 /** 들어온 곳(홈·설정에서 push로) + 그 뒤 쌓은 방문 기록 칸 수 */
@@ -83,6 +85,8 @@ function stepDone(k: StepKey, d: OnboardingDraft): boolean {
       return d.activity !== null
     case 'goal':
       return d.goal !== null || isMinor(d)
+    case 'school':
+      return true
   }
 }
 
@@ -132,7 +136,9 @@ export default function OnboardingPage({ user }: { user: User | null }) {
 
   function update(patch: Partial<OnboardingDraft>) {
     // 입력이 바뀌면 결과 화면의 직접 조정은 버린다(추천값이 달라진다)
-    const next = { ...draft, ...patch, override: null }
+    // 학교만 바꾼 것은 추천값과 무관하니 직접 조정을 남긴다
+    const onlySchool = Object.keys(patch).every((k) => k === 'school')
+    const next = { ...draft, ...patch, override: onlySchool ? draft.override : null }
     setDraft(next)
     writeOnboardingDraft(next)
   }
@@ -348,6 +354,17 @@ function QuizView({
         {minor && <div className="note">{MINOR_MSG}</div>}
       </>,
     ],
+    // D13: 시안 quiz 'school' 단계(누구에게나, 부제는 2026-10-28 사용자 결정 문구)
+    school: [
+      '학교를 등록할까요?',
+      '학생·선생님이라면 급식 메뉴로 더 쉽고 정확하게 기록할 수 있어요. 설정에서 언제든 바꾸거나 해제할 수 있어요 (선택)',
+      <SchoolSearch
+        initial={d.school?.name ?? ''}
+        picked={d.school ?? null}
+        fieldStyle={{ borderColor: 'var(--line)', marginTop: 0 }}
+        onPick={(h) => onUpdate({ school: { atpt: h.atpt, code: h.code, name: h.name } })}
+      />,
+    ],
   }
   const [title, help, body] = B[k]
 
@@ -373,6 +390,18 @@ function QuizView({
           {step > 0 && onBack && (
             <button type="button" className="btn ghost narrow" onClick={onBack}>
               이전
+            </button>
+          )}
+          {k === 'school' && (
+            <button
+              type="button"
+              className="btn ghost narrow"
+              onClick={() => {
+                onUpdate({ school: null })
+                onNext()
+              }}
+            >
+              건너뛰기
             </button>
           )}
           <button type="button" className="btn ink" disabled={!done} onClick={onNext}>
@@ -463,6 +492,8 @@ function ResultView({
 
   /** 로그인한 계정: 목표가 있으면 고르게, 없으면 저장 */
   function finish() {
+    // 시작 단계에서 고른 학교(D13): 목표를 유지하든 바꾸든 등록한다(기다리지 않음)
+    if (uid && draft.school) setSchool(uid, draft.school).catch((e: unknown) => console.warn('[onboarding] 학교 저장 실패', e))
     if (existing) setPick(true)
     else void save(ed.override)
   }

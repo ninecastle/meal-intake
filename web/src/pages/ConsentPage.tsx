@@ -56,7 +56,7 @@ export default function ConsentPage({ user }: { user: User | null }) {
   useEffect(() => {
     if (!uid || agree !== null || !ready || !prefs) return
     const keep = prefs.p.keepPhotos === true
-    if (hasCurrentConsent(consent ?? null)) setAgree({ svc: true, priv: true, ai: true, age: true, keep, school: consent?.school === true })
+    if (hasCurrentConsent(consent ?? null)) setAgree({ svc: true, priv: true, ai: true, age: true, keep })
     else setAgree({ keep })
   }, [uid, agree, ready, prefs, consent])
 
@@ -93,7 +93,8 @@ export default function ConsentPage({ user }: { user: User | null }) {
 
   async function submit() {
     if (!ok || submitted) return
-    const choice = { photoKeep: a.keep === true, school: a.school === true }
+    // 학교 등록은 동의 항목에서 뺐다(D13). 규칙이 요구하는 school 칸은 false로 계속 저장한다
+    const choice = { photoKeep: a.keep === true, school: false }
     if (!uid) {
       // 새 가입(D11): 로그인은 목표 질문·추천 결과 뒤 [구글로 저장하고 시작하기]에서
       writeConsentDraft(choice)

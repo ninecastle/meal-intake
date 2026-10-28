@@ -8,8 +8,10 @@ import {
   GENERATION_CONFIG_A,
   PROMPT_VERSION_A,
   SYSTEM_INSTRUCTION_A,
-  USER_TEXT_A,
+  beforeCacheKey,
+  buildUserTextA,
   normalizeBeforeResponse,
+  sanitizeMenuCandidates,
   parseBeforeText,
   type BeforeParsed,
 } from './beforePrompt'
@@ -95,9 +97,15 @@ function parseA(text: string): ParseOutcome<BeforeParsed> {
 
 /** 먹기 전 분석(호출 A). 음식이 1개 이상이고 id는 i1부터 다시 매긴다.
  *  같은 사진(압축본 SHA-256)이면 캐시 결과를 돌려주고 호출하지 않는다. 출처는 getAnalysisOrigin(result).
+ *  menuCandidates(선택, 급식 메뉴 이름): 다듬어(최대 15개) 프롬프트 a7 후보 블록으로 넣고, 캐시 키에도 넣는다.
+ *  비었거나 다듬은 뒤 0개면 후보 없는 호출과 같다. 목업 모드는 후보를 쓰지 않는다.
  *  오류: ANALYSIS_UNAVAILABLE(재시도 후), NO_FOOD_DETECTED(음식 0개), PHOTO_INVALID(413·읽기 실패). 취소: AbortError */
-export async function analyzeBefore(photo: Blob, opts?: { signal?: AbortSignal }): Promise<BeforeAnalysis> {
+export async function analyzeBefore(
+  photo: Blob,
+  opts?: { signal?: AbortSignal; menuCandidates?: string[] },
+): Promise<BeforeAnalysis> {
   const signal = opts?.signal
+  const candidates = sanitizeMenuCandidates(opts?.menuCandidates)
   throwIfAborted(signal)
   if (!isImageBlob(photo)) {
     throw new AnalysisError('PHOTO_INVALID', '사진 파일이 비어 있거나 이미지가 아닙니다')
@@ -112,7 +120,8 @@ export async function analyzeBefore(photo: Blob, opts?: { signal?: AbortSignal }
   }
   const meta = { model: AI_MODEL_ID, prompt_version: PROMPT_VERSION_A }
 
-  const key = await sha256Hex(bytes)
+  const photoHash = await sha256Hex(bytes)
+  const key = photoHash ? beforeCacheKey(photoHash, candidates) : null
   if (key) {
     const hit = memCache.get(key) ?? (await cacheGet<BeforeAnalysis>('before', key, meta))
     throwIfAborted(signal)
@@ -124,7 +133,7 @@ export async function analyzeBefore(photo: Blob, opts?: { signal?: AbortSignal }
   }
 
   const parts: Part[] = [
-    { type: 'text', text: USER_TEXT_A },
+    { type: 'text', text: buildUserTextA(candidates) },
     { type: 'inlineData', inlineData: { mimeType: photo.type || 'image/jpeg', data: toBase64(bytes) } },
   ]
   const model = getModel(AI_MODEL_ID, { systemInstruction: SYSTEM_INSTRUCTION_A, generationConfig: GENERATION_CONFIG_A })

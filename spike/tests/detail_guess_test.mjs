@@ -32,7 +32,7 @@ let n = 0
 const ok = (label) => { n++; console.log('ok', label) }
 
 // 1. 버전·지시·응답 스키마
-assert.equal(A.PROMPT_VERSION_A, 'a6')
+assert.equal(A.PROMPT_VERSION_A, 'a7') // a7(D13)은 a6 + 선택 인식 후보, 지시·스키마는 같다
 assert.equal(A.GENERATION_CONFIG_A.maxOutputTokens, 8192)
 assert.ok(/detail_guess/.test(A.SYSTEM_INSTRUCTION_A) && /100g당 값이다/.test(A.SYSTEM_INSTRUCTION_A) && /null로 적는다/.test(A.SYSTEM_INSTRUCTION_A))
 const schemaText = JSON.stringify(A.RESPONSE_SCHEMA_A.toJSON())

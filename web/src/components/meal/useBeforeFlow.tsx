@@ -42,6 +42,8 @@ export function useBeforeFlow(opts: {
   mealType: MealType
   /** 식사 사진 보관 설정(D9). true일 때만 먹기 전 썸네일을 저장한다 */
   keepPhotos: boolean | null
+  /** 학교 급식 메뉴(D13, [급식 불러오기]를 눌렀을 때만). 먹기 전 분석에 인식 후보로 넘긴다 */
+  menuCandidates?: string[]
   /** 분석이 끝나 awaiting_after 기록을 만들었다 */
   onDone: (mealId: string) => void
   /** 분석 중 덮개의 [직접 입력] */
@@ -51,10 +53,12 @@ export function useBeforeFlow(opts: {
   const onDoneRef = useRef(opts.onDone)
   const onManualRef = useRef(opts.onManual)
   const keepRef = useRef(opts.keepPhotos)
+  const menuRef = useRef(opts.menuCandidates)
   useEffect(() => {
     onDoneRef.current = opts.onDone
     onManualRef.current = opts.onManual
     keepRef.current = opts.keepPhotos
+    menuRef.current = opts.menuCandidates
   })
   const busyRef = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
@@ -90,7 +94,9 @@ export function useBeforeFlow(opts: {
       setHasLast(true)
       id = newMealId(uid)
       await beforePhotoStore.put(id, photo)
-      const beforeAnalysis = await analyzeBefore(photo, { signal: ac.signal })
+      const menu = menuRef.current && menuRef.current.length > 0 ? menuRef.current : undefined
+      if (import.meta.env.DEV) (window as unknown as { __menuCandidates?: string[] | null }).__menuCandidates = menu ?? null
+      const beforeAnalysis = await analyzeBefore(photo, { signal: ac.signal, menuCandidates: menu })
       // 기다리지 않는다: 오프라인이면 서버 확인이 끝나지 않는다(로컬 캐시와 끼니 화면 구독에는 바로 들어간다).
       createAwaitingMeal(uid, id, { dateKey, mealType, beforeAnalysis }).catch((e: unknown) =>
         console.warn('[meal] awaiting_after 저장 실패', e),

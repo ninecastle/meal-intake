@@ -11,6 +11,8 @@ interface ImportMetaEnv {
   readonly VITE_USE_EMULATORS?: 'on' | 'off'
   /** App Check reCAPTCHA Enterprise 사이트 키(공개 값, web/.env.local에 넣는다) */
   readonly VITE_RECAPTCHA_SITE_KEY?: string
+  /** 나이스 교육정보 개방 포털 인증키(무료, 학교 급식 D13). 없으면 키 없이(샘플 5건) 부른다 */
+  readonly VITE_NEIS_API_KEY?: string
 }
 
 interface ImportMeta {
