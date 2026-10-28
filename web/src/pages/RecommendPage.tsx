@@ -24,28 +24,20 @@ const MEAL_TO: Record<MealType, string> = { breakfast: '아침으로', lunch: '�
 
 type Fetch = { key: string; items: RecItem[] | null; error: boolean }
 
-/** 남은 양 한 칸: 넘으면 홈처럼 "N 넘었어요"(숫자 peach-deep), 0이 되는 작은 초과는 0 */
+/** 남은 양 한 칸(사용자가 고른 변경 22): 위에 이름, 아래에 남은 양. 넘으면 "N 초과"(peach-deep), 0이 되는 작은 초과는 0 */
 function LeftItem({ label, left, unit }: { label: string; left: number | null; unit: 'kcal' | 'g' }) {
-  if (left === null)
-    return (
-      <span>
-        {`${label} `}
-        <b className="num">–</b>
-      </span>
-    )
   const fmt = unit === 'kcal' ? formatKcal : formatMacro
-  const over = left < 0 ? fmt(-left) : '0'
-  if (over !== '0')
-    return (
-      <span>
-        {`${label} `}
-        <b className="num" style={{ color: 'var(--peach-deep)' }}>{`${over}${unit}`}</b> 넘었어요
-      </span>
-    )
+  const over = left !== null && left < 0 ? fmt(-left) : '0'
   return (
-    <span>
-      {`${label} `}
-      <b className="num">{`${fmt(Math.max(left, 0))}${unit}`}</b>
+    <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, minWidth: 0 }}>
+      <span style={{ fontSize: 14, color: 'var(--ink-2)' }}>{label}</span>
+      {left === null ? (
+        <b className="num">–</b>
+      ) : over !== '0' ? (
+        <b className="num" style={{ color: 'var(--peach-deep)', whiteSpace: 'nowrap' }}>{`${over}${unit} 초과`}</b>
+      ) : (
+        <b className="num" style={{ whiteSpace: 'nowrap' }}>{`${fmt(Math.max(left, 0))}${unit}`}</b>
+      )}
     </span>
   )
 }
@@ -185,11 +177,11 @@ export default function RecommendPage({ uid }: { uid: string }) {
             </Link>
           ) : (
             <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
                 <LeftItem label="칼로리" left={left('kcal')} unit="kcal" />
-                <LeftItem label="탄" left={left('carbs_g')} unit="g" />
-                <LeftItem label="단" left={left('protein_g')} unit="g" />
-                <LeftItem label="지" left={left('fat_g')} unit="g" />
+                <LeftItem label="탄수화물" left={left('carbs_g')} unit="g" />
+                <LeftItem label="단백질" left={left('protein_g')} unit="g" />
+                <LeftItem label="지방" left={left('fat_g')} unit="g" />
               </div>
               {light ? (
                 <span style={{ fontSize: 14, color: 'var(--lime-deep)', fontWeight: 700 }}>오늘 목표를 다 채웠어요. 가볍게 먹을 만한 걸 골랐어요</span>
