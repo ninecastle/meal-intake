@@ -29,7 +29,7 @@ import {
   type MenuPick,
   type PickNutrition,
 } from './nutrition/franchise.ts'
-import { brothShareOf, loadBroth, soupBaseName, soupPartOf, splitSoupItemWith, type BrothTable } from './nutrition/broth.ts'
+import { brothShareOf, isSoupDish, loadBroth, soupBaseName, soupPartOf, splitSoupItemWith, type BrothTable } from './nutrition/broth.ts'
 
 export type ResolveNutritionFn = (
   name: string,
@@ -342,7 +342,13 @@ export async function assembleAnalysis(
       for (const b of grp) out.push(await one(b))
       return out
     })
-    return buildAnalysis(nested.flat(), warnings, meta)
+    // 짝으로 오지 않은 국물 요리 한 항목도 자동으로 면·건더기/국물 두 항목으로 나눈다(2026-10-29 사용자 결정: 늘 두 개로, 다 먹은 경우에도)
+    let items = nested.flat()
+    if (opts?.broth !== null && items.some((it) => !it.soup_of && isSoupDish(it.name))) {
+      const t = broth ?? (await loadBroth().catch(() => null))
+      if (t) items = items.flatMap((it) => (!it.soup_of && isSoupDish(it.name) ? (splitSoupItemWith(t, it) ?? [it]) : [it]))
+    }
+    return buildAnalysis(items, warnings, meta)
   } catch {
     return buildAnalysis([], [...warnings, '분석 결과를 조립하지 못했습니다. 음식을 직접 추가해 주세요'], meta)
   }

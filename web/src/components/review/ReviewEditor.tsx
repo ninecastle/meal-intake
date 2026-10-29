@@ -176,6 +176,8 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
     const html = r.source === 'search' ? r.searchSuggestionHtml : null
     setSuggestions((s) => (html ? { ...s, [id]: html } : omit(s, id)))
     if (r.source === 'user_input') setFocusKcalId(id)
+    // 국물 요리는 자동으로 면·건더기/국물 두 카드로(2026-10-29 사용자 결정, 나눌 수 없으면 한 카드 그대로)
+    else if (isSoupDish(name)) void splitSoup(id)
   }
 
   async function confirmName(id: string, name: string, dbCode?: string) {
