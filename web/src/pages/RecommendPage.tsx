@@ -123,6 +123,8 @@ export default function RecommendPage({ uid }: { uid: string }) {
   const [meal, setMeal] = useState<MealType | null>(null)
   const [page, setPage] = useState(0)
   const [fetched, setFetched] = useState<Fetch | null>(null)
+  // 추천 목록 불러오기 실패 뒤 [다시 시도](같은 조건으로 다시 부른다)
+  const [retry, setRetry] = useState(0)
 
   useEffect(() => subscribePending(uid, setPending, () => setPending([])), [uid])
   useEffect(() => subscribeFasted(uid, today, setFastedList, () => setFastedList([])), [uid, today])
@@ -176,7 +178,7 @@ export default function RecommendPage({ uid }: { uid: string }) {
     }
     // fetchKey가 나머지 값을 대신한다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [fetchKey])
+  }, [fetchKey, retry])
 
   function back() {
     if (fromHome) navigate(-1)
@@ -197,7 +199,26 @@ export default function RecommendPage({ uid }: { uid: string }) {
 
   let list
   if (loadError) list = <div className="callout">오늘 기록을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.</div>
-  else if (plan.error || cur?.error) list = <div className="callout">추천 음식을 불러오지 못했어요. 인터넷 연결을 확인하고 다시 추천 받아 주세요.</div>
+  else if (plan.error) list = <div className="callout">추천 음식을 고르지 못했어요. 잠시 후 다시 열어 주세요.</div>
+  else if (cur?.error)
+    list = (
+      <div className="callout">
+        추천 음식을 불러오지 못했어요. 인터넷 연결을 확인해 주세요.
+        <div>
+          <button
+            type="button"
+            className="chipbtn dark"
+            style={{ marginTop: 10 }}
+            onClick={() => {
+              setFetched(null)
+              setRetry((n) => n + 1)
+            }}
+          >
+            다시 시도
+          </button>
+        </div>
+      </div>
+    )
   else if (!cur || !meal) list = <div className="callout">추천 음식을 고르는 중이에요…</div>
   else if (cur.items!.length === 0) list = <div className="callout">지금 남은 양에 맞는 음식을 찾지 못했어요.</div>
   else {

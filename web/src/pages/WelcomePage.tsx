@@ -85,6 +85,7 @@ export default function WelcomePage({ user }: { user: User | null }) {
 
   // [구글로 시작하기]로 로그인했으면(팝업이든 리디렉션이든): 동의를 불러온 뒤 홈(지금 약관에 동의함) 또는 동의 화면으로
   const consent = useConsent()
+  const [waiting, setWaiting] = useState(false)
   useEffect(() => {
     if (!user || consent === undefined || !isWelcomeLogin()) return
     markWelcomeLogin(false)
@@ -103,7 +104,12 @@ export default function WelcomePage({ user }: { user: User | null }) {
   async function start() {
     if (user) {
       // 이미 로그인한 채(처음 화면 다시 보기·동의 전 계정): 로그인 창 없이
-      if (consent === undefined) return
+      // 동의를 아직 불러오는 중이면 표시만 남겨 두고, 불러오면 위 effect가 이어서 옮긴다(눌러도 반응이 없던 것)
+      if (consent === undefined) {
+        markWelcomeLogin(true)
+        setWaiting(true)
+        return
+      }
       void navigate(hasCurrentConsent(consent) ? '/' : '/consent', { replace: true })
       return
     }
@@ -146,8 +152,8 @@ export default function WelcomePage({ user }: { user: User | null }) {
       </div>
       <div className="bottom">
         <div className="inner pad" style={{ flexDirection: 'column', gap: 2 }}>
-          <button type="button" className="btn ink" disabled={busy} onClick={() => void start()}>
-            {busy ? '로그인 중…' : '구글로 시작하기'}
+          <button type="button" className="btn ink" disabled={busy || (waiting && !!user)} onClick={() => void start()}>
+            {busy ? '로그인 중…' : waiting && user ? '잠시만요…' : '구글로 시작하기'}
           </button>
           <LoginNotice inApp={inApp} error={error} />
         </div>

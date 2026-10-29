@@ -103,6 +103,8 @@ function pressable(onPress: () => void, label?: string) {
 type EntryState = { fromHome?: unknown; openAfter?: unknown; openRecord?: unknown }
 
 const r1 = (n: number) => Math.round(n * 10) / 10
+/** [수정 완료] 저장 거부를 기다리는 최대 시간(오프라인이면 끝나지 않으므로 그 뒤에는 나간다) */
+const FINISH_WAIT_MS = 1500
 
 /** 시안 .fs 설명 줄의 실제 값: 먹기 전 무게 · 남긴 비율(있을 때) · 같이 먹은 인원(2명 이상일 때) · 수정됨 */
 function describeItem(it: MealItem, edited: boolean): string {
@@ -146,6 +148,7 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
     peekFlash('meal:saved') ? { text: '저장했어요', at: Date.now() } : null,
   )
   const [actionError, setActionError] = useState<string | null>(null)
+  const finishing = useRef(false)
 
   useEffect(() => clearFlash('meal:saved'), [])
   useEffect(() => {
@@ -198,16 +201,39 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
     })
   }, [blocker])
 
-  /** [수정 완료]: 고친 내용이 있으면 저장하고 "저장했어요", 없으면 그냥 홈(보던 위치)으로 */
-  function finish() {
+  /** [수정 완료]: 고친 내용이 있으면 저장하고 "저장했어요", 없으면 그냥 홈(보던 위치)으로.
+   *  오프라인이면 쓰기가 끝나지 않으므로 FINISH_WAIT_MS까지만 기다린다(쓰기는 기기에 남아 연결되면 올라간다).
+   *  그 안에 거부(검사·보안 규칙)되면 나가지 않고 그 기록의 고친 내용을 남긴 채 안내한다. */
+  async function finish() {
+    if (finishing.current) return
+    finishing.current = true
     const edits = allPendingEdits()
-    // 기다리지 않는다(오프라인이면 끝나지 않는다). 쓰기는 기기에 남아 연결되면 올라간다.
-    for (const [id, e] of edits) {
+    const jobs = edits.map(([id, e]) => {
       // 수정 화면에서 음식을 지워 다 남긴 음식만 남았으면 기록째(사진도) 지운다(사용자 결정, X와 같은 규칙)
       const savedCount = meals?.find((x) => x.id === id)?.analysis?.items.length ?? 0
       const job =
         e.analysis.items.length < savedCount && e.analysis.items.every(isAllLeft) ? deleteMeal(uid, id) : saveMeal(uid, id, e)
-      job.catch((err: unknown) => console.warn('[meal] 수정 저장 실패', err))
+      return job.then(
+        () => {
+          dropPendingEdit(id)
+          return true
+        },
+        (err: unknown) => {
+          console.warn('[meal] 수정 저장 실패', err)
+          return false
+        },
+      )
+    })
+    const failed = await Promise.race([
+      Promise.all(jobs).then((r) => r.includes(false)),
+      new Promise<false>((r) => window.setTimeout(() => r(false), FINISH_WAIT_MS)),
+    ])
+    if (failed) {
+      finishing.current = false
+      setActionError('고친 내용을 저장하지 못했어요. 값을 확인하고 다시 [수정 완료]를 눌러 주세요.')
+      showToast('저장하지 못했어요')
+      window.scrollTo(0, 0)
+      return
     }
     clearPendingEdits()
     leave(edits.length > 0)

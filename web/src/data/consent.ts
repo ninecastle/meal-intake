@@ -33,6 +33,9 @@ export function subscribeConsent(uid: string, onData: (c: Consent | null) => voi
   return onSnapshot(
     userRef(uid),
     (s) => {
+      // 기기 캐시에 계정 문서가 없을 뿐인 첫 값(로그아웃 때 캐시를 지운 뒤 등)은 온라인이면 서버 답을 기다린다
+      // (동의한 계정이 잠깐 "동의 없음"으로 보여 소개·동의 화면으로 가지 않게)
+      if (!s.exists() && s.metadata.fromCache && (typeof navigator === 'undefined' || navigator.onLine)) return
       const c = s.exists() ? (s.data() as { consent?: Record<string, unknown> }).consent : undefined
       if (!c || typeof c.version !== 'string' || c.required !== true) return onData(null)
       const at = c.agreedAt as Timestamp | null | undefined

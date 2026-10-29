@@ -166,9 +166,10 @@ export default function AiReportPane({ uid, today, onOpenDay }: AiReportPaneProp
     const forWeek = week
     setReport({ week: forWeek, state: { kind: 'generating', saved: prevSaved } })
     const run = (async () => {
-      // 다른 기기에서 다시 만들었을 수 있으니 저장 직전 최신 genCount·createdAt을 다시 읽는다
-      const latest = prevSaved ? await getReport(uid, forWeek) : null
-      if (latest && latest.genCount >= REPORT_MAX_GEN) return latest
+      // 다른 기기에서 만들었거나 저장본 읽기가 실패한 뒤 [다시 시도]일 수 있으니 AI를 부르기 전에 늘 최신 저장본을 읽는다.
+      // 저장본이 지금 기록과 같으면(읽기만 실패했던 것·다른 기기에서 이미 새로 만듦) AI를 부르지 않고 그것을 쓰고, 다시 만들 때는 genCount·createdAt을 이어 간다.
+      const latest = await getReport(uid, forWeek)
+      if (latest && (latest.genCount >= REPORT_MAX_GEN || latest.inputHash === s.inputHash)) return latest
       const r = await timed(
         'AI 호출',
         generateReportText(s, { under18, meals: stats.curMeals, compare: compareWeeks(s, stats.prev), goal: goal?.targets ?? null }),
