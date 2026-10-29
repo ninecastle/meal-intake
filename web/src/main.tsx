@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 import { reloadOnceForNewVersion } from './lib/chunkReload'
+import { retryPendingCleanup } from './lib/logoutCleanup'
 import { disableAutofillEverywhere } from './lib/noAutofill'
 
 disableAutofillEverywhere()
@@ -15,8 +16,13 @@ if (import.meta.env.PROD) {
   })
 }
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <App />
-  </StrictMode>,
-)
+// 지난 로그아웃 때 다 못 지운 기기 자료가 있으면(표시 키) Firestore를 쓰기 전에 한 번 더 지운다(최대 약 1.5초씩).
+void retryPendingCleanup()
+  .catch(() => undefined)
+  .finally(() => {
+    createRoot(document.getElementById('root')!).render(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    )
+  })

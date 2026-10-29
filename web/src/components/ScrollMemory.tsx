@@ -40,6 +40,16 @@ export function resetScroll(key: string): void {
   saved.set(key, 0)
 }
 
+/** 이 문서를 새로 열었는지(새로고침·앞뒤 이동이 아님) */
+function firstLoadIsNew(): boolean {
+  try {
+    const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
+    return nav?.type === 'navigate'
+  } catch {
+    return false
+  }
+}
+
 /** replace인데 위치를 그대로 둘지: 같은 화면 안의 주소 바꾸기만(홈 날짜 바꾸기는 맨 위) */
 function keepOnReplace(prev: Location | null, next: Location): boolean {
   if (!prev || prev.pathname !== next.pathname) return false
@@ -72,6 +82,13 @@ export default function ScrollMemory() {
     const prev = prevLoc.current
     prevLoc.current = location
     activeKey.current = location.key
+    // 탭에서 새로 연 페이지(주소 입력·링크·location.replace·로그인 리디렉트)의 첫 칸은 키가 늘 "default"라
+    // 같은 탭에서 앞서 연 다른 페이지의 위치가 남아 있다. 새로고침·앞뒤 이동으로 연 때만 기억한 위치로 돌아가고, 그 밖에는 맨 위.
+    if (!prev && type === 'POP' && firstLoadIsNew()) {
+      saved.delete(location.key)
+      window.scrollTo(0, 0)
+      return
+    }
     // 화면이 다른 화면을 거쳐 같은 화면으로 replace로 돌아올 때(끼니 화면 → 결과 화면 → 끼니 화면) 떠날 때 위치를 state.scrollY로 넘긴다
     const stateY = (location.state as { scrollY?: unknown } | null)?.scrollY
     if (type !== 'POP' && typeof stateY !== 'number') {

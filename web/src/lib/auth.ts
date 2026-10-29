@@ -10,8 +10,8 @@ import {
   type User,
 } from 'firebase/auth'
 import { useEffect, useState } from 'react'
-import { beforePhotoStore } from '../photos/beforePhotoStore'
 import { auth } from './firebase'
+import { clearDeviceDataAfterSignOut } from './logoutCleanup'
 
 export type AuthErrorCode = 'AUTH_CANCELLED' | 'AUTH_INAPP_BROWSER' | 'AUTH_FAILED'
 
@@ -90,14 +90,21 @@ export function consumeRedirectResult(): Promise<AuthError | null> {
 }
 
 /**
- * 먹기 전 사진(IndexedDB meal-photos)을 지운 뒤 로그아웃한다.
+ * 로그아웃하고 이 기기의 계정 자료(먹기 전 사진 IndexedDB, Firestore 영구 캐시, 계정 localStorage·sessionStorage 키)를
+ * 지운 뒤 /welcome을 새로 불러온다(lib/logoutCleanup). signOut이 실패하면 던진다(지우지 않음).
+ * 지우기는 실패해도 로그아웃·새로 불러오기는 하고, 못 지운 것은 다음 시작 때 다시 지운다.
  * 분석 결과 캐시(IndexedDB meal-analysis-cache)는 지우지 않는다: 사진이 없고 결과만 있으며,
  * before·after는 사진 해시 키라 같은 사진 없이는 꺼낼 수 없고, nutrition은 음식 이름 키라 개인 정보가 아니다.
  * 7일이면 만료되고, 남겨 두면 다시 로그인했을 때 같은 사진·이름의 AI 호출을 아낀다.
  */
 export async function signOutAndClear(): Promise<void> {
-  await beforePhotoStore.clearAll() // 던지지 않는다
   await signOut(auth)
+  try {
+    await clearDeviceDataAfterSignOut()
+  } catch (e) {
+    console.warn('[logout] 기기 자료 지우기 실패', e)
+  }
+  location.replace('/welcome')
 }
 
 /** 로그인 상태. 첫 판정 전에는 loading=true. */
