@@ -1,0 +1,107 @@
+{
+  "file": "jjamppong.jpg",
+  "model": "gemini-3.5-flash-lite",
+  "prompt": "a11",
+  "at": "2026-10-29T03:19:59.543Z",
+  "ms": 9045,
+  "usage": {
+    "promptTokenCount": 2671,
+    "candidatesTokenCount": 500,
+    "totalTokenCount": 3171,
+    "promptTokensDetails": [
+      {
+        "modality": "TEXT",
+        "tokenCount": 1591
+      },
+      {
+        "modality": "IMAGE",
+        "tokenCount": 1080
+      }
+    ],
+    "serviceTier": "standard"
+  },
+  "text": "{\n  \"f\": [\n    {\n      \"id\": \"i1\",\n      \"n\": \"짬뽕 면·건더기\",\n      \"l\": \"중앙의 큰 흰색 면기\",\n      \"g\": 450,\n      \"c\": 0.9,\n      \"p\": {\n        \"k\": 110,\n        \"c\": 18,\n        \"p\": 6,\n        \"f\": 2\n      },\n      \"wc\": null,\n      \"d\": {\n        \"su\": 1,\n        \"fi\": 2,\n        \"sf\": 0.4,\n        \"tf\": 0,\n        \"pu\": 0.5,\n        \"mu\": 0.6,\n        \"ch\": 35,\n        \"na\": 450,\n        \"ka\": 180\n      },\n      \"fr\": false,\n      \"b\": null,\n      \"ds\": \"짬뽕\"\n    },\n    {\n      \"id\": \"i2\",\n      \"n\": \"짬뽕 국물\",\n      \"l\": \"중앙의 큰 흰색 면기\",\n      \"g\": 500,\n      \"c\": 0.9,\n      \"p\": {\n        \"k\": 45,\n        \"c\": 3,\n        \"p\": 2,\n        \"f\": 3\n      },\n      \"wc\": null,\n      \"d\": {\n        \"su\": 1.5,\n        \"fi\": 0.2,\n        \"sf\": 0.6,\n        \"tf\": 0,\n        \"pu\": 0.8,\n        \"mu\": 1.0,\n        \"ch\": 10,\n        \"na\": 950,\n        \"ka\": 150\n      },\n      \"fr\": false,\n      \"b\": null,\n      \"ds\": \"짬뽕\"\n    }\n  ],\n  \"w\": [\n    \"짬뽕: 국물 속의 나트륨 함량이 높을 수 있으니 주의하세요.\"\n  ]\n}",
+  "items": [
+    {
+      "name": "짬뽕 면·건더기",
+      "grams": 450,
+      "wc": null,
+      "franchise": false,
+      "brand": null,
+      "dish": "짬뽕",
+      "kcal100": 110,
+      "na100": 450
+    },
+    {
+      "name": "짬뽕 국물",
+      "grams": 500,
+      "wc": null,
+      "franchise": false,
+      "brand": null,
+      "dish": "짬뽕",
+      "kcal100": 45,
+      "na100": 950
+    }
+  ],
+  "warnings": [
+    "짬뽕: 국물 속의 나트륨 함량이 높을 수 있으니 주의하세요."
+  ],
+  "parsed": [
+    {
+      "id": "i1",
+      "name": "짬뽕 면·건더기",
+      "location": "중앙의 큰 흰색 면기",
+      "before_grams": 450,
+      "confidence": 0.9,
+      "per_100g_guess": {
+        "kcal": 110,
+        "carbs_g": 18,
+        "protein_g": 6,
+        "fat_g": 2
+      },
+      "whole_count": null,
+      "detail_guess": {
+        "sugar_g": 1,
+        "fiber_g": 2,
+        "satfat_g": 0.4,
+        "transfat_g": 0,
+        "polyunsat_g": 0.5,
+        "monounsat_g": 0.6,
+        "cholesterol_mg": 35,
+        "sodium_mg": 450,
+        "potassium_mg": 180
+      },
+      "franchise": false,
+      "brand": null,
+      "dish": "짬뽕"
+    },
+    {
+      "id": "i2",
+      "name": "짬뽕 국물",
+      "location": "중앙의 큰 흰색 면기",
+      "before_grams": 500,
+      "confidence": 0.9,
+      "per_100g_guess": {
+        "kcal": 45,
+        "carbs_g": 3,
+        "protein_g": 2,
+        "fat_g": 3
+      },
+      "whole_count": null,
+      "detail_guess": {
+        "sugar_g": 1.5,
+        "fiber_g": 0.2,
+        "satfat_g": 0.6,
+        "transfat_g": 0,
+        "polyunsat_g": 0.8,
+        "monounsat_g": 1,
+        "cholesterol_mg": 10,
+        "sodium_mg": 950,
+        "potassium_mg": 150
+      },
+      "franchise": false,
+      "brand": null,
+      "dish": "짬뽕"
+    }
+  ]
+}

@@ -90,6 +90,9 @@ export interface FoodCardProps {
   onKcal: (kcal: number | null) => void
   onDelete: () => void
   onKcalFocused: () => void
+  /** 국물 요리 나누기(2026-10-29): 'split' = 국물 요리 한 항목 → [국물 따로 보기], 'merge' = 나뉜 두 항목 → [하나로 보기] */
+  soupAction?: 'split' | 'merge' | null
+  onSoup?: () => void
 }
 
 /** 시안 .segment(role tablist·tab, aria-selected) */
@@ -309,7 +312,14 @@ export default function FoodCard(p: FoodCardProps) {
           </div>
         </div>
 
-        <div style={LABEL}>남긴 양</div>
+        <div style={{ ...LABEL, display: 'flex', alignItems: 'baseline' }}>
+          남긴 양
+          {p.soupAction && (
+            <button type="button" className="link" onClick={p.onSoup} style={{ padding: 0, fontSize: 12, marginLeft: 'auto' }}>
+              {p.soupAction === 'split' ? '국물 따로 보기' : '하나로 보기'}
+            </button>
+          )}
+        </div>
         <Segment
           items={RATIO_PICKS}
           sel={ratioSel}

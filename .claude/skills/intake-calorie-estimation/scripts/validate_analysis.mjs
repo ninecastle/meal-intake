@@ -22,7 +22,7 @@ const REQUIRED = ["id", "name", "db_food_code", "eaters", "before_grams", "remai
 const ITEM_KEYS = new Set([...REQUIRED, "location", "db_name", "db_match", "db_ml_converted", "db_reference",
   "per_100g_fill", "user_edited", "grams_source", "published_g", "unit_count", "ratio_assumed",
   "detail_per_100g", "detail_source", "detail_consumed",
-  "brand", "franchise", "unit", "menu_pick", "franchise_ref"]);
+  "brand", "franchise", "unit", "menu_pick", "franchise_ref", "soup_of"]);
 const REF_KEYS = new Set(["db_food_code", "db_name", "db_match", "kcal_per_100g", "ml_converted"]);
 // D4-a 세부 영양소(D4-c부터 9가지): 100g당 상한(g 키 100, 콜레스테롤 5000mg, 나트륨 40000mg, 칼륨 10000mg), 출처는 db·ai_estimate. 키는 모두 선택(4가지로 저장된 기록도 통과)
 const DETAIL_MAX = {
@@ -80,6 +80,7 @@ export function checkAnalysis(r) {
     ids.add(it.id);
     if (typeof it.name !== "string") errors.push(`${tag}: name은 문자열이어야 한다`);
     if ("location" in it && typeof it.location !== "string") errors.push(`${tag}: location은 문자열이어야 한다`);
+    if ("soup_of" in it && !(nonEmpty(it.soup_of) && it.soup_of.length <= 40)) errors.push(`${tag}: soup_of는 1~40자 문자열이어야 한다`);
     if ("user_edited" in it && typeof it.user_edited !== "boolean") errors.push(`${tag}: user_edited는 boolean이어야 한다`);
     if (typeof it.kcal_overridden !== "boolean") errors.push(`${tag}: kcal_overridden은 boolean이어야 한다`);
     if (typeof it.needs_review !== "boolean") errors.push(`${tag}: needs_review는 boolean이어야 한다`);

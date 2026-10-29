@@ -99,6 +99,9 @@ export interface MealItem {
   detail_source?: Partial<Record<DetailKey, DetailSource>>
   /** D4-a. 먹은 양 기준 = detail_per_100g × consumed_grams ÷ 100(탄단지와 같은 공식). g 키는 소수 첫째 자리, mg 키는 정수로 저장 */
   detail_consumed?: DetailNutrients
+  /** 국물 요리 나누기(2026-10-29): 한 그릇을 "○○ 면·건더기"/"○○ 국물" 두 항목으로 나눴을 때 두 항목에 같은 요리 이름(예: "짬뽕").
+   *  화면은 이 값으로 두 항목을 한 묶음·대표 이름으로 보인다. 나누지 않은 항목에는 없다 */
+  soup_of?: string
 }
 
 export interface MealIntakeAnalysis {
@@ -132,6 +135,8 @@ export interface BeforeItem {
   franchise?: boolean
   /** a10: 포장지·로고·컵에 보이는 브랜드 이름(모델 표기 그대로, 한글). 보이지 않으면 null. BrandId 맞추기는 assembleAnalysis가 한다 */
   brand?: string | null
+  /** a11: 국물 요리를 면·건더기/국물 두 항목으로 나눴을 때 두 항목에 같은 요리 이름(짧은 칸 ds, 예: "짬뽕"). 나누지 않은 음식은 null·없음 */
+  dish?: string | null
 }
 export interface BeforeAnalysis { items: BeforeItem[]; warnings: string[]; model: string; prompt_version: string }
 export interface AfterItem {

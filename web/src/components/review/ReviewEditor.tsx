@@ -18,6 +18,7 @@ import {
   setRemainingRatio,
 } from '../../analysis/compute'
 import { detailFor, resolveNutrition } from '../../analysis/nutrition'
+import { isSoupDish, loadBroth, mergeSoupItems, splitSoupItem } from '../../analysis/nutrition/broth'
 import { brandOfDbCode, pickToNutrition, type PickNutrition } from '../../analysis/nutrition/franchise'
 import type { MealIntakeAnalysis, MealItem, NutritionResult } from '../../types/analysis'
 import { macroPct } from '../mealText'
@@ -41,6 +42,12 @@ export interface ReviewEditorProps {
 }
 
 const UNDO_MS = 3000
+
+/** 나뉜 두 항목을 다시 합칠 수 있는지(칼로리를 직접 고쳤거나 영양값이 없으면 broth가 합치지 않으므로 [하나로 보기]를 숨긴다) */
+function canMerge(items: MealItem[], soupOf: string): boolean {
+  const pair = items.filter((x) => x.soup_of === soupOf)
+  return pair.length === 2 && mergeSoupItems(pair[0], pair[1]) !== null
+}
 const LATER = 1_000_000
 
 /** 이름이 바뀌면 다른 메뉴이므로 "공개 중량" 표시만 지운다(무게는 그대로, 스펙 4.5.5) */
@@ -111,6 +118,18 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
   }, [busy])
 
   const onKcalFocused = useCallback(() => setFocusKcalId(null), [])
+
+  // 국물 요리 나누기(2026-10-29 사용자 결정): 요리별 국물 비율 표를 미리 불러 둔다(다 불러오면 [국물 따로 보기]가 보인다)
+  const [brothReady, setBrothReady] = useState(false)
+  useEffect(() => {
+    let alive = true
+    loadBroth()
+      .then(() => alive && setBrothReady(true))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [])
 
   function emit(items: MealItem[]) {
     const a = latest.current
@@ -276,6 +295,42 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
     emit(items.filter((it) => it.id !== id))
   }
 
+  /** [국물 따로 보기]: 국물 요리 한 카드를 "○○ 면·건더기"/"○○ 국물" 두 카드로(같은 자리, 무게·남긴 양은 broth가 나눈다) */
+  async function splitSoup(id: string) {
+    const it = find(id)
+    if (!it || pending[id] !== undefined) return
+    setPending((p) => ({ ...p, [id]: it.name }))
+    const pair = await splitSoupItem(it).catch(() => null)
+    setPending((p) => omit(p, id))
+    if (!pair || !find(id)) return
+    const base = order.current.get(id) ?? 0
+    order.current.set(pair[0].id, base)
+    order.current.set(pair[1].id, base + 0.5)
+    emit(latest.current.items.flatMap((x) => (x.id === id ? pair : [x])))
+  }
+
+  /** [하나로 보기]: 나뉜 두 카드를 다시 한 카드로. 남긴 양이 다르면 먼저 묻는다 */
+  async function mergeSoup(id: string) {
+    const a = find(id)
+    if (!a?.soup_of) return
+    const pair = latest.current.items.filter((x) => x.soup_of === a.soup_of)
+    if (pair.length !== 2) return
+    const [x, y] = pair
+    if (x.remaining_ratio !== y.remaining_ratio) {
+      const ok = await askConfirm({
+        title: '하나로 합칠까요?',
+        body: '면·건더기와 국물의 남긴 양이 달라요. 합치면 먹은 양 기준으로 다시 계산돼요.',
+        ok: '하나로 보기',
+        cancel: '취소',
+      })
+      if (!ok || !find(x.id) || !find(y.id)) return
+    }
+    const merged = mergeSoupItems(find(x.id)!, find(y.id)!)
+    if (!merged) return
+    order.current.set(merged.id, order.current.get(x.id) ?? 0)
+    emit(latest.current.items.flatMap((it) => (it.id === x.id ? [merged] : it.id === y.id ? [] : [it])))
+  }
+
   function restore() {
     const u = undo
     if (!u) return
@@ -405,6 +460,16 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
                 onKcal={(k) => update(it.id, (x) => setKcalOverride(x, k))}
                 onDelete={() => remove(it.id)}
                 onKcalFocused={onKcalFocused}
+                soupAction={
+                  it.soup_of
+                    ? canMerge(analysis.items, it.soup_of)
+                      ? 'merge'
+                      : null
+                    : brothReady && it.name !== '' && isSoupDish(it.name)
+                      ? 'split'
+                      : null
+                }
+                onSoup={() => void (it.soup_of ? mergeSoup(it.id) : splitSoup(it.id))}
               />
             ))}
           </ul>

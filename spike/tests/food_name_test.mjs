@@ -41,4 +41,9 @@ assert.equal(representativeFood(['현미밥', '쌀밥']), '현미밥 외 1개') 
 assert.equal(representativeFood(['쌀밥']), '쌀밥')
 assert.equal(representativeFood(['버거_빅맥 버거', '쌀밥']), '빅맥 버거 외 1개')
 assert.equal(representativeFood([]), '')
+// 국물 요리 나누기: 같은 요리의 면·건더기 + 국물은 요리 하나로 센다
+assert.equal(representativeFood(['짬뽕 면·건더기', '짬뽕 국물']), '짬뽕')
+assert.equal(representativeFood(['쌀밥', '순대국밥 건더기', '순대국밥 국물', '깍두기']), '순대국밥 외 2개')
+assert.equal(representativeFood(['짬뽕 국물', '군만두']), '짬뽕 국물 외 1개') // 국물만 있으면 그대로
+assert.equal(representativeFood(['짬뽕 면·건더기']), '짬뽕') // 국물을 다 남겨 숨김
 console.log(`모두 통과(예시 ${cases.length}개, DB 이름 ${n}개, 대표 음식)`)

@@ -21,6 +21,9 @@
 // a10(2026-10-29, 프랜차이즈 보충표 사용자 결정): a9 + 음식마다 fr(프랜차이즈 메뉴로 보이면 true)·b(포장지·로고·컵·상자에 보이는 브랜드, 없으면 null).
 //   같은 호출 안에서 받는다(호출 수 그대로). n에는 브랜드를 빼고 메뉴 이름만. 정리: franchise는 true일 때만 true, brand는 한 줄 30자 문자열 또는 null,
 //   brand가 있으면 franchise=true. BrandId 맞추기(보충표 aliases)는 assembleAnalysis가 한다. a9 캐시는 다시 분석한다.
+// a11(2026-10-29, 국물 요리 나누기 사용자 결정): a10 + 규칙 5에 면·국물 요리(라면·짬뽕·칼국수·우동·쌀국수·냉면·마라탕·국밥·탕 등)를 명시해
+//   "○○ 면·건더기"(면이 없으면 "○○ 건더기")와 "○○ 국물" 두 항목으로 나누고, 두 항목의 ds(dish)에 같은 요리 이름을 받는다.
+//   정리: dish는 한 줄 30자 문자열 또는 null. 두 항목을 한 그릇 값으로 나누는 일은 assembleAnalysis(nutrition/broth.ts)가 한다. a10 캐시는 다시 분석한다.
 // 이 파일은 import.meta.env를 쓰지 않는다(Node 시험 스크립트에서도 그대로 불러 쓴다).
 import { Schema, ThinkingLevel, type GenerationConfig } from 'firebase/ai'
 import type { BeforeItem, DetailNutrients, Nutrients } from '../types/analysis'
@@ -29,10 +32,10 @@ import { koreanWarnings } from './koreanText.ts'
 import { expandBeforeRaw } from './shortKeys.ts'
 
 // a9(2026-10-29): 급식 후보에 있는데 사진에 없어 뺀 음식은 경고에도 쓰지 않는다(후보 블록 한 줄, 실기기 화면의 "제외함" 경고들).
-export const PROMPT_VERSION_A = 'a10'
+export const PROMPT_VERSION_A = 'a11'
 
 export const SYSTEM_INSTRUCTION_A = `당신은 식사 사진을 분석하는 영양 보조 도구다. 먹기 전 식탁 사진 한 장이 주어진다.
-응답 칸 이름은 짧게 줄여 두었다: f=음식 목록, w=경고 목록. 음식 하나는 id, n=이름, l=위치, g=먹기 전 중량(g), c=확신(0~1), p=100g당 열량·탄단지, wc=통째로 보이는 개수, d=100g당 세부 영양소, fr=프랜차이즈 메뉴 여부, b=보이는 브랜드.
+응답 칸 이름은 짧게 줄여 두었다: f=음식 목록, w=경고 목록. 음식 하나는 id, n=이름, l=위치, g=먹기 전 중량(g), c=확신(0~1), p=100g당 열량·탄단지, wc=통째로 보이는 개수, d=100g당 세부 영양소, fr=프랜차이즈 메뉴 여부, b=보이는 브랜드, ds=국물 요리를 나눈 두 항목의 요리 이름.
 
 할 일:
 1. 보이는 음식을 그릇 단위로 모두 f에 나열하고 i1, i2 … 순서로 id를 붙인다.
@@ -40,7 +43,11 @@ export const SYSTEM_INSTRUCTION_A = `당신은 식사 사진을 분석하는 영
    단, 종류에 따라 칼로리 차이가 큰 음식(햄버거·샌드위치, 치킨, 피자, 떡볶이·라면, 마라탕·샐러드, 카페 음료, 케이크·디저트)은 사진에 보이는 특징까지 넣은 구체적인 이름으로 쓴다(예: "더블 치즈버거", "양념치킨 순살", "페퍼로니 피자", "로제 떡볶이", "아이스 카페라떼", "생크림 딸기 케이크"). 사진에서 보이지 않는 특징은 지어내지 않는다.
 3. l(위치)에 그릇 위치와 모양을 짧게 적는다(예: "왼쪽 위 흰 밥공기"). 나중에 먹은 후 사진에서 같은 그릇을 찾는 데 쓴다.
 4. 각 음식의 먹기 전 중량 g(그램)를 추정한다. 수저, 표준 밥공기(밥 약 210g), 접시 크기를 단서로 쓴다.
-5. 국·찌개는 건더기와 국물을 별도 항목으로 나눈다.
+5. 국물이 있는 요리(국·찌개·탕·전골·국밥, 그리고 라면·짬뽕·칼국수·우동·쌀국수·물냉면·밀면·잔치국수·콩국수·라멘·마라탕·떡국·수제비 같은 면·국물 요리)는 한 그릇을 건더기와 국물 두 항목으로 나눈다.
+   - 이름: 면이 든 요리는 "○○ 면·건더기"와 "○○ 국물", 면이 없는 요리(국밥·탕·찌개·국·전골 등)는 "○○ 건더기"와 "○○ 국물"로 쓴다. ○○은 요리 이름이다(예: "짬뽕 면·건더기"와 "짬뽕 국물", "순대국밥 건더기"와 "순대국밥 국물").
+   - 두 항목의 ds에는 같은 요리 이름을 적는다(예: ds="짬뽕"). l에는 같은 그릇 위치를 적는다.
+   - g·p·d는 각 부분(면·건더기, 국물)의 무게와 그 부분의 100g당 값으로 따로 적는다.
+   - 비빔냉면·비빔국수·짜장면·볶음면처럼 국물이 거의 없는 요리와 국물이 없는 음식은 나누지 않고 ds=null.
 6. p에 100g당 k=kcal, c=탄수화물(g), p=단백질(g), f=지방(g) 추정값을 적는다. 일반적인 값을 그대로 쓰지 말고 보이는 구성(패티 수, 치즈·소스·토핑, 튀김옷, 크림·시럽 등)을 따져 그 음식에 맞게 추정한다. DB에 없거나, 종류 차이가 큰 음식이 DB 대표값에만 맞을 때 쓰인다.
 7. wc: 버거, 피자 한 판, 치킨 한 마리, 도시락, 컵 음료처럼 한 개·한 마리·한 판·1인분이 손대지 않은 모양 그대로 통째로 보이면 그 개수를 정수(1~10)로 적는다. 일부만 덜어 왔거나, 잘라 놓은 조각(피자 몇 조각 등)이거나, 여러 그릇에 나눠 담겼거나, 반찬·나물·국물처럼 정해진 크기가 없는 음식이면 null로 적는다. 판단이 어려우면 null. g는 wc와 상관없이 그대로 추정한다.
 8. d에 그 음식 100g당 su=당류(g), fi=식이섬유(g), sf=포화지방(g), tf=트랜스지방(g), pu=다불포화지방(g), mu=단일불포화지방(g), ch=콜레스테롤(mg), na=나트륨(mg), ka=칼륨(mg) 추정값을 적는다. 1인분이나 그릇 전체 값이 아니라 100g당 값이다. 한국에서 흔히 먹는 조리 기준으로 보이는 구성을 따져 추정하고, 짐작할 수 없는 값은 null로 적는다.
@@ -174,6 +181,7 @@ export const RESPONSE_SCHEMA_A = Schema.object({
           d: DETAIL_SCHEMA_A,
           fr: Schema.boolean({ description: '프랜차이즈 메뉴로 보임' }),
           b: Schema.string({ nullable: true, description: '보이는 브랜드(없으면 null)' }),
+          ds: Schema.string({ nullable: true, description: '국물 요리를 나눈 두 항목의 요리 이름(나누지 않으면 null)' }),
         },
       }),
     }),
@@ -265,6 +273,14 @@ export function franchiseOf(fr: unknown, b: unknown): Pick<BeforeItem, 'franchis
   return { franchise: fr === true || brand !== null, brand }
 }
 
+/** a11 dish 칸 정리: 한 줄 30자 이하 문자열, 빈 것·"null"·"없음"은 null. 칸이 없으면(a10 이하 응답·캐시) 아무것도 넣지 않는다 */
+export function dishOf(v: unknown): Pick<BeforeItem, 'dish'> {
+  if (v === undefined) return {}
+  if (typeof v !== 'string') return { dish: null }
+  const t = v.replace(CTRL_RE, ' ').replace(/\s+/g, ' ').trim().slice(0, 30)
+  return { dish: t && !/^(null|none|없음|-)$/i.test(t) ? t : null }
+}
+
 /** 모델 원본(JSON 객체) → 정리된 항목. id는 i1부터 다시 매긴다. */
 export function normalizeBeforeResponse(rawIn: unknown): NormalizeBeforeResult {
   const raw = expandBeforeRaw(rawIn) // a8 짧은 칸 이름 → 원래 이름(원래 이름 응답·캐시는 그대로)
@@ -309,6 +325,7 @@ export function normalizeBeforeResponse(rawIn: unknown): NormalizeBeforeResult {
       whole_count: normWholeCount(it.whole_count),
       detail_guess: checkDetail(it.detail_guess),
       ...franchiseOf(it.franchise, it.brand),
+      ...dishOf(it.dish),
     })
   }
   if (items.length === 0) return { ok: false, kind: 'invalid', detail: '형식에 맞는 항목이 없습니다' }

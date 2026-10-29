@@ -153,7 +153,7 @@ ok(pa.ok && pa.items[2].franchise === false && pa.items[2].brand === null, '"없
 ok(pa.ok && pa.items[3].franchise === true && pa.items[3].brand === '스타벅스', '브랜드가 있으면 franchise=true, 공백 정리')
 const old = A.normalizeBeforeResponse({ items: [{ id: 'i1', name: '김치찌개', location: '', before_grams: 300, confidence: 0.8, per_100g_guess: null }], warnings: [] })
 ok(old.ok && !('franchise' in old.items[0]) && !('brand' in old.items[0]), 'a9 이하 응답(원래 이름)엔 칸을 넣지 않음')
-ok(A.PROMPT_VERSION_A === 'a10' && A.SYSTEM_INSTRUCTION_A.includes('fr=프랜차이즈') && A.SYSTEM_INSTRUCTION_A.includes('b='), '버전 a10·지시에 fr·b')
+ok(A.PROMPT_VERSION_A === 'a11' && A.SYSTEM_INSTRUCTION_A.includes('fr=프랜차이즈') && A.SYSTEM_INSTRUCTION_A.includes('b='), '버전 a10·지시에 fr·b')
 
 // ── assembleAnalysis ──
 const dbRes = (c) => {

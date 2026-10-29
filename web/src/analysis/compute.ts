@@ -381,6 +381,8 @@ function toStoredItem(it: MealItem): MealItem {
     ...(typeof it.user_edited === 'boolean' ? { user_edited: it.user_edited } : {}),
     ...storedDetail(it),
     ...franchiseFields(it),
+    // 국물 요리 나누기(2026-10-29): 같은 그릇에서 나뉜 두 항목의 요리 이름
+    ...(typeof it.soup_of === 'string' && it.soup_of.trim() !== '' ? { soup_of: it.soup_of.trim().slice(0, 40) } : {}),
   }
 }
 

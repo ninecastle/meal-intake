@@ -29,6 +29,7 @@ import {
   type MenuPick,
   type PickNutrition,
 } from './nutrition/franchise.ts'
+import { brothShareOf, loadBroth, soupBaseName, soupPartOf, splitSoupItemWith, type BrothTable } from './nutrition/broth.ts'
 
 export type ResolveNutritionFn = (
   name: string,
@@ -43,6 +44,8 @@ export interface AssembleOptions {
   detail?: (code: string) => Promise<DetailNutrients | null>
   /** 시험용 주입. 프랜차이즈 보충표. 없으면(undefined) 프랜차이즈로 보이는 음식이 있을 때만 loadFranchise()로 받는다. null이면 쓰지 않는다 */
   franchise?: FranchiseTable | null
+  /** 시험용 주입. 국물 몫 표. 없으면(undefined) dish가 있는 음식이 있을 때만 loadBroth()로 받는다. null이면 나누기 계산을 하지 않는다 */
+  broth?: BrothTable | null
 }
 
 /** 영양값 조회 동시 실행 상한 */
@@ -93,6 +96,28 @@ export function publishedGrams(b: BeforeItem, r: NutritionResult): { published_g
   return { published_g: w, unit_count: n }
 }
 
+/** 두 부분의 100g당 값을 무게로 가중 평균(한 그릇 100g당). 한쪽만 있으면 그쪽, 둘 다 없으면 null */
+function mixPer100(a: Nutrients | null, ga: number, b: Nutrients | null, gb: number): Nutrients | null {
+  if (!a || !b) return a ?? b ?? null
+  const g = ga + gb
+  if (!(g > 0)) return a
+  const m = (x: number, y: number) => Math.round(((x * ga + y * gb) / g) * 10) / 10
+  return { kcal: m(a.kcal, b.kcal), carbs_g: m(a.carbs_g, b.carbs_g), protein_g: m(a.protein_g, b.protein_g), fat_g: m(a.fat_g, b.fat_g) }
+}
+/** 세부 영양소 추정도 같은 가중 평균. 한쪽에만 있는 키는 그 값, 하나도 없으면 null */
+function mixDetail(a: DetailNutrients | null, ga: number, b: DetailNutrients | null, gb: number): DetailNutrients | null {
+  if (!a || !b) return a ?? b ?? null
+  const out: DetailNutrients = {}
+  for (const k of new Set([...Object.keys(a), ...Object.keys(b)]) as Set<keyof DetailNutrients>) {
+    const x = a[k]
+    const y = b[k]
+    if (typeof x === 'number' && typeof y === 'number') out[k] = ((x * ga + y * gb) / (ga + gb))
+    else if (typeof x === 'number') out[k] = x
+    else if (typeof y === 'number') out[k] = y
+  }
+  return Object.keys(out).length ? out : null
+}
+
 function joinVersion(a: string | undefined, b: string | undefined): string | undefined {
   const parts = [a, b].filter((v): v is string => typeof v === 'string' && v !== '')
   return parts.length ? parts.join('-') : undefined
@@ -141,7 +166,7 @@ export async function assembleAnalysis(
     else if (anyFranchise) table = await loadFranchise().catch(() => null)
     if (table && table.brands.length === 0) table = null
 
-    const items = await mapLimit(list, RESOLVE_CONCURRENCY, async (b) => {
+    const one = async (b: BeforeItem): Promise<MealItem> => {
       const a = afterById.get(b.id)
       if (after && !a) warnings.push(`${b.name}: 먹은 후 결과에 없어 남긴 비율을 정하지 못했습니다`)
       const ratio = after ? (a?.remaining_ratio ?? null) : null
@@ -229,8 +254,95 @@ export async function assembleAnalysis(
         }
       }
       return item
+    }
+
+    // 국물 요리 나누기(2026-10-29, a11): 같은 dish의 면·건더기/국물 두 항목 → 한 그릇 값(dish 이름으로 DB → 보충표 → AI)을
+    // 두 항목 무게 합 기준으로 국물 몫 표로 나눠 붙인다(두 항목 합계 = 한 그릇 값). 표에 없거나 나눌 수 없으면 각 항목을 따로 찾는다.
+    let broth: BrothTable | null = null
+    if (opts?.broth !== undefined) broth = opts.broth
+    else if (list.some((b) => typeof b.dish === 'string' && b.dish !== '')) broth = await loadBroth().catch(() => null)
+    const pairOf = new Map<string, { solid: BeforeItem; broth: BeforeItem; dish: string }>()
+    if (broth) {
+      const byDish = new Map<string, BeforeItem[]>()
+      for (const b of list) {
+        if (typeof b.dish !== 'string' || !b.dish.trim()) continue
+        const d = soupBaseName(b.dish)
+        if (!d) continue
+        const xs = byDish.get(d) ?? []
+        xs.push(b)
+        byDish.set(d, xs)
+      }
+      for (const [d, xs] of byDish) {
+        if (xs.length !== 2 || !brothShareOf(broth, d)) continue
+        const solid = xs.find((x) => soupPartOf(x.name) === 'solid')
+        const br = xs.find((x) => soupPartOf(x.name) === 'broth')
+        if (!solid || !br) continue
+        const p = { solid, broth: br, dish: d }
+        pairOf.set(solid.id, p)
+        pairOf.set(br.id, p)
+      }
+    }
+    const pairItems = async (p: { solid: BeforeItem; broth: BeforeItem; dish: string }): Promise<MealItem[] | null> => {
+      const gs = p.solid.before_grams
+      const gb = p.broth.before_grams
+      const g = gs + gb
+      const guess = mixPer100(p.solid.per_100g_guess ?? null, gs, p.broth.per_100g_guess ?? null, gb)
+      let r: NutritionResult
+      try {
+        if (signal?.aborted) throw new DOMException('aborted', 'AbortError')
+        r = await resolve(p.dish, { guess, signal })
+      } catch {
+        r = guess ? { source: 'ai_estimate', per_100g: guess, via: 'guess' } : { source: 'user_input', per_100g: null }
+      }
+      if (r.source === 'user_input') return null
+      const whole0 = draftItem({ ...p.solid, name: p.dish, before_grams: g }, null, p.solid.confidence)
+      let whole = applyNutrition(whole0, r)
+      let db: DetailNutrients | null = null
+      if (r.source === 'db' && !signal?.aborted) db = await detailOf(r.db_food_code).catch(() => null)
+      whole = applyDetail(whole, db, mixDetail(p.solid.detail_guess ?? null, gs, p.broth.detail_guess ?? null, gb))
+      const parts = splitSoupItemWith(broth, whole, gb)
+      if (!parts) return null
+      return ([[parts[0], p.solid], [parts[1], p.broth]] as const).map(([it, b]) => {
+        const a = afterById.get(b.id)
+        if (after && !a) warnings.push(`${b.name}: 먹은 후 결과에 없어 남긴 비율을 정하지 못했습니다`)
+        const ratio = after ? (a?.remaining_ratio ?? null) : null
+        const out: MealItem = {
+          ...it,
+          id: b.id,
+          ...(typeof b.location === 'string' ? { location: b.location } : {}),
+          remaining_ratio: ratio,
+          confidence: a ? Math.min(b.confidence, a.confidence) : b.confidence,
+        }
+        delete out.ratio_assumed
+        if (a?.ratio_assumed === 'not_visible' && ratio === 0) out.ratio_assumed = 'not_visible'
+        return out
+      })
+    }
+    const groups: BeforeItem[][] = []
+    const done = new Set<string>()
+    for (const b of list) {
+      if (done.has(b.id)) continue
+      const p = pairOf.get(b.id)
+      if (p) {
+        const first = list.indexOf(p.solid) < list.indexOf(p.broth) ? [p.solid, p.broth] : [p.broth, p.solid]
+        groups.push(first)
+        done.add(p.solid.id).add(p.broth.id)
+      } else {
+        groups.push([b])
+        done.add(b.id)
+      }
+    }
+    const nested = await mapLimit(groups, RESOLVE_CONCURRENCY, async (grp) => {
+      if (grp.length === 2) {
+        const p = pairOf.get(grp[0].id)!
+        const xs = await pairItems(p).catch(() => null)
+        if (xs) return p.solid === grp[0] ? xs : [xs[1], xs[0]]
+      }
+      const out: MealItem[] = []
+      for (const b of grp) out.push(await one(b))
+      return out
     })
-    return buildAnalysis(items, warnings, meta)
+    return buildAnalysis(nested.flat(), warnings, meta)
   } catch {
     return buildAnalysis([], [...warnings, '분석 결과를 조립하지 못했습니다. 음식을 직접 추가해 주세요'], meta)
   }

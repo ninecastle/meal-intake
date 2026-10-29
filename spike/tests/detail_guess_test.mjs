@@ -32,7 +32,7 @@ let n = 0
 const ok = (label) => { n++; console.log('ok', label) }
 
 // 1. 버전·지시·응답 스키마
-assert.equal(A.PROMPT_VERSION_A, 'a10') // a8(2026-10-29)은 a7 + 짧은 칸 이름(d=detail_guess 등) + 경고 말투
+assert.equal(A.PROMPT_VERSION_A, 'a11') // a8(2026-10-29)은 a7 + 짧은 칸 이름(d=detail_guess 등) + 경고 말투
 assert.equal(A.GENERATION_CONFIG_A.maxOutputTokens, 8192)
 assert.ok(/d에 그 음식 100g당/.test(A.SYSTEM_INSTRUCTION_A) && /100g당 값이다/.test(A.SYSTEM_INSTRUCTION_A) && /null로 적는다/.test(A.SYSTEM_INSTRUCTION_A))
 const schemaText = JSON.stringify(A.RESPONSE_SCHEMA_A.toJSON())

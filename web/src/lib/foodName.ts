@@ -41,12 +41,42 @@ export function isPlainRice(name: string): boolean {
   return PLAIN_RICE.test(foodName(name).replace(/\([^)]*\)/g, '').replace(/\s+/g, ''))
 }
 
+// 국물 요리 나누기(2026-10-29 사용자 결정): 한 그릇을 "짬뽕 면·건더기"/"짬뽕 국물" 두 항목으로 나눈 것
+const SOUP_SOLID = /\s+(?:면·건더기|건더기)$/
+const SOUP_BROTH = /\s+국물$/
+
+/**
+ * 같은 요리에서 나뉜 두 이름("짬뽕 면·건더기" + "짬뽕 국물")을 요리 이름("짬뽕") 하나로 합친다(홈 대표 음식·개수용).
+ * 짝이 없으면 건더기 쪽만 요리 이름으로 바꾸고 국물만 있으면 그대로 둔다. 순서는 먼저 나온 쪽 자리에.
+ */
+export function joinSoupParts(names: string[]): string[] {
+  const out: (string | null)[] = [...names]
+  for (let i = 0; i < out.length; i++) {
+    const n = out[i]
+    if (n == null) continue
+    const solid = SOUP_SOLID.test(n)
+    const broth = !solid && SOUP_BROTH.test(n)
+    if (!solid && !broth) continue
+    const base = n.replace(solid ? SOUP_SOLID : SOUP_BROTH, '')
+    const j = out.findIndex((m, k) => k > i && m != null && (solid ? SOUP_BROTH : SOUP_SOLID).test(m) && m.replace(solid ? SOUP_BROTH : SOUP_SOLID, '') === base)
+    if (!base) continue
+    // 짝이 없어도 "○○ 면·건더기"/"○○ 건더기"는 요리 이름으로(국물을 다 남겨 숨긴 경우). "○○ 국물"만 남은 것은 그대로(사골 국물 같은 음식일 수 있다)
+    if (j < 0) {
+      if (solid) out[i] = base
+      continue
+    }
+    out[i] = base
+    out[j] = null
+  }
+  return out.filter((n): n is string => n != null)
+}
+
 /**
  * 대표 음식 글자("첫 음식 외 n개", 홈 끼니 카드·먹은 후 시트 부제). 맨밥은 대표로 쓰지 않고 다음 음식을 쓴다(맨밥뿐이면 그 밥).
  * 개수는 전체에서 하나를 뺀 수. 이름은 화면 이름(foodName)으로 정리한다. 음식이 없으면 빈 문자열.
  */
 export function representativeFood(names: string[]): string {
-  const shown = names.map(foodName).filter(Boolean)
+  const shown = joinSoupParts(names.map(foodName).filter(Boolean))
   if (shown.length === 0) return ''
   const main = shown.find((n) => !isPlainRice(n)) ?? shown[0]
   return `${main}${shown.length > 1 ? ` 외 ${shown.length - 1}개` : ''}`

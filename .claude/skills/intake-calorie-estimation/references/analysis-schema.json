@@ -67,6 +67,7 @@
           "unit": {"enum": ["개", "마리", "판", "조각", "잔", "인분"]},
           "menu_pick": {"type": "object", "additionalProperties": false, "properties": {"menuId": {"type": "string"}, "dbCode": {"type": "string"}}},
           "franchise_ref": {"type": "object", "additionalProperties": false, "required": ["label", "kcal"], "properties": {"label": {"type": "string"}, "kcal": {"type": "number", "minimum": 0}}},
+          "soup_of": {"type": "string", "minLength": 1, "maxLength": 40, "description": "국물 요리 나누기(2026-10-29). 한 그릇을 면·건더기/국물 두 항목으로 나눴을 때 두 항목에 같은 요리 이름"},
           "location": {"type": "string"},
           "db_food_code": {"type": ["string", "null"], "description": "nutrition_source가 db일 때 식약처 음식 코드, 그 밖에는 null"},
           "db_name": {"type": ["string", "null"], "description": "v2. db일 때 매칭된 DB 음식명"},

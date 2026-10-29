@@ -37,3 +37,6 @@ export type { WordAlias } from './aliases.ts'
 export type { FoodHit, FoodSuggestion, MfdsFood } from './db.ts'
 export { normalizeFoodName } from './normalize.ts'
 export { PROMPT_VERSION_D } from './estimate.ts'
+// 국물 요리 나누기(2026-10-29). 화면은 nutrition/broth.ts를 직접 불러도 된다
+export { brothKindOf, brothShareOf, isSoupDish, loadBroth, mergeSoupItems, soupBaseName, soupPartNames, soupPartOf, splitSoupItem, splitSoupItemWith } from './broth.ts'
+export type { BrothShare, BrothTable } from './broth.ts'
