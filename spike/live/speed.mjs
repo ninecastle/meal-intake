@@ -26,10 +26,14 @@ const MODEL = 'gemini-3.5-flash-lite'
 const app = initializeApp({ apiKey: 'AIzaSyA6KZYiJiGbBjX_qJVcLhWn-4b6U3Jk1_s', authDomain: 'meal-intake-2026.firebaseapp.com', projectId: 'meal-intake-2026', appId: '1:686292653830:web:87f810922b0016e244f087' })
 const ai = getAI(app, { backend: new GoogleAIBackend() })
 const cfg = (c) => ({ ...c, thinkingConfig: { thinkingLevel: level } })
-const img = () => ({ type: 'inlineData', inlineData: { mimeType: 'image/jpeg', data: readFileSync(`${ROOT}spike/live/bibimbap_${side}.jpg`).toString('base64') } })
+// IMG=bibimbap4 이면 spike/live/bibimbap4_<side>.jpg(돌솥 4개 2×2 상차림, 2026-10-29 칸 이름 줄이기 실측)
+const IMG = process.env.IMG ?? 'bibimbap'
+const img = () => ({ type: 'inlineData', inlineData: { mimeType: 'image/jpeg', data: readFileSync(`${ROOT}spike/live/${IMG}_${side}.jpg`).toString('base64') } })
 
 // 호출 B 먹기 전 목록: 전후 측정에 같은 값(호출 A 사진의 돌솥 하나)
-const BEFORE = [{ id: 'i1', name: '돌솥비빔밥', location: '가운데 검은 돌솥', before_grams: 450, confidence: 0.95, per_100g_guess: null }]
+const BEFORE = IMG === 'bibimbap4'
+  ? ['왼쪽 위', '오른쪽 위', '왼쪽 아래', '오른쪽 아래'].map((loc, i) => ({ id: `i${i + 1}`, name: '돌솥비빔밥', location: `${loc} 검은 돌솥`, before_grams: 450, confidence: 0.9, per_100g_guess: null }))
+  : [{ id: 'i1', name: '돌솥비빔밥', location: '가운데 검은 돌솥', before_grams: 450, confidence: 0.95, per_100g_guess: null }]
 
 // 리포트 입력: 2026-10-19 주 7일 가짜 기록
 const MON = '2026-10-19'
@@ -94,6 +98,7 @@ for (let i = 0; i < N; i++) {
     out.finish = r.candidates?.[0]?.finishReason
     out.usage = r.usageMetadata
     const text = r.text()
+    out.raw = text
     out.parsed = parse(text)
   } catch (e) {
     out.ms = Date.now() - t0
@@ -109,4 +114,5 @@ for (let i = 0; i < N; i++) {
     if (out.status === 429 || /429|quota|RESOURCE_EXHAUSTED/i.test(out.error)) { console.log('429 — 멈춤'); break }
   }
 }
-writeFileSync(`${ROOT}spike/results/speed_${kind}_${level}_${side}.json`, JSON.stringify(runs, null, 2))
+const ver = kind === 'a' ? A.PROMPT_VERSION_A : kind === 'b' ? B.PROMPT_VERSION_B : 'r'
+writeFileSync(`${ROOT}spike/results/speed_${kind}_${level}_${side}${IMG === 'bibimbap' ? '' : '_' + IMG + '_' + ver}.json`, JSON.stringify(runs, null, 2))

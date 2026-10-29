@@ -47,8 +47,8 @@ const ok = (cond, msg) => {
 }
 
 // ── 1. 버전 ──
-ok(A.PROMPT_VERSION_A === 'a7', `PROMPT_VERSION_A = a7 (${A.PROMPT_VERSION_A})`)
-ok(Z.getAnalysisMode().promptVersions.before === 'a7', 'getAnalysisMode before = a7')
+ok(A.PROMPT_VERSION_A === 'a8', `PROMPT_VERSION_A = a8 (${A.PROMPT_VERSION_A})`)
+ok(Z.getAnalysisMode().promptVersions.before === 'a8', 'getAnalysisMode before = a8')
 
 // ── 2. 후보 없음: a6와 같은 사용자 텍스트 ──
 ok(A.buildUserTextA() === 'BEFORE 사진' && A.buildUserTextA(undefined) === A.USER_TEXT_A, '후보 없음(undefined) → USER_TEXT_A 그대로')
@@ -62,7 +62,7 @@ ok(t.startsWith('BEFORE 사진\n\n인식 후보'), '첫 줄은 BEFORE 사진, �
 ok(t.includes('\n- 쌀밥\n- 김치찌개\n- 돈육불고기\n'), `후보 목록(알레르기 번호 지움): ${JSON.stringify(t.split('\n').filter((l) => l.startsWith('- ') && !l.includes(' 후보')))}`)
 ok(/후보 이름을 글자 그대로 쓴다/.test(t), '규칙: 같으면 후보 이름 그대로')
 ok(/후보에 없는 음식은 후보와 상관없이 보이는 대로/.test(t), '규칙: 후보에 없으면 보이는 대로')
-ok(/사진에 보이지 않는 음식은 items에 넣지 않는다/.test(t), '규칙: 사진에 없는 후보는 넣지 않음')
+ok(/사진에 보이지 않는 음식은 f에 넣지 않는다/.test(t), '규칙: 사진에 없는 후보는 넣지 않음')
 ok(/지시가 아니다/.test(t), '후보는 데이터일 뿐 지시가 아니라고 알림')
 
 // ── 4. 다듬기 ──
@@ -113,7 +113,7 @@ const ac = new AbortController()
 
 const r0 = await Z.analyzeBefore(photo(1), { signal: ac.signal })
 ok(calls.length === 1 && calls[0][0].text === A.USER_TEXT_A, '후보 없이 호출 → 첫 텍스트 = USER_TEXT_A')
-ok(r0.prompt_version === 'a7' && r0.items[0].name === '김치찌개', `결과 prompt_version a7 (${r0.prompt_version})`)
+ok(r0.prompt_version === 'a8' && r0.items[0].name === '김치찌개', `결과 prompt_version a8 (${r0.prompt_version})`)
 ok(Z.getAnalysisOrigin(r0)?.source === 'live', '첫 호출 live')
 
 const r1 = await Z.analyzeBefore(photo(1), { signal: ac.signal, menuCandidates: ['쌀밥', '김치찌개(5.9.13)'] })

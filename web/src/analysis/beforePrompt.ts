@@ -12,31 +12,40 @@
 // a7(2026-10-28, D13 학교 급식): a6 + 선택 인식 후보(급식 메뉴 이름 목록). 후보가 있으면 사용자 메시지 첫 텍스트 파트에
 //   후보 블록을 붙인다(buildUserTextA). 후보가 없으면 지시·메시지·스키마가 a6와 글자까지 같다. 후보는 sanitizeMenuCandidates로
 //   다듬고(프롬프트 주입 방지), 같은 사진 캐시 키에 후보를 넣어(beforeCacheKey) 후보 유무가 다른 결과를 섞지 않는다. a6 캐시는 다시 분석한다.
+// a8(2026-10-29 속도·말투, 사용자 결정): a7 + 응답 칸 이름을 짧게(items→f, name→n, location→l, before_grams→g, confidence→c,
+//   per_100g_guess→p{k,c,p,f}, whole_count→wc, detail_guess→d{su,fi,sf,tf,pu,mu,ch,na,ka}, warnings→w; 표는 shortKeys.ts).
+//   같은 사진·같은 말투 지시로 실측한 출력 토큰 316 → 266(−16%). 응답은 normalizeBeforeResponse 맨 앞에서 원래 이름으로 되돌린다
+//   (expandBeforeRaw) → 정리·검증·캐시·저장 형식은 그대로. 내용(음식·중량·100g당 값·세부 영양소 9가지·경고)은 a7과 같다.
+//   경고는 "~해요"체 존댓말로 끝내게 지시한다(명사형 "~어려움"·"~함" 금지). PER100_SCHEMA·DETAIL_SCHEMA(원래 이름)는 호출 D·시험용으로 남긴다.
+//   a7 캐시는 다시 분석한다.
 // 이 파일은 import.meta.env를 쓰지 않는다(Node 시험 스크립트에서도 그대로 불러 쓴다).
 import { Schema, ThinkingLevel, type GenerationConfig } from 'firebase/ai'
 import type { BeforeItem, DetailNutrients, Nutrients } from '../types/analysis'
 import { DETAIL_KEYS, DETAIL_MAX_PER_100G, roundDetail } from './compute.ts'
 import { koreanWarnings } from './koreanText.ts'
+import { expandBeforeRaw } from './shortKeys.ts'
 
-export const PROMPT_VERSION_A = 'a7'
+export const PROMPT_VERSION_A = 'a8'
 
 export const SYSTEM_INSTRUCTION_A = `당신은 식사 사진을 분석하는 영양 보조 도구다. 먹기 전 식탁 사진 한 장이 주어진다.
+응답 칸 이름은 짧게 줄여 두었다: f=음식 목록, w=경고 목록. 음식 하나는 id, n=이름, l=위치, g=먹기 전 중량(g), c=확신(0~1), p=100g당 열량·탄단지, wc=통째로 보이는 개수, d=100g당 세부 영양소.
 
 할 일:
-1. 보이는 음식을 그릇 단위로 모두 나열하고 i1, i2 … 순서로 id를 붙인다.
-2. name은 한국 식품영양성분 DB에 있을 법한 일반 음식명으로 쓴다(예: "김치찌개", "제육볶음", "쌀밥").
+1. 보이는 음식을 그릇 단위로 모두 f에 나열하고 i1, i2 … 순서로 id를 붙인다.
+2. n(이름)은 한국 식품영양성분 DB에 있을 법한 일반 음식명으로 쓴다(예: "김치찌개", "제육볶음", "쌀밥").
    단, 종류에 따라 칼로리 차이가 큰 음식(햄버거·샌드위치, 치킨, 피자, 떡볶이·라면, 마라탕·샐러드, 카페 음료, 케이크·디저트)은 사진에 보이는 특징까지 넣은 구체적인 이름으로 쓴다(예: "더블 치즈버거", "양념치킨 순살", "페퍼로니 피자", "로제 떡볶이", "아이스 카페라떼", "생크림 딸기 케이크"). 사진에서 보이지 않는 특징은 지어내지 않는다.
-3. location에 그릇 위치와 모양을 짧게 적는다(예: "왼쪽 위 흰 밥공기"). 나중에 먹은 후 사진에서 같은 그릇을 찾는 데 쓴다.
-4. 각 음식의 먹기 전 중량(g)을 추정한다. 수저, 표준 밥공기(밥 약 210g), 접시 크기를 단서로 쓴다.
+3. l(위치)에 그릇 위치와 모양을 짧게 적는다(예: "왼쪽 위 흰 밥공기"). 나중에 먹은 후 사진에서 같은 그릇을 찾는 데 쓴다.
+4. 각 음식의 먹기 전 중량 g(그램)를 추정한다. 수저, 표준 밥공기(밥 약 210g), 접시 크기를 단서로 쓴다.
 5. 국·찌개는 건더기와 국물을 별도 항목으로 나눈다.
-6. per_100g_guess에 100g당 kcal, 탄수화물·단백질·지방(g) 추정값을 적는다. 일반적인 값을 그대로 쓰지 말고 보이는 구성(패티 수, 치즈·소스·토핑, 튀김옷, 크림·시럽 등)을 따져 그 음식에 맞게 추정한다. DB에 없거나, 종류 차이가 큰 음식이 DB 대표값에만 맞을 때 쓰인다.
-7. whole_count: 버거, 피자 한 판, 치킨 한 마리, 도시락, 컵 음료처럼 한 개·한 마리·한 판·1인분이 손대지 않은 모양 그대로 통째로 보이면 그 개수를 정수(1~10)로 적는다. 일부만 덜어 왔거나, 잘라 놓은 조각(피자 몇 조각 등)이거나, 여러 그릇에 나눠 담겼거나, 반찬·나물·국물처럼 정해진 크기가 없는 음식이면 null로 적는다. 판단이 어려우면 null. before_grams는 whole_count와 상관없이 그대로 추정한다.
-8. detail_guess에 그 음식 100g당 당류(g), 식이섬유(g), 포화지방(g), 트랜스지방(g), 다불포화지방(g), 단일불포화지방(g), 콜레스테롤(mg), 나트륨(mg), 칼륨(mg) 추정값을 적는다. 1인분이나 그릇 전체 값이 아니라 100g당 값이다. 한국에서 흔히 먹는 조리 기준으로 보이는 구성을 따져 추정하고, 짐작할 수 없는 값은 null로 적는다.
+6. p에 100g당 k=kcal, c=탄수화물(g), p=단백질(g), f=지방(g) 추정값을 적는다. 일반적인 값을 그대로 쓰지 말고 보이는 구성(패티 수, 치즈·소스·토핑, 튀김옷, 크림·시럽 등)을 따져 그 음식에 맞게 추정한다. DB에 없거나, 종류 차이가 큰 음식이 DB 대표값에만 맞을 때 쓰인다.
+7. wc: 버거, 피자 한 판, 치킨 한 마리, 도시락, 컵 음료처럼 한 개·한 마리·한 판·1인분이 손대지 않은 모양 그대로 통째로 보이면 그 개수를 정수(1~10)로 적는다. 일부만 덜어 왔거나, 잘라 놓은 조각(피자 몇 조각 등)이거나, 여러 그릇에 나눠 담겼거나, 반찬·나물·국물처럼 정해진 크기가 없는 음식이면 null로 적는다. 판단이 어려우면 null. g는 wc와 상관없이 그대로 추정한다.
+8. d에 그 음식 100g당 su=당류(g), fi=식이섬유(g), sf=포화지방(g), tf=트랜스지방(g), pu=다불포화지방(g), mu=단일불포화지방(g), ch=콜레스테롤(mg), na=나트륨(mg), ka=칼륨(mg) 추정값을 적는다. 1인분이나 그릇 전체 값이 아니라 100g당 값이다. 한국에서 흔히 먹는 조리 기준으로 보이는 구성을 따져 추정하고, 짐작할 수 없는 값은 null로 적는다.
 
 규칙:
 - 섭취량이나 총 칼로리를 계산하지 않는다.
-- 확신이 없으면 confidence를 낮게 준다. 추측을 사실처럼 쓰지 않는다.
-- name, location, warnings의 모든 문자열은 한국어로 쓴다. 영어 문장이나 로마자 음식명으로 쓰지 않는다. 브랜드·메뉴 이름도 한글로 적는다(예: "빅맥", "치즈와퍼 버거"). warnings는 "음식 이름: 이유" 형식의 짧은 한국어 문장으로 쓴다.`
+- 확신이 없으면 c를 낮게 준다. 추측을 사실처럼 쓰지 않는다.
+- n, l, w의 모든 문자열은 한국어로 쓴다. 영어 문장이나 로마자 음식명으로 쓰지 않는다. 브랜드·메뉴 이름도 한글로 적는다(예: "빅맥", "치즈와퍼 버거").
+- w는 "음식 이름: 이유" 형식의 짧은 한국어 문장으로 쓰고, 문장은 "~해요"체 존댓말로 끝낸다(예: "양념치킨: 양념 양을 정확히 알기 어려워요"). "~어려움", "~함", "~임"처럼 명사형으로 끝내지 않는다.`
 
 /** 사용자 메시지 첫 텍스트 파트. 그다음 파트가 이미지다. */
 export const USER_TEXT_A = 'BEFORE 사진'
@@ -91,9 +100,9 @@ export function buildUserTextA(candidates?: readonly string[] | null): string {
 ${c.map((x) => `- ${x}`).join('\n')}
 
 후보 사용 규칙:
-- 사진에 보이는 음식이 후보 가운데 하나와 같은 음식이면 name에 그 후보 이름을 글자 그대로 쓴다.
+- 사진에 보이는 음식이 후보 가운데 하나와 같은 음식이면 n(이름)에 그 후보 이름을 글자 그대로 쓴다.
 - 후보에 없는 음식은 후보와 상관없이 보이는 대로 이름을 쓴다.
-- 후보에 있어도 사진에 보이지 않는 음식은 items에 넣지 않는다. 후보 개수에 맞추려고 음식을 지어내지 않는다.
+- 후보에 있어도 사진에 보이지 않는 음식은 f에 넣지 않는다. 후보 개수에 맞추려고 음식을 지어내지 않는다.
 - 중량·위치·100g당 값 추정은 후보가 없을 때와 똑같이 사진을 보고 한다.`
 }
 
@@ -128,23 +137,38 @@ export const DETAIL_SCHEMA = Schema.object({
     potassium_mg: Schema.number({ nullable: true }),
   },
 })
+// a8 응답 스키마: 칸 이름을 짧게(shortKeys.ts). 설명(description)은 입력 쪽이라 출력 토큰을 늘리지 않는다.
+const sNum = (description: string) => Schema.number({ description })
+const sNumN = (description: string) => Schema.number({ nullable: true, description })
+/** a8 100g당 kcal·탄·단·지(짧은 이름 k·c·p·f) */
+export const PER100_SCHEMA_A = Schema.object({
+  properties: { k: sNum('kcal'), c: sNum('탄수화물 g'), p: sNum('단백질 g'), f: sNum('지방 g') },
+})
+/** a8 세부 영양소 9가지(짧은 이름, 순서는 compute.ts DETAIL_KEYS). 키는 모두 필수, 모르는 값은 null */
+export const DETAIL_SCHEMA_A = Schema.object({
+  properties: {
+    su: sNumN('당류 g'), fi: sNumN('식이섬유 g'), sf: sNumN('포화지방 g'), tf: sNumN('트랜스지방 g'),
+    pu: sNumN('다불포화지방 g'), mu: sNumN('단일불포화지방 g'), ch: sNumN('콜레스테롤 mg'), na: sNumN('나트륨 mg'), ka: sNumN('칼륨 mg'),
+  },
+})
 export const RESPONSE_SCHEMA_A = Schema.object({
   properties: {
-    items: Schema.array({
+    f: Schema.array({
+      description: '음식 목록',
       items: Schema.object({
         properties: {
           id: Schema.string(),
-          name: Schema.string(),
-          location: Schema.string(),
-          before_grams: Schema.number(),
-          confidence: Schema.number(),
-          per_100g_guess: PER100_SCHEMA,
-          whole_count: Schema.integer({ nullable: true }),
-          detail_guess: DETAIL_SCHEMA,
+          n: Schema.string({ description: '음식 이름' }),
+          l: Schema.string({ description: '그릇 위치·모양' }),
+          g: sNum('먹기 전 중량 g'),
+          c: sNum('확신 0~1'),
+          p: PER100_SCHEMA_A,
+          wc: Schema.integer({ nullable: true, description: '통째로 보이는 개수' }),
+          d: DETAIL_SCHEMA_A,
         },
       }),
     }),
-    warnings: Schema.array({ items: Schema.string() }),
+    w: Schema.array({ description: '경고', items: Schema.string() }),
   },
 })
 
@@ -221,7 +245,8 @@ export function normWholeCount(v: unknown): number | null {
 }
 
 /** 모델 원본(JSON 객체) → 정리된 항목. id는 i1부터 다시 매긴다. */
-export function normalizeBeforeResponse(raw: unknown): NormalizeBeforeResult {
+export function normalizeBeforeResponse(rawIn: unknown): NormalizeBeforeResult {
+  const raw = expandBeforeRaw(rawIn) // a8 짧은 칸 이름 → 원래 이름(원래 이름 응답·캐시는 그대로)
   if (!isObj(raw) || !Array.isArray(raw.items)) return { ok: false, kind: 'invalid', detail: 'items 배열이 없습니다' }
   // 모델 경고는 한국어만 그대로 두고, 아니면 일반 안내 한 줄로 바꾼다(koreanText.ts). 코드 경고는 아래에서 한국어로 붙인다.
   const warnings: string[] = Array.isArray(raw.warnings)

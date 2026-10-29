@@ -32,12 +32,24 @@ let n = 0
 const ok = (label) => { n++; console.log('ok', label) }
 
 // 1. 버전·지시·응답 스키마
-assert.equal(A.PROMPT_VERSION_A, 'a7') // a7(D13)은 a6 + 선택 인식 후보, 지시·스키마는 같다
+assert.equal(A.PROMPT_VERSION_A, 'a8') // a8(2026-10-29)은 a7 + 짧은 칸 이름(d=detail_guess 등) + 경고 말투
 assert.equal(A.GENERATION_CONFIG_A.maxOutputTokens, 8192)
-assert.ok(/detail_guess/.test(A.SYSTEM_INSTRUCTION_A) && /100g당 값이다/.test(A.SYSTEM_INSTRUCTION_A) && /null로 적는다/.test(A.SYSTEM_INSTRUCTION_A))
+assert.ok(/d에 그 음식 100g당/.test(A.SYSTEM_INSTRUCTION_A) && /100g당 값이다/.test(A.SYSTEM_INSTRUCTION_A) && /null로 적는다/.test(A.SYSTEM_INSTRUCTION_A))
 const schemaText = JSON.stringify(A.RESPONSE_SCHEMA_A.toJSON())
 const KEYS9 = ['sugar_g', 'fiber_g', 'satfat_g', 'transfat_g', 'polyunsat_g', 'monounsat_g', 'cholesterol_mg', 'sodium_mg', 'potassium_mg']
-assert.ok(['detail_guess', ...KEYS9].every((k) => schemaText.includes(`"${k}"`)))
+const SHORT9 = ['su', 'fi', 'sf', 'tf', 'pu', 'mu', 'ch', 'na', 'ka']
+assert.ok(['d', ...SHORT9].every((k) => schemaText.includes(`"${k}"`)) && !schemaText.includes('"detail_guess"')) // a8 짧은 칸 이름
+assert.deepEqual(Object.keys(A.DETAIL_SCHEMA_A.toJSON().properties), SHORT9)
+assert.ok(Object.values(A.DETAIL_SCHEMA_A.toJSON().properties).every((p) => p.nullable === true && p.type === 'number'))
+{
+  // a8 짧은 이름 응답 → 원래 이름으로 정리한 결과가 원래 이름 응답과 같다(바깥 형식 그대로)
+  const longRaw = { items: [{ id: 'i1', name: '김치찌개', location: '가운데 뚝배기', before_grams: 400, confidence: 0.8, per_100g_guess: { kcal: 60, carbs_g: 4, protein_g: 4.5, fat_g: 3 }, whole_count: null, detail_guess: { sugar_g: 1.2, fiber_g: 1, satfat_g: 1, transfat_g: 0, polyunsat_g: 0.4, monounsat_g: 1.1, cholesterol_mg: 15, sodium_mg: 520, potassium_mg: 160 } }], warnings: ['김치찌개: 건더기 양을 정확히 알기 어려워요'] }
+  const shortRaw = { f: [{ id: 'i1', n: '김치찌개', l: '가운데 뚝배기', g: 400, c: 0.8, p: { k: 60, c: 4, p: 4.5, f: 3 }, wc: null, d: { su: 1.2, fi: 1, sf: 1, tf: 0, pu: 0.4, mu: 1.1, ch: 15, na: 520, ka: 160 } }], w: ['김치찌개: 건더기 양을 정확히 알기 어려워요'] }
+  assert.deepEqual(A.normalizeBeforeResponse(shortRaw), A.normalizeBeforeResponse(longRaw))
+  assert.deepEqual(A.parseBeforeText(JSON.stringify(shortRaw)), A.normalizeBeforeResponse(longRaw))
+  assert.equal(A.normalizeBeforeResponse(shortRaw).items[0].detail_guess.sodium_mg, 520)
+  ok('a8 짧은 칸 이름 응답 → 원래 이름(정리 결과 같음)')
+}
 assert.ok(['트랜스지방', '다불포화지방', '단일불포화지방', '콜레스테롤(mg)', '칼륨(mg)'].every((w) => A.SYSTEM_INSTRUCTION_A.includes(w)))
 const detailJson = A.DETAIL_SCHEMA.toJSON()
 assert.deepEqual(Object.keys(detailJson.properties), KEYS9)

@@ -8,12 +8,14 @@
 //   - 이 구분을 모델 경고 문장이 아니라 응답 필드로 받는다: 맨 위 same_scene(boolean), 항목마다 match(same|not_visible|different|unclear).
 //   - 0·null을 정하는 것은 코드(normalizeAfterResponse)다. 모델은 match가 same일 때만 숫자를 쓴다.
 //   - same_scene·match가 없는 응답(b2 응답·옛 픽스처)은 b2 규칙 그대로. b1·b2 캐시는 prompt_version이 달라 다시 분석한다.
+// b4(2026-10-29 속도·말투, 사용자 결정): b3 + 경고를 "~해요"체 존댓말로 끝내게 지시(명사형 "~어려움"·"~함" 금지).
+//   응답 칸 이름 줄이기도 시험했지만 출력 토큰이 6%만 줄어 되돌렸다(03_vision_eval.md "칸 이름 줄이기"). 스키마·규칙은 b3 그대로. b3 캐시는 다시 분석한다.
 // 이 파일은 import.meta.env를 쓰지 않고, 값 import는 firebase/ai만 한다(Node 시험 스크립트에서도 그대로 불러 쓴다).
 import { Schema, ThinkingLevel, type GenerationConfig } from 'firebase/ai'
 import type { AfterItem, BeforeItem } from '../types/analysis'
 import { koreanWarnings } from './koreanText.ts'
 
-export const PROMPT_VERSION_B = 'b3'
+export const PROMPT_VERSION_B = 'b4'
 
 export const SYSTEM_INSTRUCTION_B = `당신은 식사 사진을 분석하는 영양 보조 도구다.
 먹기 전에 분석한 음식 목록(JSON), 먹기 전 사진, 먹은 후 사진이 주어진다. 먹기 전 사진이 빠질 수도 있다.
@@ -35,7 +37,8 @@ export const SYSTEM_INSTRUCTION_B = `당신은 식사 사진을 분석하는 영
 - 목록에 없는데 먹은 후 사진에만 있는 음식은 결과에 넣지 말고 warnings에 적는다.
 - 확신이 없으면 confidence를 낮게 준다.
 - warnings에는 match가 "different"·"unclear"인 음식의 이유와 새로 생긴 음식만 적는다. "not_visible"인 음식은 적지 않는다.
-- warnings의 모든 문장은 한국어로 쓴다. 영어로 쓰지 않는다. 음식은 목록의 name으로 부르고 "음식 이름: 이유" 형식으로 짧게 쓴다(예: "불고기 버거: 그 자리에 다른 음식이 있어 남은 양을 판단할 수 없어요").`
+- warnings의 모든 문장은 한국어로 쓴다. 영어로 쓰지 않는다. 음식은 목록의 name으로 부르고 "음식 이름: 이유" 형식으로 짧게 쓴다(예: "불고기 버거: 그 자리에 다른 음식이 있어 남은 양을 판단할 수 없어요").
+- warnings 문장은 "~해요"체 존댓말로 끝낸다. "~어려움", "~함", "~임"처럼 명사형으로 끝내지 않는다.`
 
 /** 이미지 앞에 붙이는 텍스트 파트. 순서: 목록 → "BEFORE 사진" → 먹기 전 이미지(없으면 둘 다 생략) → "AFTER 사진" → 먹은 후 이미지 */
 export const USER_TEXT_BEFORE_PHOTO = 'BEFORE 사진'

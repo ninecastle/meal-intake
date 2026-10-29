@@ -54,7 +54,7 @@ const resp = (same_scene, list, warnings = []) => ({
 })
 
 // ── 프롬프트·스키마 ──
-ok(B.PROMPT_VERSION_B === 'b3', `버전 b3 (${B.PROMPT_VERSION_B})`)
+ok(B.PROMPT_VERSION_B === 'b4', `버전 b4 (${B.PROMPT_VERSION_B})`) // b4 = b3 + 경고 말투 지시, 스키마·규칙은 같다
 ok(['same_scene', '"not_visible"', '"different"', '"unclear"'].every((s) => B.SYSTEM_INSTRUCTION_B.includes(s)), 'B 지시에 same_scene·match 설명')
 const sch = typeof B.RESPONSE_SCHEMA_B.toJSON === 'function' ? B.RESPONSE_SCHEMA_B.toJSON() : B.RESPONSE_SCHEMA_B
 const itemSch = sch.properties?.items?.items

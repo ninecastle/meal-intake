@@ -43,7 +43,8 @@ const ok = (cond, msg) => {
 
 // ── 프롬프트 버전·문구 ──
 // a5(D4-b)·a6(D4-c)는 a4에 detail_guess만 더했다(한국어 규칙 그대로)
-ok(A.PROMPT_VERSION_A === 'a7' && B.PROMPT_VERSION_B === 'b3', `버전 a7·b3 (${A.PROMPT_VERSION_A}·${B.PROMPT_VERSION_B})`)
+ok(A.PROMPT_VERSION_A === 'a8' && B.PROMPT_VERSION_B === 'b4', `버전 a8·b4 (${A.PROMPT_VERSION_A}·${B.PROMPT_VERSION_B})`)
+ok([A.SYSTEM_INSTRUCTION_A, B.SYSTEM_INSTRUCTION_B].every((s) => s.includes('"~해요"체 존댓말') && s.includes('명사형으로 끝내지 않는다')), 'a8·b4 지시에 경고 말투(~해요체, 명사형 금지)')
 ok(/한국어로 쓴다/.test(A.SYSTEM_INSTRUCTION_A) && /한국어로 쓴다/.test(B.SYSTEM_INSTRUCTION_B), 'A·B 지시에 한국어 규칙')
 ok(/다른 음식, 다른 그릇, 다른 식탁/.test(B.SYSTEM_INSTRUCTION_B) && /remaining_ratio=null/.test(B.SYSTEM_INSTRUCTION_B), 'B 지시에 다른 장면 → null 규칙')
 ok(!/안 보이면 remaining_ratio=0/.test(B.SYSTEM_INSTRUCTION_B), 'b1의 "그릇이 안 보이면 0" 규칙 없음')
