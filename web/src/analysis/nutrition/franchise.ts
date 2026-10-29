@@ -554,7 +554,16 @@ async function estimateByResolve(name: string): Promise<Nutrients | null> {
   try {
     const { resolveNutrition } = await import('./index.ts')
     const r = await resolveNutrition(name)
-    return r.source === 'ai_estimate' || r.source === 'search' ? r.per_100g : null
+    if (r.source === 'ai_estimate' || r.source === 'search') return r.per_100g
+    // 이름이 DB에 맞으면 resolve가 DB 행을 주고, 빈 탄·지는 호출 D로 채워 fill에 적어 둔다(2026-10-29 사용자 화면: 고추바사삭 지방 0).
+    // 그 채운 값을 AI 추정으로 넘긴다(못 채운 칸은 NaN이라 쓰지 않는다)
+    // 빈 칸이 없는 DB 행이면 그 값을 그대로(공식 표에 탄·지가 없는 메뉴의 빈 칸 채우기)
+    if (r.source === 'db') {
+      const p: Nutrients = { ...r.per_100g }
+      for (const k of ['carbs_g', 'fat_g'] as const) if (r.fill && r.fill[k] !== undefined && r.fill[k] !== 'ai_estimate') p[k] = Number.NaN
+      return p
+    }
+    return null
   } catch {
     return null
   }
