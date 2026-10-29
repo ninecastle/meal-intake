@@ -15,6 +15,14 @@ type Decoded = { image: CanvasImageSource; width: number; height: number; releas
 const HEAD_BYTES = 256 * 1024 // EXIF(최대 64KB)·썸네일 뒤에 SOF가 오므로 넉넉히
 
 /** JPEG 헤더(SOF)의 저장된 가로·세로(EXIF 회전 전). JPEG가 아니거나 앞부분에서 못 찾으면 null. 순수 함수(단위 시험) */
+/** JPEG 앞부분에 EXIF(APP1 "Exif")가 있으면 true — 회전 정보가 있을 수 있어 그대로 쓰지 않는다 */
+function hasExifOrientation(b: Uint8Array): boolean {
+  for (let i = 2; i + 10 < Math.min(b.length, 65536); i++) {
+    if (b[i] === 0xff && b[i + 1] === 0xe1 && b[i + 4] === 0x45 && b[i + 5] === 0x78 && b[i + 6] === 0x69 && b[i + 7] === 0x66) return true
+  }
+  return false
+}
+
 export function jpegSize(b: Uint8Array): { width: number; height: number } | null {
   if (b.length < 4 || b[0] !== 0xff || b[1] !== 0xd8) return null
   let i = 2
@@ -138,6 +146,12 @@ function unsupported(cause?: unknown): AnalysisError {
 /** 긴 변 1024px, JPEG 품질 0.8, EXIF 회전 반영. 큰 JPEG는 처음부터 작게 디코드(fastDecodeWidth). HEIC/HEIF는 브라우저가 못 열 때만 변환. 오류: AnalysisError(PHOTO_INVALID, HEIC 변환 실패는 reason 'unsupported_format') */
 export async function compressPhoto(file: Blob): Promise<Blob> {
   if (!file || file.size === 0) throw invalid('빈 파일')
+  // 이미 작은 JPEG(앱 카메라가 긴 변 1024px로 뜬 사진 등)는 다시 풀지 않는다. EXIF 회전이 있을 수 있는 큰 파일은 제외
+  if (file.size <= 600 * 1024 && (file.type === 'image/jpeg' || file.type === '')) {
+    const head = new Uint8Array(await file.slice(0, 256 * 1024).arrayBuffer())
+    const sz = jpegSize(head)
+    if (sz && Math.max(sz.width, sz.height) <= MAX_SIDE && !hasExifOrientation(head)) return file
+  }
 
   let decoded = await decodeNative(file, await readResizeWidth(file))
   if (!decoded) {

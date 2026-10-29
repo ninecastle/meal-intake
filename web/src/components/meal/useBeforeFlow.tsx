@@ -81,6 +81,8 @@ export function useBeforeFlow(opts: {
     fn()
   }
 
+  // 시간 표시용 사진 준비 이름(어디서 온 사진·크기, ?timing=1일 때만 보임)
+  const prepLabel = useRef('사진 준비')
   async function run(getPhoto: () => Promise<Blob>, getTakenAt: () => Promise<Date>) {
     if (busyRef.current) return
     busyRef.current = true
@@ -92,7 +94,7 @@ export function useBeforeFlow(opts: {
     try {
       timingStart('먹기 전 분석')
       const takenAt = await getTakenAt()
-      const photo = await timed('사진 준비(줄이기·변환)', getPhoto)
+      const photo = await timed(prepLabel.current, getPhoto)
       last.current = { photo, takenAt }
       setHasLast(true)
       id = newMealId(uid)
@@ -126,6 +128,7 @@ export function useBeforeFlow(opts: {
 
   function onPick(file: File, source: PickSource) {
     const now = new Date()
+    prepLabel.current = `사진 준비(${source === 'album' ? '앨범' : '카메라'} ${(file.size / 1048576).toFixed(1)}MB)`
     void run(
       () => compressPhoto(file),
       async () => (source === 'album' ? ((await readTakenAt(file)) ?? now) : now),

@@ -181,13 +181,17 @@ export default function CameraCapture({ title, hint, onShot, onAlbum, onClose, o
   function shoot() {
     const v = videoRef.current
     if (!v || !live || shotRef.current) return
-    const w = v.videoWidth
-    const h = v.videoHeight
+    // 분석에 쓰는 크기(긴 변 1024px, photos/compress)로 바로 뜬다 — 큰 프레임을 JPEG로 만들었다가 다시 줄이는 시간을 없앤다(2026-10-29 실기기 측정)
+    const vw = v.videoWidth
+    const vh = v.videoHeight
+    const scale = Math.min(1, 1024 / Math.max(vw, vh, 1))
+    const w = Math.max(1, Math.round(vw * scale))
+    const h = Math.max(1, Math.round(vh * scale))
     const canvas = document.createElement('canvas')
     canvas.width = w
     canvas.height = h
     const ctx = canvas.getContext('2d')
-    if (!w || !h || !ctx) return
+    if (!vw || !vh || !ctx) return
     shotRef.current = true
     // 미리보기 좌우 반전(전면)과 겹쳐 보기는 화면에만. 사진은 video 프레임만 원래 방향 그대로 뜬다.
     ctx.drawImage(v, 0, 0, w, h)
@@ -203,7 +207,7 @@ export default function CameraCapture({ title, hint, onShot, onAlbum, onClose, o
         onShot(new File([blob], `camera-${now}.jpg`, { type: 'image/jpeg', lastModified: now }))
       },
       'image/jpeg',
-      0.92,
+      0.8,
     )
   }
 

@@ -47,8 +47,8 @@ const ok = (cond, msg) => {
 }
 
 // ── 1. 버전 ──
-ok(A.PROMPT_VERSION_A === 'a8', `PROMPT_VERSION_A = a8 (${A.PROMPT_VERSION_A})`)
-ok(Z.getAnalysisMode().promptVersions.before === 'a8', 'getAnalysisMode before = a8')
+ok(A.PROMPT_VERSION_A === 'a9', `PROMPT_VERSION_A = a8 (${A.PROMPT_VERSION_A})`)
+ok(Z.getAnalysisMode().promptVersions.before === 'a9', 'getAnalysisMode before = a8')
 
 // ── 2. 후보 없음: a6와 같은 사용자 텍스트 ──
 ok(A.buildUserTextA() === 'BEFORE 사진' && A.buildUserTextA(undefined) === A.USER_TEXT_A, '후보 없음(undefined) → USER_TEXT_A 그대로')
@@ -113,7 +113,7 @@ const ac = new AbortController()
 
 const r0 = await Z.analyzeBefore(photo(1), { signal: ac.signal })
 ok(calls.length === 1 && calls[0][0].text === A.USER_TEXT_A, '후보 없이 호출 → 첫 텍스트 = USER_TEXT_A')
-ok(r0.prompt_version === 'a8' && r0.items[0].name === '김치찌개', `결과 prompt_version a8 (${r0.prompt_version})`)
+ok(r0.prompt_version === 'a9' && r0.items[0].name === '김치찌개', `결과 prompt_version a8 (${r0.prompt_version})`)
 ok(Z.getAnalysisOrigin(r0)?.source === 'live', '첫 호출 live')
 
 const r1 = await Z.analyzeBefore(photo(1), { signal: ac.signal, menuCandidates: ['쌀밥', '김치찌개(5.9.13)'] })

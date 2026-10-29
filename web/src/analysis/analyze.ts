@@ -139,7 +139,9 @@ export async function analyzeBefore(
   const model = getModel(AI_MODEL_ID, { systemInstruction: SYSTEM_INSTRUCTION_A, generationConfig: GENERATION_CONFIG_A })
   const { value, attempts } = await generateWithRetry({ model, parts, parse: parseA, signal, label: '호출 A' })
 
-  const result: BeforeAnalysis = { items: value.items, warnings: value.warnings, ...meta }
+  // 급식 후보 가운데 사진에 없어 뺐다는 경고는 보이지 않는다(2026-10-29 사용자 화면: "사진에 보이지 않아 제외함" 줄들)
+  const warnings = candidates.length > 0 ? value.warnings.filter((w) => !/(보이지 않|비어 있|없어)[^.]{0,12}(제외|빼|넣지 않)/.test(w)) : value.warnings
+  const result: BeforeAnalysis = { items: value.items, warnings, ...meta }
   const at = Date.now()
   if (key) {
     const entry: CacheEntry<BeforeAnalysis> = { key, value: structuredClone(result), at, ...meta }

@@ -168,7 +168,7 @@ export function useAfterFlow(opts: {
   function onPick(file: File) {
     void withOp(async (t) => {
       timingStart('먹은 후 분석')
-      const afterPhoto = await timed('사진 준비(줄이기·변환)', compressPhoto(file))
+      const afterPhoto = await timed(`사진 준비(${(file.size / 1048576).toFixed(1)}MB)`, compressPhoto(file))
       const beforePhoto = await timed('먹기 전 사진 꺼내기', beforePhotoStore.get(t.id).catch(() => null))
       // 분석 호출 전에 비교한다. 같으면 [그대로 분석]을 누르기 전에는 호출하지 않는다(한도 절약).
       if (beforePhoto && (await isSamePhoto(beforePhoto, afterPhoto).catch(() => false))) {

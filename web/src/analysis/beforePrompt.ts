@@ -25,7 +25,8 @@ import { DETAIL_KEYS, DETAIL_MAX_PER_100G, roundDetail } from './compute.ts'
 import { koreanWarnings } from './koreanText.ts'
 import { expandBeforeRaw } from './shortKeys.ts'
 
-export const PROMPT_VERSION_A = 'a8'
+// a9(2026-10-29): 급식 후보에 있는데 사진에 없어 뺀 음식은 경고에도 쓰지 않는다(후보 블록 한 줄, 실기기 화면의 "제외함" 경고들).
+export const PROMPT_VERSION_A = 'a9'
 
 export const SYSTEM_INSTRUCTION_A = `당신은 식사 사진을 분석하는 영양 보조 도구다. 먹기 전 식탁 사진 한 장이 주어진다.
 응답 칸 이름은 짧게 줄여 두었다: f=음식 목록, w=경고 목록. 음식 하나는 id, n=이름, l=위치, g=먹기 전 중량(g), c=확신(0~1), p=100g당 열량·탄단지, wc=통째로 보이는 개수, d=100g당 세부 영양소.
@@ -103,6 +104,7 @@ ${c.map((x) => `- ${x}`).join('\n')}
 - 사진에 보이는 음식이 후보 가운데 하나와 같은 음식이면 n(이름)에 그 후보 이름을 글자 그대로 쓴다.
 - 후보에 없는 음식은 후보와 상관없이 보이는 대로 이름을 쓴다.
 - 후보에 있어도 사진에 보이지 않는 음식은 f에 넣지 않는다. 후보 개수에 맞추려고 음식을 지어내지 않는다.
+- 후보에 있는데 사진에 없거나 그릇이 비어 넣지 않은 음식은 경고(w)에도 쓰지 않는다(사용자에게 알릴 일이 아니다).
 - 중량·위치·100g당 값 추정은 후보가 없을 때와 똑같이 사진을 보고 한다.`
 }
 
