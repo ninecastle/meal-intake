@@ -137,8 +137,15 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
       r = { source: 'user_input', per_100g: null }
     }
     const detail = r.source === 'db' ? await detailFor(r.db_food_code).catch(() => null) : null
-    // 직접 입력한 새 음식(프랜차이즈가 아닌 DB 음식)은 1회 제공량이 있으면 "1인분 · ○○g"으로 미리 채운다(2026-10-29)
-    const serving = fresh && r.source === 'db' ? await servingGrams(r.db_food_code) : null
+    // 직접 입력한 새 음식(프랜차이즈가 아닌 음식)은 보통 1인분 무게로 "1인분 · ○○g"을 미리 채운다(2026-10-29 사용자 결정, 표시 없음).
+    // DB 음식: 1개 중량(w) → 대표식품명별 1인분 표(servingOf). DB에 없는 음식: 호출 D가 함께 준 serving_g. 못 정하면 무게 그대로(100g)
+    const serving = !fresh
+      ? null
+      : r.source === 'db'
+        ? await servingGrams(r.db_food_code)
+        : r.source === 'ai_estimate' && r.via === 'call_d'
+          ? (r.serving_g ?? null)
+          : null
     if (controllers.current.get(id) !== ac || ac.signal.aborted) return // 삭제됐거나 화면을 떠남
     controllers.current.delete(id)
     setPending((p) => omit(p, id))

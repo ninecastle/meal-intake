@@ -277,7 +277,7 @@ export default function FoodCard(p: FoodCardProps) {
               <NumField value={item.before_grams} min={0} max={MAX_GRAMS} onCommit={p.onGrams} label="먹기 전 무게(g)" style={NUM_INPUT} />
               <span style={UNIT}>g</span>
             </label>
-            {item.grams_source === 'published' && item.published_g != null && (
+            {item.grams_source === 'published' && item.published_g != null && item.unit !== '인분' && (
               <div style={{ fontSize: 12, color: 'var(--lime-deep)', marginTop: 4 }}>
                 공개 중량 {Math.round(item.published_g)}g × {item.unit_count ?? 1}
               </div>

@@ -115,7 +115,7 @@ export function withUnits(it: MealItem, unitG: number, count: number, unit?: Fra
   return recomputeItem(next)
 }
 
-/** 프랜차이즈가 아닌 DB 음식의 1회 제공량(g). 없으면 null(지금 식약처 원본은 이 칸이 비어 늘 null — vision 확인 2026-10-29) */
+/** 프랜차이즈가 아닌 DB 음식의 보통 1인분 무게(g): 1개 중량(w) → 대표식품명별 1인분 표. 없으면 null */
 export async function servingGrams(dbCode: string): Promise<number | null> {
   try {
     await loadNutritionDb()

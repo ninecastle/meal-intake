@@ -8,17 +8,36 @@ import { matchFood, type DbMatchResult, type NutritionDbIndex } from './db.ts'
 import { isHighVarianceFood } from './highVariance.ts'
 import { normalizeFoodName } from './normalize.ts'
 
+/** 호출 D 결과: 100g당 값 + 보통 1인분 무게(serving_g, d2부터, 없을 수 있다). 1인분은 화면이 직접 입력 새 음식 무게로 쓴다 */
+export type Estimate = Nutrients & { serving_g?: number }
+
+export const SERVING_G_MIN = 5
+export const SERVING_G_MAX = 1500
+
+/** serving_g 정리: 5~1500 수만 정수로, 아니면 null */
+export function checkServingG(v: unknown): number | null {
+  return typeof v === 'number' && Number.isFinite(v) && v >= SERVING_G_MIN && v <= SERVING_G_MAX ? Math.round(v) : null
+}
+
+/** 호출 D 응답 검사: 100g당 값(checkPer100)이 맞아야 하고, serving_g는 맞을 때만 붙인다 */
+export function checkEstimate(v: unknown): Estimate | null {
+  const per = checkPer100(v)
+  if (!per) return null
+  const g = checkServingG((v as { serving_g?: unknown }).serving_g)
+  return g === null ? per : { ...per, serving_g: g }
+}
+
 /** 호출 D 결과의 영구 캐시(IndexedDB). 키는 정규화한 이름. 실패는 null·무시로 처리한다 */
 export interface EstimateCache {
-  get(key: string): Promise<Nutrients | null>
-  put(key: string, value: Nutrients): Promise<void>
+  get(key: string): Promise<Estimate | null>
+  put(key: string, value: Estimate): Promise<void>
 }
 
 export interface ResolverDeps {
   /** DB 색인. 실패하면 DB 단계를 건너뛴다 */
   loadIndex: () => Promise<NutritionDbIndex>
   /** 호출 D: 이름만 보내 100g당 값을 받는다. 실패하면 던지고, 취소는 AbortError. null이면 호출 D를 하지 않는다 */
-  estimate: ((name: string, signal?: AbortSignal) => Promise<Nutrients>) | null
+  estimate: ((name: string, signal?: AbortSignal) => Promise<Estimate>) | null
   /** VITE_SEARCH_GROUNDING === 'on'. 기본 false(무료 등급에서 막혀 있다) */
   searchGrounding?: boolean
   cache?: EstimateCache
@@ -34,6 +53,8 @@ export interface ResolveOptions {
 
 /** 목업 모드(VITE_AI_MOCK=1)의 호출 D 고정 값 */
 export const MOCK_ESTIMATE: Readonly<Nutrients> = { kcal: 200, carbs_g: 25, protein_g: 8, fat_g: 7 }
+/** 목업 호출 D의 1인분 무게 */
+export const MOCK_SERVING_G = 250
 const MOCK_DELAY_MS = 300
 
 function isAbortError(e: unknown): boolean {
@@ -58,8 +79,11 @@ function raceAbort<T>(p: Promise<T>, signal?: AbortSignal): Promise<T> {
 }
 
 /** 목업 호출 D: 0.3초 뒤 고정 값 */
-export function mockEstimate(_name: string, signal?: AbortSignal): Promise<Nutrients> {
-  return raceAbort(new Promise<Nutrients>((r) => setTimeout(() => r({ ...MOCK_ESTIMATE }), MOCK_DELAY_MS)), signal)
+export function mockEstimate(_name: string, signal?: AbortSignal): Promise<Estimate> {
+  return raceAbort(
+    new Promise<Estimate>((r) => setTimeout(() => r({ ...MOCK_ESTIMATE, serving_g: MOCK_SERVING_G }), MOCK_DELAY_MS)),
+    signal,
+  )
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10
@@ -84,15 +108,15 @@ async function searchStage(_name: string, _signal?: AbortSignal): Promise<Nutrit
 
 export function createNutritionResolver(deps: ResolverDeps) {
   // 호출 D 결과: 세션 메모리 → 영구 캐시 → 호출. 같은 이름의 동시 요청은 한 번만 부른다.
-  const mem = new Map<string, Nutrients>()
-  const inflight = new Map<string, Promise<Nutrients>>()
+  const mem = new Map<string, Estimate>()
+  const inflight = new Map<string, Promise<Estimate>>()
 
-  function startEstimate(key: string, name: string, signal?: AbortSignal): Promise<Nutrients> {
-    const run = async (): Promise<Nutrients> => {
-      const stored = deps.cache ? checkPer100(await deps.cache.get(key).catch(() => null)) : null
+  function startEstimate(key: string, name: string, signal?: AbortSignal): Promise<Estimate> {
+    const run = async (): Promise<Estimate> => {
+      const stored = deps.cache ? checkEstimate(await deps.cache.get(key).catch(() => null)) : null
       if (stored) return stored
       const raw = await deps.estimate!(name, signal)
-      const v = checkPer100(raw)
+      const v = checkEstimate(raw)
       if (!v) throw new Error('호출 D 값이 범위를 벗어났습니다')
       void deps.cache?.put(key, v).catch(() => undefined)
       return v
@@ -108,7 +132,7 @@ export function createNutritionResolver(deps: ResolverDeps) {
   }
 
   /** 호출 D(캐시 포함). 실패하면 null, 취소는 AbortError */
-  async function estimateByName(name: string, signal?: AbortSignal): Promise<Nutrients | null> {
+  async function estimateByName(name: string, signal?: AbortSignal): Promise<Estimate | null> {
     if (!deps.estimate) return null
     const key = normalizeFoodName(name)
     if (!key) return null
@@ -194,7 +218,10 @@ export function createNutritionResolver(deps: ResolverDeps) {
     const ref = reference ? { reference } : {}
     if (guess) return { source: 'ai_estimate', per_100g: guess, via: 'guess', ...ref }
     const d = await estimateByName(name, signal)
-    if (d) return { source: 'ai_estimate', per_100g: d, via: 'call_d', ...ref }
+    if (d) {
+      const { serving_g, ...per } = d
+      return { source: 'ai_estimate', per_100g: per, via: 'call_d', ...ref, ...(serving_g ? { serving_g } : {}) }
+    }
 
     // 4 직접 입력
     throwIfAborted(signal)

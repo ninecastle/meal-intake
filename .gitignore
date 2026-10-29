@@ -34,3 +34,5 @@ spike/results/
 
 # 프랜차이즈 공식 영양정보 원본(다시 받을 수 있음)
 spike/franchise/raw/
+spike/serving/raw/
+spike/serving/raw_v1/

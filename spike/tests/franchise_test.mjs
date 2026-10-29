@@ -121,7 +121,7 @@ ok(bk.length === 4 && bk.some((p) => p.dbCode === CHEESEWHOPPER && p.name === '�
 ok(F.brandMenusIn(FAKE, 'burgerking', '와퍼')[0]?.name === '와퍼', '검색 "와퍼" → 와퍼 먼저')
 ok(F.brandMenusIn(FAKE, 'burgerking', '피자').length === 0, '없는 검색어 → 빈 목록')
 ok(F.brandOfDbCodeIn(FAKE, CHEESEWHOPPER)?.id === 'burgerking' && F.brandOfDbCodeIn(FAKE, BBQ)?.id === 'burgerking' && F.brandOfDbCodeIn(FAKE, 'nope') === null, 'brandOfDbCodeIn(dbBrand·보충표 dbCode·없음)')
-ok(F.servingOf === servingOf && servingOf(BIGMAC) === null, 'servingOf: 원본 1회 섭취참고량이 비어 null')
+ok(F.servingOf === servingOf && servingOf(BIGMAC) === 223, 'servingOf: 1개 중량(w)이 있으면 그 값(빅맥 223g)')
 
 // ── 브랜드 판별 매칭 ──
 ok(F.matchBrand(FAKE, '맥도날드') === 'mcdonalds' && F.matchBrand(FAKE, "McDonald's") === 'mcdonalds' && F.matchBrand(FAKE, 'mcdonalds') === 'mcdonalds', '맥도날드·영문')

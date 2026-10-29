@@ -110,8 +110,8 @@ export function isNominalUnit(it: Pick<MealItem, 'nutrition_source' | 'grams_sou
   return it.nutrition_source === 'official' && it.grams_source === 'published' && it.published_g === 100
 }
 
-/** 치킨처럼 나눠 먹는 메뉴(마리)는 0.5 단위 */
-export const countStep = (it: Pick<MealItem, 'unit'>): number => (it.unit === '마리' ? 0.5 : 1)
+/** 치킨처럼 나눠 먹는 메뉴(마리)와 일반 음식 1인분(인분, 2026-10-29)은 0.5 단위 */
+export const countStep = (it: Pick<MealItem, 'unit'>): number => (it.unit === '마리' || it.unit === '인분' ? 0.5 : 1)
 /** 저장 규칙(unit_count 1~10)에 맞춘 상한 */
 export const MAX_COUNT = 10
 

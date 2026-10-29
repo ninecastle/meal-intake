@@ -176,6 +176,13 @@ export type NutritionResult =
       per_100g: Nutrients
       fill?: Partial<Record<'carbs_g' | 'fat_g', FillSource>>
     }
-  | { source: 'ai_estimate'; per_100g: Nutrients; via: 'guess' | 'call_d'; reference?: DbReference }
+  | {
+      source: 'ai_estimate'
+      per_100g: Nutrients
+      via: 'guess' | 'call_d'
+      reference?: DbReference
+      /** 호출 D(d2)가 함께 준 보통 1인분 무게(g, 5~1500). 직접 입력 새 음식의 무게로 쓴다(2026-10-29, 표시 없음) */
+      serving_g?: number
+    }
   /** 3단계가 모두 실패 */
   | { source: 'user_input'; per_100g: null }

@@ -18,10 +18,11 @@ const resolver = createNutritionResolver({
 /** 오류를 던지지 않는다(AbortError만 예외). guess는 그 이름에 대해 호출 A가 낸 값일 때만 넘긴다 */
 export const resolveNutrition = resolver.resolveNutrition
 
-export { createNutritionResolver, mockEstimate, MOCK_ESTIMATE } from './resolve.ts'
-export type { EstimateCache, ResolveOptions, ResolverDeps } from './resolve.ts'
+export { checkEstimate, checkServingG, createNutritionResolver, mockEstimate, MOCK_ESTIMATE, MOCK_SERVING_G } from './resolve.ts'
+export type { Estimate, EstimateCache, ResolveOptions, ResolverDeps } from './resolve.ts'
 export { HIGH_VARIANCE_EXCLUDE, HIGH_VARIANCE_KEYWORDS, isHighVarianceFood } from './highVariance.ts'
-export { findBestMatch, listFoodVariants, loadNutritionDb, searchFoodNames, searchFoods, servingOf } from './db.ts'
+export { findBestMatch, listFoodVariants, loadNutritionDb, searchFoodNames, searchFoods, servingOf, servingOfRep, loadServing } from './db.ts'
+export type { ServingTable } from './db.ts'
 // 프랜차이즈 보충표(2026-10-29). 화면은 표 없이 부르는 비동기 래퍼, 표 인자 버전은 …In
 export {
   applyMenuPick, brandMenus, brandMenusIn, brandOfDbCode, brandOfDbCodeIn, categoryOfName, findBrandMenu, franchiseBrands,

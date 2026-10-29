@@ -1,0 +1,37 @@
+{
+  "file": "bigmac_box.jpg",
+  "model": "gemini-3.5-flash-lite",
+  "prompt": "a10",
+  "at": "2026-10-29T02:09:39.769Z",
+  "ms": 4315,
+  "usage": {
+    "promptTokenCount": 2350,
+    "candidatesTokenCount": 269,
+    "totalTokenCount": 2619,
+    "promptTokensDetails": [
+      {
+        "modality": "IMAGE",
+        "tokenCount": 1064
+      },
+      {
+        "modality": "TEXT",
+        "tokenCount": 1286
+      }
+    ],
+    "serviceTier": "standard"
+  },
+  "text": "{\n  \"f\": [\n    {\n      \"id\": \"i1\",\n      \"n\": \"빅맥\",\n      \"l\": \"가운데 놓인 상자\",\n      \"g\": 223,\n      \"c\": 0.95,\n      \"p\": {\n        \"k\": 257,\n        \"c\": 20.2,\n        \"p\": 12.1,\n        \"f\": 13.9\n      },\n      \"wc\": 1,\n      \"d\": {\n        \"su\": 4.0,\n        \"fi\": 1.5,\n        \"sf\": 4.5,\n        \"tf\": 0.5,\n        \"pu\": null,\n        \"mu\": null,\n        \"ch\": 35,\n        \"na\": 435,\n        \"ka\": 220\n      },\n      \"fr\": true,\n      \"b\": \"맥도날드\"\n    }\n  ],\n  \"w\": [\n    \"빅맥: 상자 안에 들어 있어 실제 내부 상태를 직접 확인하기 어려워요.\"\n  ]\n}",
+  "items": [
+    {
+      "name": "빅맥",
+      "grams": 223,
+      "wc": 1,
+      "franchise": true,
+      "brand": "맥도날드",
+      "kcal100": 257
+    }
+  ],
+  "warnings": [
+    "빅맥: 상자 안에 들어 있어 실제 내부 상태를 직접 확인하기 어려워요."
+  ]
+}

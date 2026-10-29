@@ -1,0 +1,37 @@
+{
+  "file": "starbucks_latte.jpg",
+  "model": "gemini-3.5-flash-lite",
+  "prompt": "a10",
+  "at": "2026-10-29T02:09:49.741Z",
+  "ms": 12636,
+  "usage": {
+    "promptTokenCount": 2393,
+    "candidatesTokenCount": 297,
+    "totalTokenCount": 2690,
+    "promptTokensDetails": [
+      {
+        "modality": "IMAGE",
+        "tokenCount": 1107
+      },
+      {
+        "modality": "TEXT",
+        "tokenCount": 1286
+      }
+    ],
+    "serviceTier": "standard"
+  },
+  "text": "{\n  \"f\": [\n    {\n      \"id\": \"i1\",\n      \"n\": \"휘핑 크림 토핑 카페라떼\",\n      \"l\": \"손에 들린 붉은색 종이컵\",\n      \"g\": 350.0,\n      \"c\": 0.8,\n      \"p\": {\n        \"k\": 85.0,\n        \"c\": 7.5,\n        \"p\": 3.0,\n        \"f\": 4.8\n      },\n      \"wc\": 1,\n      \"d\": {\n        \"su\": 6.0,\n        \"fi\": 0.0,\n        \"sf\": 3.0,\n        \"tf\": 0.1,\n        \"pu\": 0.2,\n        \"mu\": 1.2,\n        \"ch\": 12.0,\n        \"na\": 45.0,\n        \"ka\": 120.0\n      },\n      \"fr\": true,\n      \"b\": null\n    }\n  ],\n  \"w\": [\n    \"휘핑 크림 토핑 카페라떼: 우유의 지방 함량과 시럽 추가 여부를 정확히 알기 어려워요.\"\n  ]\n}",
+  "items": [
+    {
+      "name": "휘핑 크림 토핑 카페라떼",
+      "grams": 350,
+      "wc": 1,
+      "franchise": true,
+      "brand": null,
+      "kcal100": 85
+    }
+  ],
+  "warnings": [
+    "휘핑 크림 토핑 카페라떼: 우유의 지방 함량과 시럽 추가 여부를 정확히 알기 어려워요."
+  ]
+}

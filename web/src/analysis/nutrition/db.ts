@@ -12,7 +12,7 @@ export interface MfdsFood {
   cb: number | null // 탄수화물 g/100g, 원본이 비어 있으면 null
   f: number | null // 지방 g/100g, 원본이 비어 있으면 null
   ml?: 1 // 원본 기준량 100ml를 밀도 1.0으로 환산한 행
-  s?: number // 1인(회)분량 참고량(g)
+  s?: number // 1인(회)분량 참고량(g). 식약처 원본 칸이 모두 비어 쓰지 않는다(1인분은 servingOf)
   w?: number // 공개 중량(g, 스펙 4.5.5). 업체 제공 행의 식품중량이 100g·100ml가 아닐 때만, ml은 1ml=1g
 }
 
@@ -129,12 +129,60 @@ export function loadedDbIndex(): NutritionDbIndex | null {
   return loaded
 }
 
-/** 1인(회)분량 참고량(g). DB를 아직 받지 않았거나 값이 없으면 null.
- *  주의(2026-10-29 확인): 식약처 음식 표준데이터 원본(19,738행)의 "1인(회)분량 참고량" 칸이 모두 비어 있어 지금은 늘 null이다 */
+// ── 보통 1인분 무게 (2026-10-29 사용자 결정, CLAUDE.md "일반 음식 1인분 무게") ──
+// 표: 대표식품명별 1인분 g(spike/serving/build.mjs가 만든다. 근거 mfds_ref = 1회 섭취참고량, ai = Gemini 한 번 묶음 조회).
+// 앱 실행 중 AI 호출은 없다. 식약처 DB처럼 처음 쓸 때 한 번 받아 캐시한다.
+
+export interface ServingTable {
+  version: string
+  byRep: Record<string, number>
+  source: Record<string, 'mfds_ref' | 'ai'>
+}
+
+export const SERVING_URL = `${import.meta.env?.BASE_URL ?? '/'}data/serving-20261029.json`
+export const SERVING_MIN_G = 5
+export const SERVING_MAX_G = 1500
+
+const validGrams = (g: unknown): g is number =>
+  typeof g === 'number' && Number.isFinite(g) && g >= SERVING_MIN_G && g <= SERVING_MAX_G
+
+async function fetchServing(): Promise<ServingTable> {
+  const res = await fetch(SERVING_URL)
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+  return (await res.json()) as ServingTable
+}
+
+let servingLoading: Promise<ServingTable> | null = null
+let servingTable: ServingTable | null = null
+
+/** 1인분 무게 표를 한 번만 받는다. 실패하면 1회 재시도 후 reject하고 다음 호출에서 다시 시도한다. fetchTable은 Node 시험용 */
+export function loadServing(fetchTable: () => Promise<ServingTable> = fetchServing): Promise<ServingTable> {
+  servingLoading ??= fetchTable()
+    .catch(() => fetchTable())
+    .then((t) => (servingTable = t))
+    .catch((e: unknown) => {
+      servingLoading = null
+      throw e
+    })
+  return servingLoading
+}
+
+/** 표에서 대표식품명의 1인분 g. 표를 아직 받지 않았거나 없으면 null */
+export function servingOfRep(rep: string): number | null {
+  const g = servingTable?.byRep[rep]
+  return validGrams(g) ? Math.round(g) : null
+}
+
+/**
+ * 보통 1인분 무게(g, 동기). 순서: 그 행의 1개 중량(w, 업체 제공 행) → 대표식품명(r)별 1인분 표 → null.
+ * DB나 표를 아직 받지 않았으면 그 단계를 건너뛴다(loadNutritionDb가 둘 다 미리 받는다).
+ */
 export function servingOf(dbCode: string): number | null {
   const i = loaded?.byCode.get(dbCode)
-  const s = i === undefined ? undefined : loaded!.db.foods[i].s
-  return typeof s === "number" && Number.isFinite(s) && s > 0 ? s : null
+  if (i === undefined) return null
+  const f = loaded!.db.foods[i]
+  if (validGrams(f.w)) return Math.round(f.w)
+  return servingOfRep(f.r)
 }
 
 /**
@@ -152,9 +200,9 @@ export function loadDb(fetchDb: () => Promise<MfdsDb> = fetchDefault): Promise<N
   return loading
 }
 
-/** 스펙 4.3 계약 이름. S2 진입 때 미리 불러 둔다. */
+/** 스펙 4.3 계약 이름. S2 진입 때 미리 불러 둔다. 1인분 무게 표도 함께 받는다(표 실패는 무시: 1인분 없이 100g) */
 export async function loadNutritionDb(): Promise<void> {
-  await loadDb()
+  await Promise.all([loadDb(), loadServing().catch(() => null)])
 }
 
 // ── 검색 ──────────────────────────────────────────────
