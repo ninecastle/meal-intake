@@ -83,7 +83,8 @@ export interface MenuPick {
 import type { DetailNutrients, FillSource, MealItem, Nutrients, NutritionResult } from '../../types/analysis.ts'
 import { applyDetail, applyNutrition, unitCountOk } from '../compute.ts'
 import { foodName } from '../../lib/foodName.ts'
-import { loadDb, loadedDbIndex, servingOf, type MfdsFood, type NutritionDbIndex } from './db.ts'
+import { loadDb, loadedDbIndex, loadServing, servingOf, servingOfRep, type MfdsFood, type NutritionDbIndex } from './db.ts'
+import { chickenWeight, isWholeChicken } from './chickenWeight.ts'
 import { detailFor } from './detail.ts'
 import { normalizeFoodName } from './normalize.ts'
 
@@ -315,9 +316,15 @@ const round1 = (n: number) => Math.round(n * 10) / 10
 
 export interface PickExtras {
   /** 1개 중량(g): DB 식품중량 → 보충표 unitWeight_g. 둘 다 없으면 없음(사진 AI 추정 무게를 쓴다).
-   *  nominal: 공식 값이 1단위당뿐이고 중량을 모른다 → 1단위를 100g으로 두어 per_100g이 곧 1단위 값(화면은 무게를 숨기는 편이 낫다) */
+   *  nominal: 공식 값이 1단위당뿐이고 중량을 모른다 → 1단위를 100g으로 두어 per_100g이 곧 1단위 값(화면은 무게를 숨기는 편이 낫다)
+   *  typical: 1마리 무게가 공식·DB에 없는 치킨 → 조사표 1마리 먹는 무게(chickenWeight.ts, 화면 "1마리 · 약 ○○g", grams_basis 'typical')
+   *  serving: 1개 무게가 없는 다른 메뉴 → 대표식품명 1인분 표(unit '인분', 화면 "1인분 ○g 기준") */
   unitWeight_g?: number
-  unitWeight_source?: 'db' | 'official' | 'nominal'
+  unitWeight_source?: 'db' | 'official' | 'nominal' | 'typical' | 'serving'
+  /** 단위를 바꿔 쓸 때만(serving → '인분'). 없으면 pick.unit */
+  unit?: FranchiseUnit
+  /** 기본 개수가 1이 아닐 때만(반마리·하프 치킨 0.5) */
+  defaultCount?: number
   /** 영양소별 출처. 배지는 칼로리 출처(source) */
   parts: Record<'kcal' | 'carbs_g' | 'protein_g' | 'fat_g', PartSource>
   /** 보충표 세부 영양소 100g당(당류·나트륨·포화지방). applyDetail의 official 칸에 넘긴다 */
@@ -338,7 +345,7 @@ export interface PickOptions {
  *  칼로리 — DB에 100g당 kcal과 1개 중량이 둘 다 있으면 DB → 보충표 공식 kcal(1단위 값은 공식 중량(없으면 DB 중량)으로 100g당 환산,
  *           중량이 전혀 없으면 1단위 = 100g으로 둠) → DB 100g당 kcal만 있으면 DB(1개 중량은 사진 추정) → AI 추정(guess → estimate) → 직접 입력.
  *  탄·단·지 — 하나씩 DB → 보충표 → AI 추정 → 빈 값(0, fill missing). 합은 100g을 넘지 않게 자른다.
- *  세부 영양소 — official_detail로 넘긴다(applyDetail이 DB → 보충표 → 추정). 1개 중량 — DB → 보충표 → 없음. 던지지 않는다 */
+ *  세부 영양소 — official_detail로 넘긴다(applyDetail이 DB → 보충표 → 추정). 1개 중량 — DB → 보충표 → 치킨 조사표(typical)·1인분 표(serving) → 없음. 던지지 않는다 */
 export async function pickToNutritionIn(t: FranchiseTable, pick: MenuPick, opts: PickOptions = {}): Promise<PickNutrition> {
   const idx = loadedDbIndex() ?? (await loadDb().catch(() => null))
   const food = dbFood(idx, pick.dbCode)
@@ -415,7 +422,7 @@ export async function pickToNutritionIn(t: FranchiseTable, pick: MenuPick, opts:
       ? { unitWeight_g: W, unitWeight_source: dbW ? ('db' as const) : ('official' as const) }
       : nominal
         ? { unitWeight_g: 100, unitWeight_source: 'nominal' as const }
-        : {}),
+        : await fallbackUnit(pick, menu, food)),
     ...(Object.keys(official_detail).length ? { official_detail } : {}),
     ...(pick.menuId ? { menuId: pick.menuId } : {}),
     ...(pick.dbCode ? { dbCode: pick.dbCode } : {}),
@@ -445,6 +452,22 @@ export async function pickToNutritionIn(t: FranchiseTable, pick: MenuPick, opts:
   return { source: 'user_input', per_100g: null, ...extras }
 }
 
+const CATEGORY_REP: Record<string, string> = { burger: '햄버거', pizza: '피자', drink: '커피', dessert: '케이크', side: '감자튀김' }
+
+/** 공식·DB 1개 무게가 없을 때(2026-10-29 사용자 결정): 한 마리 치킨 → 조사표 1마리 무게(typical),
+ *  다른 메뉴 → 그 메뉴 DB 행(없으면 이름 분류)의 대표식품명 1인분(serving, unit '인분'). 못 정하면 빈 값(사진 AI 무게) */
+async function fallbackUnit(pick: MenuPick, menu: FranchiseMenu | undefined, food: MfdsFood | undefined): Promise<Partial<PickExtras>> {
+  const category = menu?.category ?? categoryOfName(`${food?.r ?? ''} ${pick.name}`)
+  const piece = /통다리|\d+\s*조각/.test(pick.name)
+  if (!piece && ((pick.unit === '마리' && category === 'chicken') || (food?.r === '닭튀김' && isWholeChicken(food.n, food.r)))) {
+    const c = chickenWeight(pick.name, pick.brand)
+    return { unitWeight_g: c.unit_g, unitWeight_source: 'typical', unit: '마리', ...(c.half ? { defaultCount: 0.5 } : {}) }
+  }
+  await loadServing().catch(() => null)
+  const g = (pick.dbCode ? servingOf(pick.dbCode) : null) ?? (category && CATEGORY_REP[category] ? servingOfRep(CATEGORY_REP[category]) : null)
+  return g ? { unitWeight_g: g, unitWeight_source: 'serving', unit: '인분' } : {}
+}
+
 /** 메뉴 고르기 결과를 항목에 넣는다: 영양값(pickToNutrition) → 세부 영양소(DB → 보충표 → 추정) → brand·franchise·unit·menu_pick.
  *  count(개수)를 주고 1개 중량이 있으면 무게 = 1개 중량 × count, count가 정수 1~10이면 "공개 중량"(grams_source·published_g·unit_count).
  *  count가 없으면 무게는 그대로. franchise_ref는 지운다(메뉴를 골랐으므로). 던지지 않는다 */
@@ -459,12 +482,18 @@ export async function applyMenuPick(
   delete next.grams_source
   delete next.published_g
   delete next.unit_count
+  delete next.grams_basis
   delete next.franchise_ref
   const n = opts.count
   if (r.unitWeight_g && typeof n === 'number' && Number.isFinite(n) && n > 0) {
     next.before_grams = round1(r.unitWeight_g * n)
-    if (unitCountOk(n, pick.unit) && r.unitWeight_source !== 'nominal')
-      Object.assign(next, { grams_source: 'published' as const, published_g: r.unitWeight_g, unit_count: n })
+    if (unitCountOk(n, r.unit ?? pick.unit) && r.unitWeight_source !== 'nominal')
+      Object.assign(next, {
+        grams_source: 'published' as const,
+        published_g: r.unitWeight_g,
+        unit_count: n,
+        ...(r.unitWeight_source === 'typical' ? { grams_basis: 'typical' as const } : {}),
+      })
   }
   next = applyNutrition(next, r)
   let db: DetailNutrients | null = null
@@ -474,7 +503,7 @@ export async function applyMenuPick(
     ...next,
     brand: pick.brand,
     franchise: true,
-    unit: pick.unit,
+    unit: r.unit ?? pick.unit,
     menu_pick: { ...(pick.menuId ? { menuId: pick.menuId } : {}), ...(pick.dbCode ? { dbCode: pick.dbCode } : {}) },
   }
 }

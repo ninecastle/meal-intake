@@ -259,6 +259,7 @@ export function setBeforeGrams(item: MealItem, g: number): MealItem {
   delete next.grams_source
   delete next.published_g
   delete next.unit_count
+  delete next.grams_basis
   return recomputeItem(next)
 }
 
@@ -336,13 +337,13 @@ export function unitCountOk(n: unknown, unit?: string): n is number {
 }
 
 /** 공개 중량 표시 세 필드(4.5.5). 함께 있고 before_grams ≈ published_g × unit_count(±1g)일 때만 남긴다 */
-function publishedFields(it: MealItem): Pick<MealItem, 'grams_source' | 'published_g' | 'unit_count'> {
+function publishedFields(it: MealItem): Pick<MealItem, 'grams_source' | 'published_g' | 'unit_count' | 'grams_basis'> {
   const w = it.published_g
   const n = it.unit_count
   if (it.grams_source !== 'published' || typeof w !== 'number' || !Number.isFinite(w) || w <= 0) return {}
   if (!unitCountOk(n, it.unit)) return {}
   if (Math.abs(num(it.before_grams, 0) - w * n) > 1) return {}
-  return { grams_source: 'published', published_g: w, unit_count: n }
+  return { grams_source: 'published', published_g: w, unit_count: n, ...(it.grams_basis === 'typical' ? { grams_basis: 'typical' as const } : {}) }
 }
 
 /** 저장용 세부 영양소 세 필드(D4-a): 허용 키만, 100g당 값·출처가 짝이 맞는 키만, 먹은 양은 반올림. 값이 없으면 필드를 뺀다 */

@@ -106,8 +106,8 @@ export function countOf(it: MealItem): { count: number; unit: FranchiseUnit; uni
 
 /** 공식 1단위 값만 있고 중량을 모르는 메뉴(pickToNutrition unitWeight_source 'nominal'): 1단위 = 100g으로 둔 것이라 무게를 숨긴다.
  *  공개 중량 규칙(스펙 4.5.5)은 100g 식품중량을 쓰지 않으므로 official + 1단위 100g이면 nominal이다 */
-export function isNominalUnit(it: Pick<MealItem, 'nutrition_source' | 'grams_source' | 'published_g'>): boolean {
-  return it.nutrition_source === 'official' && it.grams_source === 'published' && it.published_g === 100
+export function isNominalUnit(it: Pick<MealItem, 'nutrition_source' | 'grams_source' | 'published_g' | 'grams_basis'>): boolean {
+  return it.nutrition_source === 'official' && it.grams_source === 'published' && it.published_g === 100 && it.grams_basis !== 'typical'
 }
 
 /** 치킨처럼 나눠 먹는 메뉴(마리)와 일반 음식 1인분(인분, 2026-10-29)은 0.5 단위 */

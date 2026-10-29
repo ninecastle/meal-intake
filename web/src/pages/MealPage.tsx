@@ -108,7 +108,8 @@ const r1 = (n: number) => Math.round(n * 10) / 10
 function describeItem(it: MealItem, edited: boolean): string {
   // 1개 중량을 쓰는 음식(프랜차이즈 메뉴·1인분)은 개수·단위 먼저: "1개 · 223g · 다 먹음"(2026-10-29 사용자 결정)
   const cnt = countOf(it)
-  const parts = cnt ? [countLabel(cnt.count, cnt.unit), ...(isNominalUnit(it) ? [] : [`${formatGrams(it.before_grams)}g`])] : [`${formatGrams(it.before_grams)}g`]
+  const grams = `${it.grams_basis === 'typical' ? '약 ' : ''}${formatGrams(it.before_grams)}g` // 치킨 조사표 1마리 무게는 "약"
+  const parts = cnt ? [countLabel(cnt.count, cnt.unit), ...(isNominalUnit(it) ? [] : [grams])] : [`${formatGrams(it.before_grams)}g`]
   const left = it.remaining_ratio ?? 0
   if (left > 0) parts.push(`${Math.round(left * 100)}% 남김`)
   else if (cnt) parts.push('다 먹음')

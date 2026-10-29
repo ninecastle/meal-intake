@@ -65,6 +65,9 @@ export interface MealItem {
   published_g?: number
   /** 통째로 보인 개수(호출 A whole_count, 정수 1~10) */
   unit_count?: number
+  /** 'typical': published_g가 공식 값이 아니라 치킨 1마리 조사표 무게(2026-10-29, chickenWeight.ts). 화면 "1마리 · 약 ○○g".
+   *  공개 중량 세 필드가 있을 때만 둔다(없어지면 함께 지운다) */
+  grams_basis?: 'typical'
   /** 0~1, null = 매칭 실패·판단 불확실(다른 음식·장면처럼 보임). null이면 사용자가 고르기 전에는 저장하지 않는다 */
   remaining_ratio: number | null
   /** 같은 장면인데 먹은 후 사진에 그 그릇이 안 보여 remaining_ratio=0(다 먹음)으로 미리 골라 둔 경우만(2026-10-27 사용자 결정).

@@ -19,7 +19,7 @@ const TOP_KEYS = new Set(['items', 'totals', 'warnings', 'model', 'prompt_versio
 const REQUIRED = ['id', 'name', 'db_food_code', 'eaters', 'before_grams', 'remaining_ratio', 'consumed_grams',
   'per_100g', 'nutrition_source', 'consumed', 'kcal_overridden', 'confidence', 'needs_review']
 const ITEM_KEYS = new Set([...REQUIRED, 'location', 'db_name', 'db_match', 'db_ml_converted', 'db_reference',
-  'per_100g_fill', 'user_edited', 'grams_source', 'published_g', 'unit_count', 'ratio_assumed',
+  'per_100g_fill', 'user_edited', 'grams_source', 'published_g', 'unit_count', 'grams_basis', 'ratio_assumed',
   'detail_per_100g', 'detail_source', 'detail_consumed',
   'brand', 'franchise', 'unit', 'menu_pick', 'franchise_ref', 'soup_of'])
 const REF_KEYS = new Set(['db_food_code', 'db_name', 'db_match', 'kcal_per_100g', 'ml_converted'])
@@ -152,6 +152,9 @@ export function checkAnalysis(r: unknown): { errors: string[]; warnings: string[
       else if (pwOk && typeof it.before_grams === 'number' && Math.abs(it.before_grams - pw * uc) > 1)
         errors.push(`${tag}: before_grams(${it.before_grams})가 published_g × unit_count(${pw * uc})와 1g 넘게 다르다`)
     }
+
+    // 2026-10-29: grams_basis 'typical'(치킨 1마리 조사표 무게)은 공개 중량 세 필드가 있을 때만
+    if ('grams_basis' in it && (it.grams_basis !== 'typical' || pubKeys.length !== 3)) errors.push(`${tag}: grams_basis는 "typical"만, 공개 중량 세 필드와 함께`)
 
     const consumedOk = isNutrients(it.consumed)
     if (!consumedOk) errors.push(`${tag}: consumed 영양소 누락·음수`)

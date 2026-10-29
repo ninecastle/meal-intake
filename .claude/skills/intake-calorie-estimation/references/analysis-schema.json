@@ -79,6 +79,7 @@
           "grams_source": {"const": "published", "description": "스펙 4.5.5. 먹기 전 무게를 업체 공개 중량 × 개수로 정했을 때만. published_g·unit_count와 함께 넣는다. 화면: 공개 중량 223g × 1"},
           "published_g": {"type": "number", "exclusiveMinimum": 0, "description": "공개 중량(g, 식약처 DB 식품중량, ml은 1ml=1g)"},
           "unit_count": {"type": "number", "multipleOf": 0.5, "minimum": 0.5, "maximum": 10, "description": "통째로 보인 개수(호출 A whole_count) 또는 고른 개수. 정수 1~10, unit이 마리·인분이면 0.5 단위(2026-10-29)"},
+          "grams_basis": {"enum": ["typical"], "description": "published_g가 공식 값이 아니라 치킨 1마리 조사표 무게(2026-10-29, 화면 \"1마리 · 약 ○○g\"). 공개 중량 세 필드가 있을 때만"},
           "remaining_ratio": {"type": ["number", "null"], "minimum": 0, "maximum": 1, "description": "남은 양 비율(0=다 먹음, 1=그대로). null=매칭 실패(0으로 계산, needs_review=true)"},
           "ratio_assumed": {"const": "not_visible", "description": "b3(2026-10-27). 같은 식사 장면인데 먹은 후 사진에 그 그릇만 안 보여 remaining_ratio=0(다 먹음)으로 미리 골라 둔 경우만. remaining_ratio=0일 때만 넣는다. 화면: 노란 표시 \"그릇이 안 보여서 다 드신 걸로 했어요. 아니면 바꿔 주세요\"(저장 허용). 사용자가 남긴 비율을 고르면 지운다"},
           "consumed_grams": {"type": "number", "minimum": 0, "description": "before_grams × (1 − remaining_ratio) ÷ eaters"},

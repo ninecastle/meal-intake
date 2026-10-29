@@ -260,7 +260,13 @@ export default function FoodCard(p: FoodCardProps) {
                 onCount={p.onCount}
               />
               <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4, fontSize: 12 }}>
-                {cnt.unit !== '인분' && !isNominalUnit(item) && (
+                {/* 치킨 조사표 1마리 무게(공식 값 아님, 2026-10-29): "1마리 · 약 ○○g" */}
+                {item.grams_basis === 'typical' && (
+                  <span style={{ color: 'var(--ink-3)' }}>
+                    1{cnt.unit} · 약 {Math.round(cnt.unitG)}g
+                  </span>
+                )}
+                {cnt.unit !== '인분' && item.grams_basis !== 'typical' && !isNominalUnit(item) && (
                   <span style={{ color: 'var(--lime-deep)' }}>
                     공개 중량 {Math.round(cnt.unitG)}g × {countLabel(cnt.count, cnt.unit)}
                   </span>
@@ -282,7 +288,9 @@ export default function FoodCard(p: FoodCardProps) {
             </label>
             {item.grams_source === 'published' && item.published_g != null && item.unit !== '인분' && (
               <div style={{ fontSize: 12, color: 'var(--lime-deep)', marginTop: 4 }}>
-                공개 중량 {Math.round(item.published_g)}g × {item.unit_count ?? 1}
+                {item.grams_basis === 'typical'
+                  ? `1${item.unit ?? '마리'} 약 ${Math.round(item.published_g)}g × ${item.unit_count ?? 1}`
+                  : `공개 중량 ${Math.round(item.published_g)}g × ${item.unit_count ?? 1}`}
               </div>
             )}
           </div>

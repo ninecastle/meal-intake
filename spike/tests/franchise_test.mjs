@@ -103,7 +103,7 @@ const pickOf = (b, id) => F.brandMenusIn(FAKE, b).find((p) => p.menuId === id)
   ok(r.parts.carbs_g === 'official' && r.per_100g.carbs_g === 50 && r.parts.protein_g === 'ai_estimate' && r.per_100g.protein_g === 12, '탄 공식·단 AI')
   // 100g당만 공개(교촌)
   const k = await F.pickToNutritionIn(FAKE, pickOf('kyochon', 'kc-original'), { guess })
-  ok(k.source === 'official' && k.per_100g.kcal === 250 && k.per_100g.protein_g === 20 && !k.unitWeight_g, '100g당만 공개(교촌) → 그대로, 1개 중량 없음')
+  ok(k.source === 'official' && k.per_100g.kcal === 250 && k.per_100g.protein_g === 20 && k.unitWeight_g === 499.7 && k.unitWeight_source === 'typical', `100g당만 공개(교촌) → 값 그대로, 1마리 무게는 조사표 교촌 후라이드 684.5 × 0.73 (${k.unitWeight_g} ${k.unitWeight_source})`)
   // 아무 값도 없음
   const none = await F.pickToNutritionIn({ ...FAKE, menus: [m({ id: 'x', brand: 'mcdonalds', name: '빈 메뉴' })] }, { brand: 'mcdonalds', brandName: '맥도날드', name: '빈 메뉴', unit: '개', menuId: 'x' })
   ok(none.source === 'user_input' && none.per_100g === null, '값이 하나도 없고 AI도 없으면 user_input')

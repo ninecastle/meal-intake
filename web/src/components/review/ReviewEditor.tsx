@@ -24,7 +24,7 @@ import type { MealIntakeAnalysis, MealItem, NutritionResult } from '../../types/
 import { macroPct } from '../mealText'
 import { askConfirm } from '../ui'
 import FoodCard, { FoodSearch, type RatioHint } from './FoodCard'
-import { menuRef, menusOf, servingGrams, withUnits, type MenuPick } from './franchiseUi'
+import { chickenUnitOf, menuRef, menusOf, servingGrams, withUnits, type MenuPick } from './franchiseUi'
 
 export interface ReviewEditorProps {
   analysis: MealIntakeAnalysis
@@ -165,13 +165,17 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
         : r.source === 'ai_estimate' && r.via === 'call_d'
           ? (r.serving_g ?? null)
           : null
+    // 한 마리 치킨(식약처 DB 닭튀김·이름에 치킨, 공식 1마리 무게 없음)은 1인분 대신 조사표 1마리 무게(2026-10-29, "1마리 · 약 ○○g")
+    const chicken = fresh && r.source !== 'user_input' && !(r.source === 'db' && r.published_g) ? chickenUnitOf(name, r.source === 'db' ? r.db_food_code : null) : null
     if (controllers.current.get(id) !== ac || ac.signal.aborted) return // 삭제됐거나 화면을 떠남
     controllers.current.delete(id)
     setPending((p) => omit(p, id))
     if (!find(id)) return
     update(id, (it) => {
       const next = dropPublished(applyDetail(applyNutrition(clearFranchise({ ...it, name, user_edited: true }), r), detail, null))
-      return serving && !gramsEdited.current.has(id) ? withUnits(next, serving, 1, '인분') : next
+      if (gramsEdited.current.has(id)) return next
+      if (chicken) return withUnits(next, chicken.unitG, chicken.count, '마리', 'typical')
+      return serving ? withUnits(next, serving, 1, '인분') : next
     })
     const html = r.source === 'search' ? r.searchSuggestionHtml : null
     setSuggestions((s) => (html ? { ...s, [id]: html } : omit(s, id)))
@@ -240,13 +244,20 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
     if (!cur) return
     // 1개 중량: DB → 보충표(pickToNutrition이 정함). 1단위 값만 있고 중량을 모르면(nominal) per_100g이 곧 1단위 값이라
     // 무게를 1단위 = 100g으로 맞춰야 칼로리가 맞는다(묻지 않고, 화면은 무게를 숨기고 개수만)
+    // 공식 1개 무게가 없으면: 한 마리 치킨은 조사표 1마리 무게(typical, "1마리 · 약 ○○g"), 다른 메뉴는 1인분 표(serving, unit '인분')
     const nominal = r.unitWeight_source === 'nominal'
+    const typical = r.unitWeight_source === 'typical'
+    const unit = r.unit ?? pick.unit
     const unitG = r.unitWeight_g && r.unitWeight_g > 0 ? r.unitWeight_g : null
     let useUnit = unitG !== null
     if (unitG !== null && !nominal && gramsEdited.current.has(id) && cur.before_grams > 0) {
       useUnit = await askConfirm({
-        title: `공개 중량 ${Math.round(unitG)}g으로 바꿀까요?`,
-        body: `직접 고친 무게 ${Math.round(cur.before_grams)}g 대신 1${pick.unit} 무게를 써요.`,
+        title: typical
+          ? `1${unit} 약 ${Math.round(unitG)}g으로 바꿀까요?`
+          : r.unitWeight_source === 'serving'
+            ? `1인분 ${Math.round(unitG)}g으로 바꿀까요?`
+            : `공개 중량 ${Math.round(unitG)}g으로 바꿀까요?`,
+        body: `직접 고친 무게 ${Math.round(cur.before_grams)}g 대신 1${unit} 무게를 써요.`,
         ok: '바꾸기',
         cancel: '지금 무게 그대로',
       })
@@ -255,11 +266,11 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
     if (useUnit) gramsEdited.current.delete(id)
     update(id, (x) => {
       const base = applyDetail(applyNutrition({ ...x, name: pick.name, user_edited: true }, r), detail, null, r.official_detail ?? null)
-      const next: MealItem = { ...base, brand: pick.brand, franchise: true, unit: pick.unit, menu_pick: menuRef(pick) }
+      const next: MealItem = { ...base, brand: pick.brand, franchise: true, unit, menu_pick: menuRef(pick) }
       delete next.franchise_ref
       if (!useUnit || unitG === null) return dropPublished(next)
-      const count = x.grams_source === 'published' && x.unit_count && x.unit === pick.unit ? x.unit_count : 1
-      return withUnits(next, unitG, count, pick.unit)
+      const count = x.grams_source === 'published' && x.unit_count && x.unit === unit ? x.unit_count : (r.defaultCount ?? 1)
+      return withUnits(next, unitG, count, unit, typical ? 'typical' : null)
     })
     if (r.source === 'user_input') setFocusKcalId(id)
   }

@@ -16,6 +16,8 @@ import {
   type FranchiseUnit,
   type MenuPick,
 } from '../../analysis/nutrition/franchise'
+import { chickenWeight, isWholeChicken } from '../../analysis/nutrition/chickenWeight'
+import { loadedDbIndex } from '../../analysis/nutrition/db'
 import type { MealItem } from '../../types/analysis'
 export { countLabel, countOf, countStep, MAX_COUNT } from '../mealText'
 
@@ -108,11 +110,24 @@ export async function brandsFor(name: string): Promise<FranchiseBrand[]> {
 }
 
 /** 무게 = 1단위 중량 × 개수. 저장 규칙(compute publishedFields)에 맞게 공개 중량 세 필드를 함께 둔다.
- *  1인분(unit '인분', DB 1회 제공량)도 같은 필드를 쓰고, 화면에서 "공개 중량" 대신 "1인분 ○g 기준"으로 보인다 */
-export function withUnits(it: MealItem, unitG: number, count: number, unit?: FranchiseUnit): MealItem {
+ *  1인분(unit '인분', DB 1회 제공량)도 같은 필드를 쓰고, 화면에서 "공개 중량" 대신 "1인분 ○g 기준"으로 보인다.
+ *  basis: 'typical'(치킨 조사표 1마리 무게, 화면 "1마리 · 약 ○○g")이면 grams_basis를 두고, null이면 지우고, 없으면 그대로 둔다 */
+export function withUnits(it: MealItem, unitG: number, count: number, unit?: FranchiseUnit, basis?: 'typical' | null): MealItem {
   const next: MealItem = { ...it, before_grams: Math.round(unitG * count), published_g: unitG, unit_count: count, grams_source: 'published' }
   if (unit) next.unit = unit
+  if (basis === 'typical') next.grams_basis = 'typical'
+  else if (basis === null) delete next.grams_basis
   return recomputeItem(next)
+}
+
+/** 프랜차이즈 메뉴가 아닌 한 마리 치킨(식약처 DB 닭튀김·이름에 치킨): 조사표 1마리 먹는 무게(g)와 기본 개수(반마리 0.5). 아니면 null */
+export function chickenUnitOf(name: string, dbCode?: string | null): { unitG: number; count: number } | null {
+  const idx = loadedDbIndex()
+  const i = dbCode ? idx?.byCode.get(dbCode) : undefined
+  const rep = idx && i !== undefined ? idx.db.foods[i].r : null
+  if (!isWholeChicken(name, rep)) return null
+  const c = chickenWeight(name)
+  return { unitG: c.unit_g, count: c.half ? 0.5 : 1 }
 }
 
 /** 프랜차이즈가 아닌 DB 음식의 보통 1인분 무게(g): 1개 중량(w) → 대표식품명별 1인분 표. 없으면 null */

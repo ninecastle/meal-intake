@@ -15,6 +15,8 @@ import { normWholeCount } from './beforePrompt.ts'
 import { resolveNutrition } from './nutrition/index.ts'
 // index.ts가 아니라 detail.ts에서 직접: Node 시험은 index.ts를 빈 모듈로 바꾼다(detail.ts는 import.meta.env 없이도 동작)
 import { detailFor } from './nutrition/detail.ts'
+import { chickenWeight, isWholeChicken } from './nutrition/chickenWeight.ts'
+import { loadedDbIndex } from './nutrition/db.ts'
 import {
   brandMenusIn,
   brandOfDbCodeIn,
@@ -84,6 +86,13 @@ function draftItem(b: BeforeItem, ratio: number | null, confidence: number, assu
     confidence,
     needs_review: false,
   }
+}
+
+/** 식약처 DB 행의 대표식품명(색인이 없으면 null) */
+function dbRepOf(code: string): string | null {
+  const idx = loadedDbIndex()
+  const i = idx?.byCode.get(code)
+  return idx && i !== undefined ? (idx.db.foods[i].r ?? null) : null
 }
 
 /** 공개 중량(스펙 4.5.5): whole_count가 있고, DB 이름 일치(db_match === 'name')이고, 매칭된 행에 공개 중량이 있을 때만
@@ -210,10 +219,26 @@ export async function assembleAnalysis(
           // 공식 값이 1단위당뿐이고 중량을 모름: 1단위 = 100g으로 둔 값이라 무게도 단위 수로 맞춘다
           draft.before_grams = w * (n ?? 1)
           if (n === null) warnings.push(`${b.name}: 공식 무게가 없어 1${pick!.unit}로 계산했어요. 개수를 확인해 주세요`)
-        } else if (w && n !== null) Object.assign(draft, { before_grams: w * n, grams_source: 'published' as const, published_g: w, unit_count: n })
+        } else if (w && n !== null && pickRes.unitWeight_source !== 'serving')
+          // 치킨 조사표 1마리 무게(typical)도 통째로 보일 때만 × 개수(화면 "1마리 · 약 ○○g"). 1인분 표(serving)는 사진 무게 그대로
+          Object.assign(draft, {
+            before_grams: w * n,
+            grams_source: 'published' as const,
+            published_g: w,
+            unit_count: n,
+            ...(pickRes.unitWeight_source === 'typical' ? { grams_basis: 'typical' as const } : {}),
+          })
       } else {
         const pub = publishedGrams(b, r)
         if (pub) Object.assign(draft, { before_grams: pub.published_g * pub.unit_count, grams_source: 'published' as const, ...pub })
+        else if (n !== null) {
+          // 공식 1마리 무게가 없는 치킨(식약처 DB 닭튀김·표에 없는 브랜드 등)이 통째로 보이면 조사표 1마리 무게 × 개수(2026-10-29)
+          const rep = r.source === 'db' ? dbRepOf(r.db_food_code) : null
+          if (isWholeChicken(b.name, rep)) {
+            const w = chickenWeight(b.name, b.brand).unit_g
+            Object.assign(draft, { before_grams: w * n, grams_source: 'published' as const, published_g: w, unit_count: n, grams_basis: 'typical' as const, unit: '마리' as const })
+          }
+        }
       }
       let item = applyNutrition(draft, r)
       const code = pickRes ? (pickRes.source !== 'ai_estimate' ? pickRes.dbCode : undefined) : r.source === 'db' ? r.db_food_code : undefined

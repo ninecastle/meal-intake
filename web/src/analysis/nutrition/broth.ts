@@ -264,6 +264,7 @@ function stripWhole(item: MealItem): MealItem {
   delete next.grams_source
   delete next.published_g
   delete next.unit_count
+  delete next.grams_basis
   delete next.franchise_ref
   return next
 }
