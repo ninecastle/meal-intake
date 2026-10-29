@@ -3,6 +3,7 @@
 import type { MealType } from '../data/meals'
 import { APP_TIMEZONE } from '../lib/time'
 import type { DetailKey, MealItem } from '../types/analysis'
+import type { FranchiseUnit } from '../analysis/nutrition/franchise'
 
 /** 하루 요약에 보이는 끼니 순서 */
 export const MEAL_TYPES: readonly MealType[] = ['breakfast', 'lunch', 'dinner', 'snack']
@@ -22,7 +23,14 @@ export function sourceLabel(it: SourceFields): string {
       return 'AI 추정'
     case 'user_input':
       return '직접 입력'
+    case 'official':
+      return '공식 정보' // 프랜차이즈 보충표(2026-10-29 사용자 결정)
   }
+}
+
+/** 출처 배지(.srcb) 색: 기본은 시안 lime(DB), "공식 정보"만 sky로 구별한다 */
+export function sourceBadgeStyle(it: Pick<MealItem, 'nutrition_source'>): { background: string; color: string } | undefined {
+  return it.nutrition_source === 'official' ? { background: 'var(--sky-soft)', color: 'var(--sky-deep)' } : undefined
 }
 
 export function formatKcal(n: number): string {
@@ -88,4 +96,26 @@ export function dateKeyLabel(dateKey: string): string {
 /** 그 날짜의 홈(하루 요약) 경로. 오늘이면 ?date를 붙이지 않는다. */
 export function homeHref(dateKey: string, today: string): string {
   return dateKey === today ? '/' : `/?date=${dateKey}`
+}
+
+/** 1단위 중량을 쓰는 음식(프랜차이즈 메뉴 공개 중량·1인분): 개수·단위·1개 중량. 없으면 null(무게 칸 그대로, 2026-10-29 사용자 결정) */
+export function countOf(it: MealItem): { count: number; unit: FranchiseUnit; unitG: number } | null {
+  if (it.published_g == null || it.unit_count == null || !(it.published_g > 0)) return null
+  return { count: it.unit_count, unit: it.unit ?? '개', unitG: it.published_g }
+}
+
+/** 공식 1단위 값만 있고 중량을 모르는 메뉴(pickToNutrition unitWeight_source 'nominal'): 1단위 = 100g으로 둔 것이라 무게를 숨긴다.
+ *  공개 중량 규칙(스펙 4.5.5)은 100g 식품중량을 쓰지 않으므로 official + 1단위 100g이면 nominal이다 */
+export function isNominalUnit(it: Pick<MealItem, 'nutrition_source' | 'grams_source' | 'published_g'>): boolean {
+  return it.nutrition_source === 'official' && it.grams_source === 'published' && it.published_g === 100
+}
+
+/** 치킨처럼 나눠 먹는 메뉴(마리)는 0.5 단위 */
+export const countStep = (it: Pick<MealItem, 'unit'>): number => (it.unit === '마리' ? 0.5 : 1)
+/** 저장 규칙(unit_count 1~10)에 맞춘 상한 */
+export const MAX_COUNT = 10
+
+/** "1개", "1.5마리", "2인분" */
+export function countLabel(n: number, unit: string): string {
+  return `${Number.isInteger(n) ? n : n.toFixed(1)}${unit}`
 }

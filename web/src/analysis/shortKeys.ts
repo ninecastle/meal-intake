@@ -10,7 +10,7 @@ type KeyMap = Readonly<Record<string, string>>
 /** 호출 A 맨 위 */
 export const SHORT_A_TOP: KeyMap = { f: 'items', w: 'warnings' }
 /** 호출 A 음식 하나 */
-export const SHORT_A_ITEM: KeyMap = { n: 'name', l: 'location', g: 'before_grams', c: 'confidence', p: 'per_100g_guess', wc: 'whole_count', d: 'detail_guess' }
+export const SHORT_A_ITEM: KeyMap = { n: 'name', l: 'location', g: 'before_grams', c: 'confidence', p: 'per_100g_guess', wc: 'whole_count', d: 'detail_guess', fr: 'franchise', b: 'brand' }
 /** 호출 A 100g당 kcal·탄·단·지 */
 export const SHORT_A_PER100: KeyMap = { k: 'kcal', c: 'carbs_g', p: 'protein_g', f: 'fat_g' }
 /** 호출 A 세부 영양소 9가지(순서는 compute.ts DETAIL_KEYS) */

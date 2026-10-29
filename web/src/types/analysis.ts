@@ -7,10 +7,15 @@
 // BeforeItem.detail_guess, totals.detail. 영양소마다 식약처 DB 값 → 없으면 호출 A의 100g당 추정("추정" 배지) → 없으면 키를 뺀다(화면 "–").
 
 export type Nutrients = { kcal: number; carbs_g: number; protein_g: number; fat_g: number }
-/** 화면: DB / 검색 기반 / AI 추정 / 직접 입력 */
-export type NutritionSource = 'db' | 'search' | 'ai_estimate' | 'user_input'
-export type FillSource = 'ai_estimate' | 'missing'
+/** 화면: DB / 공식 정보(프랜차이즈 보충표, 2026-10-29) / 검색 기반 / AI 추정 / 직접 입력 */
+export type NutritionSource = 'db' | 'official' | 'search' | 'ai_estimate' | 'user_input'
+/** official: DB 빈 값을 프랜차이즈 보충표 공식 값으로 채움(2026-10-29) */
+export type FillSource = 'ai_estimate' | 'missing' | 'official'
 export type DbMatch = 'name' | 'group' | 'partial'
+
+/** 프랜차이즈 보충표(nutrition/franchise.ts) 브랜드 id·단위. franchise.ts의 BrandId·FranchiseUnit과 같다 */
+export type FranchiseBrandId = string
+export type FranchiseUnitName = '개' | '마리' | '판' | '조각' | '잔' | '인분'
 /** 세부 영양소 키. 단위: _g는 g, _mg는 mg. 다불포화·단일불포화는 식약처 원본에 열이 없어 호출 A 추정만 있다.
  *  D4-a(4가지)로 저장된 기록·캐시도 그대로 맞는다(키는 모두 선택) */
 export type DetailKey =
@@ -26,7 +31,7 @@ export type DetailKey =
 /** 100g당 값 또는 먹은 양. 값이 없는 키는 뺀다 */
 export type DetailNutrients = Partial<Record<DetailKey, number>>
 /** 화면: db → 출처 없음(DB), ai_estimate → "추정" 배지 */
-export type DetailSource = 'db' | 'ai_estimate'
+export type DetailSource = 'db' | 'official' | 'ai_estimate'
 /** 값으로 쓰지 않고 화면에 참고로만 보이는 DB 행 */
 export type DbReference = {
   db_food_code: string
@@ -78,6 +83,16 @@ export interface MealItem {
   /** confidence < 0.6 또는 remaining_ratio === null */
   needs_review: boolean
   user_edited?: boolean
+  /** 프랜차이즈(2026-10-29): 보충표 브랜드 id. null = 프랜차이즈로 보이지만 가게를 모름(화면 "어느 가게" 칩) */
+  brand?: FranchiseBrandId | null
+  /** 사진에서 프랜차이즈 메뉴로 보였거나 메뉴를 골랐다 */
+  franchise?: boolean
+  /** 메뉴 단위(개·마리·판·조각·잔·인분). 개수 표시에 쓴다 */
+  unit?: FranchiseUnitName
+  /** 연결된 메뉴: 보충표 메뉴 id 그리고/또는 식약처 DB 행 코드 */
+  menu_pick?: { menuId?: string; dbCode?: string }
+  /** 보충표·DB 어디에도 없는 프랜차이즈 메뉴일 때 같은 브랜드 같은 분류 1개 kcal 평균(참고 표시, 예 "버거킹 버거 평균") */
+  franchise_ref?: { label: string; kcal: number }
   /** D4-a. 세부 영양소 100g당 값(값이 있는 키만, 하나도 없으면 필드를 뺀다) */
   detail_per_100g?: DetailNutrients
   /** D4-a. detail_per_100g와 같은 키마다 그 값의 출처 */
@@ -113,6 +128,10 @@ export interface BeforeItem {
   whole_count?: number | null
   /** D4-b에서 채움: 호출 A가 함께 준 세부 영양소 100g당 추정(범위 검사에 실패한 키는 뺀다). 없거나 null이면 추정 없음 */
   detail_guess?: DetailNutrients | null
+  /** a10: 프랜차이즈(체인점) 메뉴로 보이면 true. 예전 결과에는 없다 */
+  franchise?: boolean
+  /** a10: 포장지·로고·컵에 보이는 브랜드 이름(모델 표기 그대로, 한글). 보이지 않으면 null. BrandId 맞추기는 assembleAnalysis가 한다 */
+  brand?: string | null
 }
 export interface BeforeAnalysis { items: BeforeItem[]; warnings: string[]; model: string; prompt_version: string }
 export interface AfterItem {
@@ -150,6 +169,12 @@ export type NutritionResult =
       /** 화면 표시용. 저장하지 않는다 */
       searchSuggestionHtml: string | null
       groundingSources: { title?: string; uri: string }[]
+    }
+  | {
+      /** 프랜차이즈 메뉴 칼로리가 보충표 공식 값(2026-10-29). 화면 배지 "공식 정보". 다른 영양소는 fill에 출처(DB 값은 표시 없음) */
+      source: 'official'
+      per_100g: Nutrients
+      fill?: Partial<Record<'carbs_g' | 'fat_g', FillSource>>
     }
   | { source: 'ai_estimate'; per_100g: Nutrients; via: 'guess' | 'call_d'; reference?: DbReference }
   /** 3단계가 모두 실패 */

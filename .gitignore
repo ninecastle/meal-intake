@@ -31,3 +31,6 @@ spike/results/
 
 # Claude Code 개인 설정
 .claude/settings.local.json
+
+# 프랜차이즈 공식 영양정보 원본(다시 받을 수 있음)
+spike/franchise/raw/

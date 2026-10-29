@@ -270,3 +270,10 @@
 - a8 = a7 + 응답 칸 이름 짧게(f·w, 음식 n·l·g·c·p{k,c,p,f}·wc·d{su,fi,sf,tf,pu,mu,ch,na,ka}, 표 `web/src/analysis/shortKeys.ts`) + 경고 "~해요"체 지시. `normalizeBeforeResponse` 맨 앞 `expandBeforeRaw`가 원래 이름으로 되돌린다(원래 이름이 이미 있으면 그대로 → a7 이하 캐시·픽스처도 읽힘). 정리·검증·캐시·저장 형식은 그대로. 호출 D(PER100_SCHEMA)는 원래 이름 그대로.
 - b4 = b3 + 경고 "~해요"체 지시(스키마·규칙 같음).
 - 정리 단계에서 "~음/~함/~임"으로 끝나는 경고는 고치지 않고 그대로 둔다(지시로만 고침).
+
+## 프롬프트 a10 — 프랜차이즈 브랜드 판별(2026-10-29)
+- 변경: 호출 A에 음식마다 `fr`(프랜차이즈 메뉴로 보임)·`b`(포장지·로고·컵에 보이는 브랜드, 안 보이면 null) 칸 추가(호출 수 그대로). 브랜드가 보이면 `n`은 메뉴 이름만, 프랜차이즈 메뉴의 `p`·`d`는 공식 영양정보를 알면 100g당으로 환산. 정리: `franchiseOf`(brand가 있으면 franchise=true, "없음"·"null" → null). BrandId 맞추기는 assembleAnalysis가 보충표 aliases로(`matchBrand`).
+- 실제 호출 2회(gemini-3.5-flash-lite, Wikimedia Commons CC 사진, `spike/live/franchise/`):
+  - 맥도날드 빅맥 상자(닫힘, "Big Mac" 글자·M 로고): 빅맥 223g, wc 1, fr true, b "맥도날드" — 정답. 4.3초, 출력 269토큰.
+  - 스타벅스 크리스마스 컵(로고 없음, "BE TOGETHER" 글자): 휘핑 크림 토핑 카페라떼 350g, fr true, b null — 로고가 안 보여 짐작하지 않음(지시대로). 화면은 "어느 가게" 칩.
+- 시험: `spike/tests/franchise_test.mjs`(가짜 표, 실제 표 파일이 생기면 그것도) 모두 통과.

@@ -18,6 +18,9 @@
 //   (expandBeforeRaw) → 정리·검증·캐시·저장 형식은 그대로. 내용(음식·중량·100g당 값·세부 영양소 9가지·경고)은 a7과 같다.
 //   경고는 "~해요"체 존댓말로 끝내게 지시한다(명사형 "~어려움"·"~함" 금지). PER100_SCHEMA·DETAIL_SCHEMA(원래 이름)는 호출 D·시험용으로 남긴다.
 //   a7 캐시는 다시 분석한다.
+// a10(2026-10-29, 프랜차이즈 보충표 사용자 결정): a9 + 음식마다 fr(프랜차이즈 메뉴로 보이면 true)·b(포장지·로고·컵·상자에 보이는 브랜드, 없으면 null).
+//   같은 호출 안에서 받는다(호출 수 그대로). n에는 브랜드를 빼고 메뉴 이름만. 정리: franchise는 true일 때만 true, brand는 한 줄 30자 문자열 또는 null,
+//   brand가 있으면 franchise=true. BrandId 맞추기(보충표 aliases)는 assembleAnalysis가 한다. a9 캐시는 다시 분석한다.
 // 이 파일은 import.meta.env를 쓰지 않는다(Node 시험 스크립트에서도 그대로 불러 쓴다).
 import { Schema, ThinkingLevel, type GenerationConfig } from 'firebase/ai'
 import type { BeforeItem, DetailNutrients, Nutrients } from '../types/analysis'
@@ -26,10 +29,10 @@ import { koreanWarnings } from './koreanText.ts'
 import { expandBeforeRaw } from './shortKeys.ts'
 
 // a9(2026-10-29): 급식 후보에 있는데 사진에 없어 뺀 음식은 경고에도 쓰지 않는다(후보 블록 한 줄, 실기기 화면의 "제외함" 경고들).
-export const PROMPT_VERSION_A = 'a9'
+export const PROMPT_VERSION_A = 'a10'
 
 export const SYSTEM_INSTRUCTION_A = `당신은 식사 사진을 분석하는 영양 보조 도구다. 먹기 전 식탁 사진 한 장이 주어진다.
-응답 칸 이름은 짧게 줄여 두었다: f=음식 목록, w=경고 목록. 음식 하나는 id, n=이름, l=위치, g=먹기 전 중량(g), c=확신(0~1), p=100g당 열량·탄단지, wc=통째로 보이는 개수, d=100g당 세부 영양소.
+응답 칸 이름은 짧게 줄여 두었다: f=음식 목록, w=경고 목록. 음식 하나는 id, n=이름, l=위치, g=먹기 전 중량(g), c=확신(0~1), p=100g당 열량·탄단지, wc=통째로 보이는 개수, d=100g당 세부 영양소, fr=프랜차이즈 메뉴 여부, b=보이는 브랜드.
 
 할 일:
 1. 보이는 음식을 그릇 단위로 모두 f에 나열하고 i1, i2 … 순서로 id를 붙인다.
@@ -41,6 +44,8 @@ export const SYSTEM_INSTRUCTION_A = `당신은 식사 사진을 분석하는 영
 6. p에 100g당 k=kcal, c=탄수화물(g), p=단백질(g), f=지방(g) 추정값을 적는다. 일반적인 값을 그대로 쓰지 말고 보이는 구성(패티 수, 치즈·소스·토핑, 튀김옷, 크림·시럽 등)을 따져 그 음식에 맞게 추정한다. DB에 없거나, 종류 차이가 큰 음식이 DB 대표값에만 맞을 때 쓰인다.
 7. wc: 버거, 피자 한 판, 치킨 한 마리, 도시락, 컵 음료처럼 한 개·한 마리·한 판·1인분이 손대지 않은 모양 그대로 통째로 보이면 그 개수를 정수(1~10)로 적는다. 일부만 덜어 왔거나, 잘라 놓은 조각(피자 몇 조각 등)이거나, 여러 그릇에 나눠 담겼거나, 반찬·나물·국물처럼 정해진 크기가 없는 음식이면 null로 적는다. 판단이 어려우면 null. g는 wc와 상관없이 그대로 추정한다.
 8. d에 그 음식 100g당 su=당류(g), fi=식이섬유(g), sf=포화지방(g), tf=트랜스지방(g), pu=다불포화지방(g), mu=단일불포화지방(g), ch=콜레스테롤(mg), na=나트륨(mg), ka=칼륨(mg) 추정값을 적는다. 1인분이나 그릇 전체 값이 아니라 100g당 값이다. 한국에서 흔히 먹는 조리 기준으로 보이는 구성을 따져 추정하고, 짐작할 수 없는 값은 null로 적는다.
+9. fr: 패스트푸드·치킨·피자·카페 체인점처럼 프랜차이즈 가게 메뉴로 보이면 true, 집밥·급식·일반 식당 음식이면 false.
+10. b: 포장지·로고·컵·상자·영수증에 브랜드가 실제로 보이면 그 이름을 한글로 적는다(예: 맥도날드, 버거킹, 맘스터치, 롯데리아, KFC, BBQ, 교촌치킨, bhc, 굽네치킨, 도미노피자, 스타벅스, 이디야). 로고나 글자가 보이지 않으면 모양만으로 짐작하지 말고 null. 브랜드가 보이면 n에는 브랜드를 빼고 메뉴 이름만 적는다(예: b="맥도날드", n="빅맥"). 프랜차이즈 메뉴의 p·d는 그 메뉴의 공식 영양정보를 알면 그 값을 100g당으로 바꿔 적고, 모르면 보이는 구성으로 추정한다.
 
 규칙:
 - 섭취량이나 총 칼로리를 계산하지 않는다.
@@ -167,6 +172,8 @@ export const RESPONSE_SCHEMA_A = Schema.object({
           p: PER100_SCHEMA_A,
           wc: Schema.integer({ nullable: true, description: '통째로 보이는 개수' }),
           d: DETAIL_SCHEMA_A,
+          fr: Schema.boolean({ description: '프랜차이즈 메뉴로 보임' }),
+          b: Schema.string({ nullable: true, description: '보이는 브랜드(없으면 null)' }),
         },
       }),
     }),
@@ -246,6 +253,18 @@ export function normWholeCount(v: unknown): number | null {
   return n !== null && Number.isInteger(n) && n >= 1 && n <= WHOLE_COUNT_MAX ? n : null
 }
 
+/** a10 프랜차이즈 칸 정리: brand는 한 줄 30자 이하 문자열(빈 것·"null"·"없음"은 null), brand가 있으면 franchise=true.
+ *  두 칸이 모두 없으면(a9 이하 응답·캐시) 아무것도 넣지 않는다 */
+export function franchiseOf(fr: unknown, b: unknown): Pick<BeforeItem, 'franchise' | 'brand'> {
+  if (fr === undefined && b === undefined) return {}
+  let brand: string | null = null
+  if (typeof b === 'string') {
+    const t = b.replace(CTRL_RE, ' ').replace(/\s+/g, ' ').trim().slice(0, 30)
+    if (t && !/^(null|none|없음|모름|알 ?수 ?없음|unknown|-)$/i.test(t)) brand = t
+  }
+  return { franchise: fr === true || brand !== null, brand }
+}
+
 /** 모델 원본(JSON 객체) → 정리된 항목. id는 i1부터 다시 매긴다. */
 export function normalizeBeforeResponse(rawIn: unknown): NormalizeBeforeResult {
   const raw = expandBeforeRaw(rawIn) // a8 짧은 칸 이름 → 원래 이름(원래 이름 응답·캐시는 그대로)
@@ -289,6 +308,7 @@ export function normalizeBeforeResponse(rawIn: unknown): NormalizeBeforeResult {
       per_100g_guess: checkPer100(it.per_100g_guess),
       whole_count: normWholeCount(it.whole_count),
       detail_guess: checkDetail(it.detail_guess),
+      ...franchiseOf(it.franchise, it.brand),
     })
   }
   if (items.length === 0) return { ok: false, kind: 'invalid', detail: '형식에 맞는 항목이 없습니다' }

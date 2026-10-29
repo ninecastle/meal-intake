@@ -17,7 +17,7 @@
         "fat_g": {"type": "number", "minimum": 0}
       }
     },
-    "fillSource": {"enum": ["ai_estimate", "missing"], "description": "ai_estimate: DB 빈 값을 AI 추정으로 채움, missing: 값 없음(per_100g·consumed 값은 0, 화면은 –)"},
+    "fillSource": {"enum": ["ai_estimate", "missing", "official"], "description": "ai_estimate: DB 빈 값을 AI 추정으로 채움, missing: 값 없음(per_100g·consumed 값은 0, 화면은 –)"},
     "detailPer100g": {
       "type": "object",
       "description": "D4-a. 세부 영양소 100g당 값(_g 키는 g, _mg 키는 mg). 값이 있는 키만. D4-c(2026-10-28)부터 9가지, 키는 모두 선택(4가지로 저장된 기록도 맞다). 다불포화·단일불포화는 식약처 원본에 없어 출처가 늘 ai_estimate",
@@ -31,7 +31,7 @@
       "additionalProperties": false,
       "properties": {"sugar_g": {"type": "number", "minimum": 0}, "fiber_g": {"type": "number", "minimum": 0}, "satfat_g": {"type": "number", "minimum": 0}, "transfat_g": {"type": "number", "minimum": 0}, "polyunsat_g": {"type": "number", "minimum": 0}, "monounsat_g": {"type": "number", "minimum": 0}, "cholesterol_mg": {"type": "number", "minimum": 0}, "sodium_mg": {"type": "number", "minimum": 0}, "potassium_mg": {"type": "number", "minimum": 0}}
     },
-    "detailSource": {"enum": ["db", "ai_estimate"], "description": "db: 식약처 DB 값, ai_estimate: 먹기 전 분석(호출 A)이 함께 준 100g당 추정(화면 \"추정\" 배지)"},
+    "detailSource": {"enum": ["db", "official", "ai_estimate"], "description": "db: 식약처 DB 값, ai_estimate: 먹기 전 분석(호출 A)이 함께 준 100g당 추정(화면 \"추정\" 배지)"},
     "detailTotal": {
       "type": "object",
       "required": ["value", "count"],
@@ -62,6 +62,11 @@
         "properties": {
           "id": {"type": "string", "minLength": 1, "description": "모델 항목 i1…, 사용자 추가 u1…"},
           "name": {"type": "string"},
+          "brand": {"type": ["string", "null"], "description": "프랜차이즈 보충표 브랜드 id(2026-10-29). null = 프랜차이즈인데 가게 모름"},
+          "franchise": {"type": "boolean", "description": "사진에서 프랜차이즈 메뉴로 보였거나 메뉴를 골랐음"},
+          "unit": {"enum": ["개", "마리", "판", "조각", "잔", "인분"]},
+          "menu_pick": {"type": "object", "additionalProperties": false, "properties": {"menuId": {"type": "string"}, "dbCode": {"type": "string"}}},
+          "franchise_ref": {"type": "object", "additionalProperties": false, "required": ["label", "kcal"], "properties": {"label": {"type": "string"}, "kcal": {"type": "number", "minimum": 0}}},
           "location": {"type": "string"},
           "db_food_code": {"type": ["string", "null"], "description": "nutrition_source가 db일 때 식약처 음식 코드, 그 밖에는 null"},
           "db_name": {"type": ["string", "null"], "description": "v2. db일 때 매칭된 DB 음식명"},
@@ -72,7 +77,7 @@
           "before_grams": {"type": "number", "minimum": 0},
           "grams_source": {"const": "published", "description": "스펙 4.5.5. 먹기 전 무게를 업체 공개 중량 × 개수로 정했을 때만. published_g·unit_count와 함께 넣는다. 화면: 공개 중량 223g × 1"},
           "published_g": {"type": "number", "exclusiveMinimum": 0, "description": "공개 중량(g, 식약처 DB 식품중량, ml은 1ml=1g)"},
-          "unit_count": {"type": "integer", "minimum": 1, "maximum": 10, "description": "통째로 보인 개수(호출 A whole_count)"},
+          "unit_count": {"type": "number", "multipleOf": 0.5, "minimum": 0.5, "maximum": 10, "description": "통째로 보인 개수(호출 A whole_count) 또는 고른 개수. 정수 1~10, unit이 마리·인분이면 0.5 단위(2026-10-29)"},
           "remaining_ratio": {"type": ["number", "null"], "minimum": 0, "maximum": 1, "description": "남은 양 비율(0=다 먹음, 1=그대로). null=매칭 실패(0으로 계산, needs_review=true)"},
           "ratio_assumed": {"const": "not_visible", "description": "b3(2026-10-27). 같은 식사 장면인데 먹은 후 사진에 그 그릇만 안 보여 remaining_ratio=0(다 먹음)으로 미리 골라 둔 경우만. remaining_ratio=0일 때만 넣는다. 화면: 노란 표시 \"그릇이 안 보여서 다 드신 걸로 했어요. 아니면 바꿔 주세요\"(저장 허용). 사용자가 남긴 비율을 고르면 지운다"},
           "consumed_grams": {"type": "number", "minimum": 0, "description": "before_grams × (1 − remaining_ratio) ÷ eaters"},
@@ -84,7 +89,7 @@
             "properties": {"carbs_g": {"$ref": "#/$defs/fillSource"}, "fat_g": {"$ref": "#/$defs/fillSource"}},
             "description": "v2. db이고 DB 행에 탄·지 값이 비어 있을 때만. 영양소 단위 출처"
           },
-          "nutrition_source": {"enum": ["db", "search", "ai_estimate", "user_input"], "description": "화면 표시: DB(db_ml_converted면 DB 환산) / 검색 기반 / AI 추정(db_reference면 DB 참고 함께) / 직접 입력"},
+          "nutrition_source": {"enum": ["db", "official", "search", "ai_estimate", "user_input"], "description": "화면 표시: DB(db_ml_converted면 DB 환산) / 검색 기반 / AI 추정(db_reference면 DB 참고 함께) / 직접 입력"},
           "consumed": {"$ref": "#/$defs/nutrients", "description": "per_100g × consumed_grams ÷ 100. kcal_overridden이면 kcal은 사용자 입력값"},
           "kcal_overridden": {"type": "boolean", "description": "사용자가 칼로리를 직접 고쳤으면 true(user_input은 항상 true)"},
           "confidence": {"type": "number", "minimum": 0, "maximum": 1},
@@ -115,7 +120,7 @@
           {
             "if": {"properties": {"nutrition_source": {"const": "db"}}, "required": ["nutrition_source"]},
             "then": {"properties": {"db_food_code": {"type": "string", "minLength": 1}}},
-            "else": {"properties": {"db_food_code": {"type": "null"}, "db_name": {"type": "null"}, "db_match": false, "db_ml_converted": false, "per_100g_fill": false}}
+            "else": {"properties": {"db_food_code": {"type": "null"}, "db_name": {"type": "null"}, "db_match": false, "db_ml_converted": false}}
           },
           {
             "if": {"properties": {"nutrition_source": {"const": "ai_estimate"}}, "required": ["nutrition_source"]},

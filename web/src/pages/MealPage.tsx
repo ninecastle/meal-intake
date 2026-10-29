@@ -32,7 +32,7 @@ import { useBeforeFlow } from '../components/meal/useBeforeFlow'
 import { useKeepPhotosAsk } from '../components/meal/KeepPhotosAsk'
 import { useSchoolMealAsk } from '../components/meal/SchoolMealAsk'
 import { markSchoolMeal } from '../lib/neis'
-import { formatGrams, homeHref, isDateKey, macroPct, MEAL_TYPE_LABEL, MEAL_TYPES, sourceLabel } from '../components/mealText'
+import { formatGrams, homeHref, isDateKey, countLabel, countOf, isNominalUnit, macroPct, MEAL_TYPE_LABEL, MEAL_TYPES, sourceBadgeStyle, sourceLabel } from '../components/mealText'
 import { foodName, isAllLeft, representativeFood } from '../lib/foodName'
 import { askConfirm, IconButton, MealArt, Toast } from '../components/ui'
 import { deleteMeal, saveMeal, subscribeMealsFor, type MealType, type MealWithId } from '../data/meals'
@@ -73,6 +73,7 @@ type Row = {
   key: string
   name: string
   src: string | null
+  srcStyle?: { background: string; color: string }
   desc: string
   kcal: number | null
   /** 끝난 기록의 음식 줄만(수정 화면). 기다리는 묶음은 묶음 전체가 누르기를 받는다 */
@@ -105,9 +106,12 @@ const r1 = (n: number) => Math.round(n * 10) / 10
 
 /** 시안 .fs 설명 줄의 실제 값: 먹기 전 무게 · 남긴 비율(있을 때) · 같이 먹은 인원(2명 이상일 때) · 수정됨 */
 function describeItem(it: MealItem, edited: boolean): string {
-  const parts = [`${formatGrams(it.before_grams)}g`]
+  // 1개 중량을 쓰는 음식(프랜차이즈 메뉴·1인분)은 개수·단위 먼저: "1개 · 223g · 다 먹음"(2026-10-29 사용자 결정)
+  const cnt = countOf(it)
+  const parts = cnt ? [countLabel(cnt.count, cnt.unit), ...(isNominalUnit(it) ? [] : [`${formatGrams(it.before_grams)}g`])] : [`${formatGrams(it.before_grams)}g`]
   const left = it.remaining_ratio ?? 0
   if (left > 0) parts.push(`${Math.round(left * 100)}% 남김`)
+  else if (cnt) parts.push('다 먹음')
   if (it.eaters > 1) parts.push(`${it.eaters}명이 나눠 먹음`)
   if (edited) parts.push('수정됨')
   return parts.join(' · ')
@@ -385,6 +389,7 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
           key: `${m.id}/${it.id}`,
           name: foodName(it.name),
           src: sourceLabel(it),
+          srcStyle: sourceBadgeStyle(it),
           desc: describeItem(it, !!m.editedAt),
           kcal: Math.round(it.consumed.kcal),
           onOpen: () => navigate(`/meal/${m.id}/edit`, { state: { fromMeal: true } }),
@@ -530,7 +535,7 @@ function MealScreen({ uid, dateKey, meal, today }: { uid: string; dateKey: strin
                       <div>
                         <div className="fn">
                           {r.name}
-                          {r.src && <span className="srcb">{r.src}</span>}
+                          {r.src && <span className="srcb" style={r.srcStyle}>{r.src}</span>}
                         </div>
                         <div className="fs">{r.desc}</div>
                       </div>

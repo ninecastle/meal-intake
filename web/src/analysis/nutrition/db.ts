@@ -122,6 +122,20 @@ async function fetchDefault(): Promise<MfdsDb> {
 }
 
 let loading: Promise<NutritionDbIndex> | null = null
+let loaded: NutritionDbIndex | null = null
+
+/** 이미 받은 DB 색인(동기). 아직 받지 않았으면 null */
+export function loadedDbIndex(): NutritionDbIndex | null {
+  return loaded
+}
+
+/** 1인(회)분량 참고량(g). DB를 아직 받지 않았거나 값이 없으면 null.
+ *  주의(2026-10-29 확인): 식약처 음식 표준데이터 원본(19,738행)의 "1인(회)분량 참고량" 칸이 모두 비어 있어 지금은 늘 null이다 */
+export function servingOf(dbCode: string): number | null {
+  const i = loaded?.byCode.get(dbCode)
+  const s = i === undefined ? undefined : loaded!.db.foods[i].s
+  return typeof s === "number" && Number.isFinite(s) && s > 0 ? s : null
+}
 
 /**
  * DB JSON을 한 번만 받아 색인까지 만들어 캐시한다. 실패하면 1회 재시도 후 NUTRITION_DB_UNAVAILABLE로 reject하고,
@@ -130,7 +144,7 @@ let loading: Promise<NutritionDbIndex> | null = null
 export function loadDb(fetchDb: () => Promise<MfdsDb> = fetchDefault): Promise<NutritionDbIndex> {
   loading ??= fetchDb()
     .catch(() => fetchDb())
-    .then(buildIndex)
+    .then((db) => (loaded = buildIndex(db)))
     .catch((e: unknown) => {
       loading = null
       throw new Error('NUTRITION_DB_UNAVAILABLE', { cause: e })

@@ -21,7 +21,13 @@ export const resolveNutrition = resolver.resolveNutrition
 export { createNutritionResolver, mockEstimate, MOCK_ESTIMATE } from './resolve.ts'
 export type { EstimateCache, ResolveOptions, ResolverDeps } from './resolve.ts'
 export { HIGH_VARIANCE_EXCLUDE, HIGH_VARIANCE_KEYWORDS, isHighVarianceFood } from './highVariance.ts'
-export { findBestMatch, listFoodVariants, loadNutritionDb, searchFoodNames, searchFoods } from './db.ts'
+export { findBestMatch, listFoodVariants, loadNutritionDb, searchFoodNames, searchFoods, servingOf } from './db.ts'
+// 프랜차이즈 보충표(2026-10-29). 화면은 표 없이 부르는 비동기 래퍼, 표 인자 버전은 …In
+export {
+  applyMenuPick, brandMenus, brandMenusIn, brandOfDbCode, brandOfDbCodeIn, categoryOfName, findBrandMenu, franchiseBrands,
+  franchiseBrandsIn, franchiseRef, loadFranchise, matchBrand, pickToNutrition, pickToNutritionIn,
+} from './franchise.ts'
+export type { BrandId, FranchiseBrand, FranchiseMenu, FranchiseTable, FranchiseUnit, MenuPick, PickExtras, PickNutrition } from './franchise.ts'
 // D4-a 세부 영양소(당류·나트륨·포화지방·식이섬유) 100g당 값. 앱 DB와 따로 처음 쓸 때 받는다
 export { detailFor, loadDetailDb } from './detail.ts'
 export type { MfdsDetailDb } from './detail.ts'

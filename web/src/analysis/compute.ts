@@ -60,7 +60,7 @@ export function roundDetail(k: DetailKey, v: number): number {
   return r === 0 ? 0 : r
 }
 
-const isDetailSource = (v: unknown): v is DetailSource => v === 'db' || v === 'ai_estimate'
+const isDetailSource = (v: unknown): v is DetailSource => v === 'db' || v === 'official' || v === 'ai_estimate'
 const detailOk = (k: DetailKey, v: unknown): v is number =>
   typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= DETAIL_MAX_PER_100G[k]
 
@@ -178,7 +178,7 @@ export function applyNutrition(item: MealItem, r: NutritionResult): MealItem {
       const fill: NonNullable<MealItem['per_100g_fill']> = {}
       for (const k of ['carbs_g', 'fat_g'] as const) {
         const f = r.fill?.[k]
-        if (f !== 'ai_estimate' && f !== 'missing') continue
+        if (f !== 'ai_estimate' && f !== 'missing' && f !== 'official') continue
         fill[k] = f
         if (f === 'missing') per[k] = 0
       }
@@ -188,6 +188,21 @@ export function applyNutrition(item: MealItem, r: NutritionResult): MealItem {
       next.db_match = r.db_match
       if (Object.keys(fill).length > 0) next.per_100g_fill = fill
       if (r.ml_converted === true) next.db_ml_converted = true
+      next.kcal_overridden = false
+      break
+    }
+    case 'official': {
+      // 프랜차이즈 보충표(2026-10-29): 칼로리가 공식 값. 연결된 DB 행은 menu_pick.dbCode에 둔다(db_food_code는 null)
+      const per: Nutrients = { ...r.per_100g }
+      const fill: NonNullable<MealItem['per_100g_fill']> = {}
+      for (const k of ['carbs_g', 'fat_g'] as const) {
+        const f = r.fill?.[k]
+        if (f !== 'ai_estimate' && f !== 'missing' && f !== 'official') continue
+        fill[k] = f
+        if (f === 'missing') per[k] = 0
+      }
+      next.per_100g = per
+      if (Object.keys(fill).length > 0) next.per_100g_fill = fill
       next.kcal_overridden = false
       break
     }
@@ -211,15 +226,25 @@ export function applyNutrition(item: MealItem, r: NutritionResult): MealItem {
 /** 세부 영양소를 넣고 다시 계산한다(D4-a). 영양소마다 식약처 DB 값(db) → 없으면 호출 A의 100g당 추정(guess, ai_estimate)
  *  → 없으면 그 키를 뺀다. 범위(0~상한)를 벗어난 값은 없는 값으로 본다. 둘 다 없으면 세부 필드를 모두 지운다.
  *  applyNutrition이 세부 필드를 지우므로 그 뒤에 부른다. */
-export function applyDetail(item: MealItem, db: DetailNutrients | null | undefined, guess?: DetailNutrients | null): MealItem {
+/** 영양소마다 DB → official(프랜차이즈 보충표 100g당, 2026-10-29) → guess(호출 A 추정) 순서 */
+export function applyDetail(
+  item: MealItem,
+  db: DetailNutrients | null | undefined,
+  guess?: DetailNutrients | null,
+  official?: DetailNutrients | null,
+): MealItem {
   const per: DetailNutrients = {}
   const src: Partial<Record<DetailKey, DetailSource>> = {}
   for (const k of DETAIL_KEYS) {
     const a = db?.[k]
     const b = guess?.[k]
+    const o = official?.[k]
     if (detailOk(k, a)) {
       per[k] = a
       src[k] = 'db'
+    } else if (detailOk(k, o)) {
+      per[k] = o
+      src[k] = 'official'
     } else if (detailOk(k, b)) {
       per[k] = b
       src[k] = 'ai_estimate'
@@ -304,12 +329,18 @@ export function computeTotals(items: MealItem[]): MealIntakeAnalysis['totals'] {
   return out
 }
 
+/** 개수: 정수 1~10. unit이 '마리'·'인분'이면 0.5 단위 0.5~10(2026-10-29 나눠 먹는 치킨·1인분 미리 채우기) */
+export function unitCountOk(n: unknown, unit?: string): n is number {
+  if (typeof n !== 'number' || !Number.isFinite(n) || n > 10) return false
+  return unit === '마리' || unit === '인분' ? Number.isInteger(n * 2) && n >= 0.5 : Number.isInteger(n) && n >= 1
+}
+
 /** 공개 중량 표시 세 필드(4.5.5). 함께 있고 before_grams ≈ published_g × unit_count(±1g)일 때만 남긴다 */
 function publishedFields(it: MealItem): Pick<MealItem, 'grams_source' | 'published_g' | 'unit_count'> {
   const w = it.published_g
   const n = it.unit_count
   if (it.grams_source !== 'published' || typeof w !== 'number' || !Number.isFinite(w) || w <= 0) return {}
-  if (typeof n !== 'number' || !Number.isInteger(n) || n < 1 || n > 10) return {}
+  if (!unitCountOk(n, it.unit)) return {}
   if (Math.abs(num(it.before_grams, 0) - w * n) > 1) return {}
   return { grams_source: 'published', published_g: w, unit_count: n }
 }
@@ -324,7 +355,7 @@ function storedDetail(it: MealItem): Pick<MealItem, 'detail_per_100g' | 'detail_
 /** 저장용 항목: 스키마에 있는 키만, 출처에 맞는 필드만, undefined 없이(Firestore가 undefined를 거부한다). */
 function toStoredItem(it: MealItem): MealItem {
   const src = it.nutrition_source
-  const fill = src === 'db' && it.per_100g_fill && Object.keys(it.per_100g_fill).length > 0 ? { ...it.per_100g_fill } : null
+  const fill = (src === 'db' || src === 'official') && it.per_100g_fill && Object.keys(it.per_100g_fill).length > 0 ? { ...it.per_100g_fill } : null
   return {
     id: it.id,
     name: it.name,
@@ -349,7 +380,29 @@ function toStoredItem(it: MealItem): MealItem {
     needs_review: it.needs_review,
     ...(typeof it.user_edited === 'boolean' ? { user_edited: it.user_edited } : {}),
     ...storedDetail(it),
+    ...franchiseFields(it),
   }
+}
+
+const UNITS = ['개', '마리', '판', '조각', '잔', '인분']
+/** 저장용 프랜차이즈 필드(2026-10-29): 형식이 맞는 것만 */
+function franchiseFields(it: MealItem): Pick<MealItem, 'brand' | 'franchise' | 'unit' | 'menu_pick' | 'franchise_ref'> {
+  const out: Pick<MealItem, 'brand' | 'franchise' | 'unit' | 'menu_pick' | 'franchise_ref'> = {}
+  if (typeof it.brand === 'string' && it.brand !== '') out.brand = it.brand
+  else if (it.brand === null) out.brand = null
+  if (typeof it.franchise === 'boolean') out.franchise = it.franchise
+  if (typeof it.unit === 'string' && UNITS.includes(it.unit)) out.unit = it.unit
+  const mp = it.menu_pick
+  if (mp && typeof mp === 'object') {
+    const p: NonNullable<MealItem['menu_pick']> = {}
+    if (typeof mp.menuId === 'string' && mp.menuId) p.menuId = mp.menuId
+    if (typeof mp.dbCode === 'string' && mp.dbCode) p.dbCode = mp.dbCode
+    if (p.menuId || p.dbCode) out.menu_pick = p
+  }
+  const ref = it.franchise_ref
+  if (ref && typeof ref.label === 'string' && ref.label && typeof ref.kcal === 'number' && Number.isFinite(ref.kcal) && ref.kcal >= 0)
+    out.franchise_ref = { label: ref.label, kcal: Math.round(ref.kcal) }
+  return out
 }
 
 /** 저장용 v2 결과: 항목마다 다시 계산 → 합계(반올림 전 값의 합) → 반올림. 경고는 중복을 뺀다. */

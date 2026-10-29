@@ -8,11 +8,11 @@ type Obj = Record<string, any>
 const TOL = 0.02 // 허용 오차 2% 또는 1
 const LOW_CONF = 0.6
 const NUTRIENTS = ['kcal', 'carbs_g', 'protein_g', 'fat_g']
-const SOURCES = ['db', 'search', 'ai_estimate', 'user_input']
+const SOURCES = ['db', 'search', 'ai_estimate', 'user_input', 'official']
 const DB_MATCHES = ['name', 'group', 'partial']
 const REF_MATCHES = ['group', 'partial']
 const FILL_KEYS = ['carbs_g', 'fat_g']
-const FILL_VALUES = ['ai_estimate', 'missing']
+const FILL_VALUES = ['ai_estimate', 'missing', 'official']
 const PHOTO_KEY = /photo|image|thumb|base64|url/i
 const PHOTO_VALUE = /^data:image\//i
 const TOP_KEYS = new Set(['items', 'totals', 'warnings', 'model', 'prompt_version'])
@@ -20,14 +20,15 @@ const REQUIRED = ['id', 'name', 'db_food_code', 'eaters', 'before_grams', 'remai
   'per_100g', 'nutrition_source', 'consumed', 'kcal_overridden', 'confidence', 'needs_review']
 const ITEM_KEYS = new Set([...REQUIRED, 'location', 'db_name', 'db_match', 'db_ml_converted', 'db_reference',
   'per_100g_fill', 'user_edited', 'grams_source', 'published_g', 'unit_count', 'ratio_assumed',
-  'detail_per_100g', 'detail_source', 'detail_consumed'])
+  'detail_per_100g', 'detail_source', 'detail_consumed',
+  'brand', 'franchise', 'unit', 'menu_pick', 'franchise_ref'])
 const REF_KEYS = new Set(['db_food_code', 'db_name', 'db_match', 'kcal_per_100g', 'ml_converted'])
 // D4-a 세부 영양소(D4-c부터 9가지): 100g당 상한(g 키 100, 콜레스테롤 5000mg, 나트륨 40000mg, 칼륨 10000mg), 출처는 db·ai_estimate. 키는 모두 선택(4가지로 저장된 기록도 통과)
 const DETAIL_MAX: Record<string, number> = {
   sugar_g: 100, fiber_g: 100, satfat_g: 100, transfat_g: 100, polyunsat_g: 100, monounsat_g: 100, cholesterol_mg: 5000, sodium_mg: 40000, potassium_mg: 10000,
 }
 const DETAIL_KEYS = Object.keys(DETAIL_MAX)
-const DETAIL_SOURCES = ['db', 'ai_estimate']
+const DETAIL_SOURCES = ['db', 'ai_estimate', 'official']
 
 /** 오류·경고 목록만 모은다(형식·범위·출처별 필드·공식 일치·사진 키). */
 export function checkAnalysis(r: unknown): { errors: string[]; warnings: string[] } {
@@ -107,7 +108,7 @@ export function checkAnalysis(r: unknown): { errors: string[]; warnings: string[
       if (it.db_ml_converted !== true) errors.push(`${tag}: db_ml_converted는 true일 때만 넣는다`)
     }
     if ('per_100g_fill' in it) {
-      if (src !== 'db') errors.push(`${tag}: per_100g_fill은 출처 db일 때만 넣는다`)
+      if (src !== 'db' && src !== 'official') errors.push(`${tag}: per_100g_fill은 출처 db·official일 때만 넣는다`)
       const f = it.per_100g_fill
       if (!isObj(f)) errors.push(`${tag}: per_100g_fill은 객체여야 한다`)
       else
@@ -143,7 +144,10 @@ export function checkAnalysis(r: unknown): { errors: string[]; warnings: string[
       const pwOk = typeof pw === 'number' && Number.isFinite(pw) && pw > 0
       if (it.grams_source !== 'published') errors.push(`${tag}: grams_source는 "published"만 허용`)
       if (!pwOk) errors.push(`${tag}: published_g는 0보다 큰 수`)
-      if (!(Number.isInteger(uc) && uc >= 1 && uc <= 10)) errors.push(`${tag}: unit_count는 정수 1~10`)
+      // 2026-10-29: unit이 '마리'·'인분'(나눠 먹는 메뉴·1인분 미리 채우기)이면 0.5 단위(0.5~10)
+      const half = it.unit === '마리' || it.unit === '인분'
+      const ucOk = half ? typeof uc === 'number' && Number.isInteger(uc * 2) && uc >= 0.5 && uc <= 10 : Number.isInteger(uc) && uc >= 1 && uc <= 10
+      if (!ucOk) errors.push(`${tag}: unit_count는 정수 1~10(unit 마리·인분은 0.5 단위 0.5~10)`)
       else if (pwOk && typeof it.before_grams === 'number' && Math.abs(it.before_grams - pw * uc) > 1)
         errors.push(`${tag}: before_grams(${it.before_grams})가 published_g × unit_count(${pw * uc})와 1g 넘게 다르다`)
     }
@@ -210,7 +214,7 @@ export function checkAnalysis(r: unknown): { errors: string[]; warnings: string[
             continue
           }
           if (!inRange(dp[k], 0, DETAIL_MAX[k])) errors.push(`${tag}: detail_per_100g.${k} 범위(0~${DETAIL_MAX[k]}) 벗어남`)
-          if (!DETAIL_SOURCES.includes(ds[k])) errors.push(`${tag}: detail_source.${k} 값 오류(db·ai_estimate)`)
+          if (!DETAIL_SOURCES.includes(ds[k])) errors.push(`${tag}: detail_source.${k} 값 오류(db·official·ai_estimate)`)
           if (!isNum(dc[k]) || dc[k] < 0) errors.push(`${tag}: detail_consumed.${k} 누락·음수`)
           else if (isNum(dp[k]) && isNum(it.consumed_grams)) {
             const exp = (dp[k] * it.consumed_grams) / 100

@@ -18,9 +18,12 @@ import {
   setRemainingRatio,
 } from '../../analysis/compute'
 import { detailFor, resolveNutrition } from '../../analysis/nutrition'
+import { brandOfDbCode, pickToNutrition, type PickNutrition } from '../../analysis/nutrition/franchise'
 import type { MealIntakeAnalysis, MealItem, NutritionResult } from '../../types/analysis'
 import { macroPct } from '../mealText'
+import { askConfirm } from '../ui'
 import FoodCard, { FoodSearch, type RatioHint } from './FoodCard'
+import { menuRef, menusOf, servingGrams, withUnits, type MenuPick } from './franchiseUi'
 
 export interface ReviewEditorProps {
   analysis: MealIntakeAnalysis
@@ -42,6 +45,16 @@ const LATER = 1_000_000
 
 /** 이름이 바뀌면 다른 메뉴이므로 "공개 중량" 표시만 지운다(무게는 그대로, 스펙 4.5.5) */
 const dropPublished = (it: MealItem) => (it.grams_source ? setBeforeGrams(it, it.before_grams) : it)
+
+/** 이름을 직접 바꿔 다른 음식이 되면 고른 메뉴·브랜드 표시를 지운다(사용자가 이름을 골랐으니 [메뉴 고르기] 줄도 닫는다) */
+function clearFranchise(it: MealItem): MealItem {
+  if (!it.menu_pick && !it.franchise_ref && !it.unit && !it.franchise && !it.brand) return it
+  const next: MealItem = { ...it, franchise: false, brand: null }
+  delete next.menu_pick
+  delete next.franchise_ref
+  delete next.unit
+  return next
+}
 
 /** needs_review, AI 추정, 그릇이 안 보여 다 먹음으로 둔 항목(ratio_assumed): 먼저, 노란 테두리로 */
 const isFlagged = (it: MealItem) =>
@@ -75,6 +88,8 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
   const [focusKcalId, setFocusKcalId] = useState<string | null>(null)
   const [suggestions, setSuggestions] = useState<Record<string, string>>({})
   const controllers = useRef(new Map<string, AbortController>())
+  // 이 화면에서 무게를 직접 고친 음식(프랜차이즈 메뉴를 고르면 1개 중량으로 덮어쓰기 전에 묻는다)
+  const gramsEdited = useRef(new Set<string>())
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
@@ -110,7 +125,7 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
   // 이름 확정 → DB → (검색) → AI 추정. guess는 넘기지 않는다. 중량·남긴 비율·인원수는 그대로 둔다.
   // 세부 영양소(D4): applyNutrition이 예전 음식의 값을 지우고, 새 이름이 DB에 있으면 그 행의 식약처 값을 넣는다
   // (새 이름에는 먹기 전 분석의 추정이 없으므로 DB에 없는 키는 "–").
-  async function resolveFor(id: string, name: string, dbCode?: string) {
+  async function resolveFor(id: string, name: string, dbCode?: string, fresh = false) {
     controllers.current.get(id)?.abort()
     const ac = new AbortController()
     controllers.current.set(id, ac)
@@ -122,27 +137,103 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
       r = { source: 'user_input', per_100g: null }
     }
     const detail = r.source === 'db' ? await detailFor(r.db_food_code).catch(() => null) : null
+    // 직접 입력한 새 음식(프랜차이즈가 아닌 DB 음식)은 1회 제공량이 있으면 "1인분 · ○○g"으로 미리 채운다(2026-10-29)
+    const serving = fresh && r.source === 'db' ? await servingGrams(r.db_food_code) : null
     if (controllers.current.get(id) !== ac || ac.signal.aborted) return // 삭제됐거나 화면을 떠남
     controllers.current.delete(id)
     setPending((p) => omit(p, id))
     if (!find(id)) return
-    update(id, (it) => dropPublished(applyDetail(applyNutrition({ ...it, name, user_edited: true }, r), detail, null)))
+    update(id, (it) => {
+      const next = dropPublished(applyDetail(applyNutrition(clearFranchise({ ...it, name, user_edited: true }), r), detail, null))
+      return serving && !gramsEdited.current.has(id) ? withUnits(next, serving, 1, '인분') : next
+    })
     const html = r.source === 'search' ? r.searchSuggestionHtml : null
     setSuggestions((s) => (html ? { ...s, [id]: html } : omit(s, id)))
     if (r.source === 'user_input') setFocusKcalId(id)
   }
 
-  function confirmName(id: string, name: string, dbCode?: string) {
+  async function confirmName(id: string, name: string, dbCode?: string) {
     const it = find(id)
     if (!it) return
     setEditingId(null)
     if (name === it.name && dbCode === undefined) return
+    const fresh = it.name === '' && !gramsEdited.current.has(id)
+    // 브랜드 이름표가 붙은 DB 메뉴는 그 브랜드 메뉴로 고른 것과 같다(1개 중량 → 공개 중량)
+    if (dbCode) {
+      const b = await brandOfDbCode(dbCode).catch(() => null)
+      if (b) {
+        const m = (await menusOf(b).catch(() => [])).find((r) => r.pick.dbCode === dbCode)
+        if (m) return applyPick(id, m.pick)
+      }
+      if (!find(id)) return
+    }
     // 직접 고친 kcal이 있으면 묻는다(공식 값을 덮어쓴 경우, 또는 직접 입력 항목에 kcal을 적어 둔 경우)
     if (it.kcal_overridden && (it.per_100g !== null || it.consumed.kcal > 0)) {
       setAsk({ id, name, dbCode })
       return
     }
-    void resolveFor(id, name, dbCode)
+    void resolveFor(id, name, dbCode, fresh)
+  }
+
+  /** 프랜차이즈 메뉴를 골랐다: 공식 값으로 다시 계산하고, 1개 중량이 있으면 무게 = 1개 중량 × 개수("공개 중량").
+   *  무게를 직접 고쳐 둔 카드는 덮어쓰기 전에 묻는다. 1개 중량이 없으면 무게는 그대로(이름 바꾸기 규칙) */
+  async function applyPick(id: string, pick: MenuPick) {
+    const it = find(id)
+    if (!it) return
+    setEditingId(null)
+    if (it.kcal_overridden && (it.per_100g !== null || it.consumed.kcal > 0)) {
+      const again = await askConfirm({
+        title: '다시 계산할까요?',
+        body: `칼로리를 직접 고친 음식이에요. ‘${pick.name}’ 기준으로 다시 계산해요.`,
+        ok: '다시 계산',
+        cancel: '이름만',
+      })
+      if (!again) {
+        update(id, (x) => dropPublished({ ...x, name: pick.name, user_edited: true, brand: pick.brand, franchise: true, unit: pick.unit, menu_pick: menuRef(pick) }))
+        return
+      }
+    }
+    controllers.current.get(id)?.abort()
+    const ac = new AbortController()
+    controllers.current.set(id, ac)
+    setPending((p) => ({ ...p, [id]: pick.name }))
+    let r: PickNutrition
+    try {
+      r = await pickToNutrition(pick)
+    } catch {
+      r = { source: 'user_input', per_100g: null, parts: { kcal: 'missing', carbs_g: 'missing', protein_g: 'missing', fat_g: 'missing' } }
+    }
+    // 세부 영양소: DB → 보충표 → 없음(applyDetail 순서)
+    const detail = r.dbCode && r.source !== 'ai_estimate' ? await detailFor(r.dbCode).catch(() => null) : null
+    if (controllers.current.get(id) !== ac || ac.signal.aborted) return
+    controllers.current.delete(id)
+    setPending((p) => omit(p, id))
+    const cur = find(id)
+    if (!cur) return
+    // 1개 중량: DB → 보충표(pickToNutrition이 정함). 1단위 값만 있고 중량을 모르면(nominal) per_100g이 곧 1단위 값이라
+    // 무게를 1단위 = 100g으로 맞춰야 칼로리가 맞는다(묻지 않고, 화면은 무게를 숨기고 개수만)
+    const nominal = r.unitWeight_source === 'nominal'
+    const unitG = r.unitWeight_g && r.unitWeight_g > 0 ? r.unitWeight_g : null
+    let useUnit = unitG !== null
+    if (unitG !== null && !nominal && gramsEdited.current.has(id) && cur.before_grams > 0) {
+      useUnit = await askConfirm({
+        title: `공개 중량 ${Math.round(unitG)}g으로 바꿀까요?`,
+        body: `직접 고친 무게 ${Math.round(cur.before_grams)}g 대신 1${pick.unit} 무게를 써요.`,
+        ok: '바꾸기',
+        cancel: '지금 무게 그대로',
+      })
+      if (!find(id)) return
+    }
+    if (useUnit) gramsEdited.current.delete(id)
+    update(id, (x) => {
+      const base = applyDetail(applyNutrition({ ...x, name: pick.name, user_edited: true }, r), detail, null, r.official_detail ?? null)
+      const next: MealItem = { ...base, brand: pick.brand, franchise: true, unit: pick.unit, menu_pick: menuRef(pick) }
+      delete next.franchise_ref
+      if (!useUnit || unitG === null) return dropPublished(next)
+      const count = x.grams_source === 'published' && x.unit_count && x.unit === pick.unit ? x.unit_count : 1
+      return withUnits(next, unitG, count, pick.unit)
+    })
+    if (r.source === 'user_input') setFocusKcalId(id)
   }
 
   function answer(yes: boolean) {
@@ -194,7 +285,14 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
     const items = latest.current.items
     const it = newUserItem(undo ? [...items, undo.item] : items)
     emit([...items, it])
-    confirmName(it.id, name, dbCode)
+    void confirmName(it.id, name, dbCode)
+  }
+
+  function addPicked(pick: MenuPick) {
+    const items = latest.current.items
+    const it = newUserItem(undo ? [...items, undo.item] : items)
+    emit([...items, it])
+    void applyPick(it.id, pick)
   }
 
   function add() {
@@ -266,7 +364,7 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
       {shown.length === 0 ? (
         <div style={{ marginTop: 22 }}>
           <div style={{ fontFamily: 'var(--f-head)', fontSize: 16 }}>어떤 음식을 먹었나요?</div>
-          <FoodSearch initial="" onConfirm={addNamed} autoFocus={false} verb="추가" />
+          <FoodSearch initial="" onConfirm={addNamed} onPickMenu={addPicked} autoFocus={false} verb="추가" />
         </div>
       ) : (
         <>
@@ -285,9 +383,16 @@ export default function ReviewEditor({ analysis, onChange, onBusyChange, mode = 
                 showEaters={showEaters}
                 onStartEdit={() => setEditingId(it.id)}
                 onCancelEdit={() => cancelEdit(it.id)}
-                onConfirmName={(name, dbCode) => confirmName(it.id, name, dbCode)}
+                onConfirmName={(name, dbCode) => void confirmName(it.id, name, dbCode)}
+                onPickMenu={(pick) => void applyPick(it.id, pick)}
+                onCount={(n) =>
+                  update(it.id, (x) => (x.published_g ? withUnits({ ...x, user_edited: true }, x.published_g, n) : x))
+                }
                 onAnswerAsk={answer}
-                onGrams={(g) => update(it.id, (x) => setBeforeGrams({ ...x, user_edited: true }, g))}
+                onGrams={(g) => {
+                  gramsEdited.current.add(it.id)
+                  update(it.id, (x) => setBeforeGrams({ ...x, user_edited: true }, g))
+                }}
                 onRatio={(r) => update(it.id, (x) => setRemainingRatio(x, r))}
                 onEaters={(n) => update(it.id, (x) => recomputeItem({ ...x, eaters: n }))}
                 onKcal={(k) => update(it.id, (x) => setKcalOverride(x, k))}

@@ -10,8 +10,9 @@ import { MAX_EATERS } from '../../analysis/compute'
 import { listFoodVariants, searchFoodNames, type FoodSuggestion } from '../../analysis/nutrition'
 import { foodName } from '../../lib/foodName'
 import type { MealItem } from '../../types/analysis'
-import { sourceLabel } from '../mealText'
-import { Icon, IconButton } from '../ui'
+import { countLabel, countOf, countStep, isNominalUnit, MAX_COUNT, sourceBadgeStyle, sourceLabel } from '../mealText'
+import { BottomSheet, Icon, IconButton } from '../ui'
+import { brandNameOf, brandsFor, categoryOf, menusOf, searchMenus, useFranchiseTable, type FranchiseBrand, type MenuPick, type MenuRow } from './franchiseUi'
 
 const AUTOCOMPLETE_DEBOUNCE_MS = 200
 const VARIANT_LIMIT = 50
@@ -80,6 +81,10 @@ export interface FoodCardProps {
   onConfirmName: (name: string, dbCode?: string) => void
   onAnswerAsk: (yes: boolean) => void
   onGrams: (g: number) => void
+  /** 프랜차이즈 메뉴를 골랐다(이름 검색·가게 칩 → 메뉴 목록). 무게 = 1개 중량 × 개수 */
+  onPickMenu: (pick: MenuPick) => void
+  /** 개수(1개 중량을 쓰는 음식). 무게 = 1개 중량 × 개수 */
+  onCount: (n: number) => void
   onRatio: (r: number) => void
   onEaters: (n: number) => void
   onKcal: (kcal: number | null) => void
@@ -125,7 +130,18 @@ export default function FoodCard(p: FoodCardProps) {
   const dbNote = item.db_match ? MATCH_NOTE[item.db_match] : null
   const ref = item.db_reference
   const shownName = foodName(name)
+  // 프랜차이즈(2026-10-29): 브랜드 이름표, 가게 칩(브랜드 모름), [메뉴 고르기](사진으로 인식, 아직 직접 고르지 않음)
+  const table = useFranchiseTable(!!item.brand || !!item.franchise)
+  const brandName = brandNameOf(table, item.brand)
+  const [chipsClosed, setChipsClosed] = useState(false)
+  const [menuBrand, setMenuBrand] = useState<FranchiseBrand | null>(null)
+  const unpicked = !!item.franchise && !item.menu_pick
+  const askBrand = unpicked && !item.brand && !chipsClosed
+  const cnt = countOf(item)
+  const [gramsMode, setGramsMode] = useState(false)
+  useEffect(() => setGramsMode(false), [item.published_g])
   const sub = [
+    brandName,
     '눌러서 이름 고치기',
     item.nutrition_source === 'db' && item.db_name ? `DB 이름: ${foodName(item.db_name)}${dbNote ? ` (${dbNote})` : ''}` : null,
   ]
@@ -146,7 +162,9 @@ export default function FoodCard(p: FoodCardProps) {
           <button type="button" onClick={p.onStartEdit} style={{ flex: 1, minWidth: 0, minHeight: 44, padding: 0, textAlign: 'left' }}>
             <div className="fn" style={{ fontFamily: 'var(--f-head)', fontSize: 17, overflowWrap: 'anywhere' }}>
               {shownName || <span style={{ color: 'var(--ink-3)' }}>이름을 입력하세요</span>}
-              <span className="srcb">{sourceLabel(item)}</span>
+              <span className="srcb" style={sourceBadgeStyle(item)}>
+                {sourceLabel(item)}
+              </span>
               {item.needs_review && (
                 <span
                   className="state"
@@ -169,7 +187,48 @@ export default function FoodCard(p: FoodCardProps) {
           </p>
         )}
 
-        {p.editing && <NameEditor item={item} onConfirm={p.onConfirmName} onCancel={p.onCancelEdit} />}
+        {item.franchise_ref && (
+          <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--ink-3)' }}>
+            참고: {item.franchise_ref.label} 평균 {Math.round(item.franchise_ref.kcal)}kcal
+          </p>
+        )}
+
+        {askBrand && (
+          <BrandChips
+            name={name}
+            onPick={setMenuBrand}
+            onOther={() => setChipsClosed(true)}
+          />
+        )}
+        {unpicked && !askBrand && (
+          <div className="callout" style={{ background: 'var(--sky-soft)', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ flex: 1, fontSize: 14 }}>메뉴 이름을 직접 골라 주시면 더 정확해요</span>
+            <button
+              type="button"
+              className="chipbtn"
+              style={{ flex: 'none' }}
+              onClick={() => {
+                if (item.brand && table) {
+                  const b = table.brands.find((x) => x.id === item.brand)
+                  if (b) return setMenuBrand(b)
+                }
+                setChipsClosed(false)
+              }}
+            >
+              메뉴 고르기
+            </button>
+          </div>
+        )}
+        <MenuSheet
+          brand={menuBrand}
+          onClose={() => setMenuBrand(null)}
+          onPick={(pk) => {
+            setMenuBrand(null)
+            p.onPickMenu(pk)
+          }}
+        />
+
+        {p.editing && <NameEditor item={item} onConfirm={p.onConfirmName} onPickMenu={p.onPickMenu} onCancel={p.onCancelEdit} />}
 
         {p.askName !== null && (
           <div className="callout" style={{ background: 'var(--butter-soft)' }}>
@@ -186,6 +245,32 @@ export default function FoodCard(p: FoodCardProps) {
         )}
 
         <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 10 }}>
+          {cnt && !gramsMode ? (
+            <div style={{ gridColumn: '1 / -1' }}>
+              <div style={LABEL}>먹기 전 양</div>
+              <CountBox
+                count={cnt.count}
+                unit={cnt.unit}
+                grams={isNominalUnit(item) ? null : item.before_grams}
+                step={countStep(item)}
+                label={shownName || '음식'}
+                onCount={p.onCount}
+              />
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4, fontSize: 12 }}>
+                {cnt.unit !== '인분' && !isNominalUnit(item) && (
+                  <span style={{ color: 'var(--lime-deep)' }}>
+                    공개 중량 {Math.round(cnt.unitG)}g × {countLabel(cnt.count, cnt.unit)}
+                  </span>
+                )}
+                {cnt.unit === '인분' && <span style={{ color: 'var(--ink-3)' }}>1인분 {Math.round(cnt.unitG)}g 기준</span>}
+                {!isNominalUnit(item) && (
+                  <button type="button" className="link" onClick={() => setGramsMode(true)} style={{ padding: 0, fontSize: 12, marginLeft: 'auto' }}>
+                    무게로 고치기
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
           <div>
             <div style={LABEL}>먹기 전 무게</div>
             <label className="fbox" style={BOX}>
@@ -198,7 +283,8 @@ export default function FoodCard(p: FoodCardProps) {
               </div>
             )}
           </div>
-          <div>
+          )}
+          <div style={cnt && !gramsMode ? { gridColumn: '1 / -1' } : undefined}>
             <div style={LABEL}>
               먹은 kcal{canAuto && <span style={{ marginLeft: 4, color: 'var(--peach-deep)' }}>직접 입력</span>}
             </div>
@@ -287,7 +373,13 @@ export default function FoodCard(p: FoodCardProps) {
         )}
 
         <p style={{ margin: '14px 0 0', fontSize: 13, color: 'var(--ink-2)' }}>
-          먹은 양 <b className="num">{`${item.consumed_grams.toFixed(0)}g`}</b> · 탄 <Macro item={item} k="carbs_g" /> · 단{' '}
+          {/* 중량 모르는 공식 1단위 메뉴(nominal)는 g이 실제 무게가 아니라 숨긴다 */}
+          {!isNominalUnit(item) && (
+            <>
+              먹은 양 <b className="num">{`${item.consumed_grams.toFixed(0)}g`}</b> ·{' '}
+            </>
+          )}
+          탄 <Macro item={item} k="carbs_g" /> · 단{' '}
           <Macro item={item} k="protein_g" /> · 지 <Macro item={item} k="fat_g" />
         </p>
 
@@ -368,6 +460,8 @@ function NumField(props: {
 export function FoodSearch(props: {
   initial: string
   onConfirm: (name: string, dbCode?: string) => void
+  /** 프랜차이즈 메뉴 후보("불고기 버거 · 롯데리아")를 골랐을 때 */
+  onPickMenu?: (pick: MenuPick) => void
   onCancel?: () => void
   baseName?: string
   baseCode?: string
@@ -375,9 +469,11 @@ export function FoodSearch(props: {
   /** 목록에 없는 이름을 그대로 넣는 버튼 말: 직접 입력(새 음식)은 "추가", 카드 이름 고치기는 "쓰기" */
   verb?: '추가' | '쓰기'
 }) {
-  const { initial, onConfirm, onCancel, baseName, baseCode, verb = '쓰기' } = props
+  const { initial, onConfirm, onPickMenu, onCancel, baseName, baseCode, verb = '쓰기' } = props
   const [draft, setDraft] = useState(initial)
   const [sugs, setSugs] = useState<FoodSuggestion[]>([])
+  const [menus, setMenus] = useState<MenuRow[]>([])
+  const withMenus = !!onPickMenu
   const [variants, setVariants] = useState<FoodSuggestion[] | null>(null)
   const [filter, setFilter] = useState('')
   // 급식 기록이면(D13) 급식 메뉴를 바로 고르는 후보로. 입력하면 그 글자가 든 메뉴만
@@ -389,17 +485,23 @@ export function FoodSearch(props: {
     const t = setTimeout(() => {
       if (!q) {
         setSugs([])
+        setMenus([])
         return
       }
       searchFoodNames(q)
         .then((r) => alive && setSugs(r))
         .catch(() => alive && setSugs([]))
+      // 프랜차이즈 메뉴 후보(보충표 + 브랜드 이름표가 붙은 DB 메뉴). 고르면 1개 중량으로 무게를 채운다
+      if (withMenus)
+        searchMenus(q)
+          .then((r) => alive && setMenus(r))
+          .catch(() => alive && setMenus([]))
     }, AUTOCOMPLETE_DEBOUNCE_MS)
     return () => {
       alive = false
       clearTimeout(t)
     }
-  }, [draft])
+  }, [draft, withMenus])
 
   useEffect(() => {
     if (!baseName) return
@@ -465,9 +567,17 @@ export function FoodSearch(props: {
         )
       })()}
 
+      {menus.length > 0 && onPickMenu && (
+        <div style={{ marginTop: 4 }} aria-label="가게 메뉴">
+          {menus.map((m) => (
+            <MenuRowButton key={`${m.pick.brand}-${m.pick.menuId ?? m.pick.dbCode}`} m={m} withBrand onPick={() => onPickMenu(m.pick)} />
+          ))}
+        </div>
+      )}
+
       {sugs.length > 0 && (
         <div style={{ marginTop: 4 }}>
-          {sugs.map((s, i) => (
+          {sugs.filter((s) => !menus.some((m) => m.pick.dbCode && m.pick.dbCode === s.dbCode)).map((s, i) => (
             <SuggestionRow key={`${s.dbCode}-${i}`} s={s} onPick={() => onConfirm(foodName(s.label), s.dbCode)} />
           ))}
         </div>
@@ -517,13 +627,19 @@ export function FoodSearch(props: {
 }
 
 // 카드 안 이름 고치기: 화면 이름으로 열고(DB 표기 "분류_세부"를 보이지 않는다), 그대로 [그대로 쓰기]하면 바뀐 것이 없으므로 닫기만 한다.
-function NameEditor(props: { item: MealItem; onConfirm: (name: string, dbCode?: string) => void; onCancel: () => void }) {
-  const { item, onConfirm, onCancel } = props
+function NameEditor(props: {
+  item: MealItem
+  onConfirm: (name: string, dbCode?: string) => void
+  onPickMenu: (pick: MenuPick) => void
+  onCancel: () => void
+}) {
+  const { item, onConfirm, onPickMenu, onCancel } = props
   const baseName = item.name.trim()
   return (
     <FoodSearch
       initial={foodName(item.name)}
       onConfirm={onConfirm}
+      onPickMenu={onPickMenu}
       onCancel={onCancel}
       baseName={baseName || undefined}
       baseCode={item.db_food_code ?? item.db_reference?.db_food_code ?? undefined}
@@ -548,6 +664,144 @@ function SuggestionRow({ s, onPick }: { s: FoodSuggestion; onPick: () => void })
       </span>
       <span className="num" style={{ fontSize: 14, color: 'var(--ink-2)' }}>{`${Math.round(s.kcalPer100g)}kcal/100g`}</span>
     </button>
+  )
+}
+
+/** 프랜차이즈 메뉴 한 줄(시안 .rec): "불고기 버거 · 롯데리아"(withBrand), 사이즈·1개 중량 작은 글자 · 1단위 kcal */
+function MenuRowButton({ m, withBrand, onPick }: { m: MenuRow; withBrand?: boolean; onPick: () => void }) {
+  const unitTxt = `1${m.pick.unit}`
+  const small = [m.size, m.pick.unitWeight_g ? `${unitTxt} ${Math.round(m.pick.unitWeight_g)}g` : null].filter(Boolean).join(' · ')
+  return (
+    <button
+      type="button"
+      className="rec"
+      onClick={onPick}
+      style={{ width: '100%', textAlign: 'left', gridTemplateColumns: '1fr auto', padding: '14px 0' }}
+    >
+      <span>
+        <b style={{ fontFamily: 'var(--f-head)' }}>{withBrand ? `${m.pick.name} · ${m.pick.brandName}` : m.pick.name}</b>
+        {small && <small>{small}</small>}
+      </span>
+      <span className="num" style={{ fontSize: 14, color: 'var(--ink-2)' }}>
+        {m.kcal != null ? `${m.kcal}kcal/${unitTxt}` : ''}
+      </span>
+    </button>
+  )
+}
+
+/** 흰 카드 위 .chipbtn(시안 바탕은 흰색이라 카드에서 안 보인다): 시안 .segment 바탕과 같은 연회색 */
+const CHIP_ON_CARD: CSSProperties = { background: 'var(--ground)' }
+
+/** 브랜드를 모르는 프랜차이즈 음식: "어느 가게 ○○인가요?" + 그 분류 메뉴가 있는 브랜드 칩(.chipbtn) + [기타·직접 만든] */
+function BrandChips({ name, onPick, onOther }: { name: string; onPick: (b: FranchiseBrand) => void; onOther: () => void }) {
+  const [brands, setBrands] = useState<FranchiseBrand[] | null>(null)
+  useEffect(() => {
+    let alive = true
+    brandsFor(name)
+      .then((b) => alive && setBrands(b))
+      .catch(() => alive && setBrands([]))
+    return () => {
+      alive = false
+    }
+  }, [name])
+  return (
+    <div style={{ marginTop: 12 }} role="group" aria-label="가게 고르기">
+      <div style={{ fontSize: 14, color: 'var(--ink-2)' }}>어느 가게 {categoryOf(name).word}인가요?</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+        {(brands ?? []).map((b) => (
+          <button key={b.id} type="button" className="chipbtn" onClick={() => onPick(b)} style={CHIP_ON_CARD}>
+            {b.name}
+          </button>
+        ))}
+        <button type="button" className="chipbtn" onClick={onOther} style={{ ...CHIP_ON_CARD, color: 'var(--ink-2)' }}>
+          기타·직접 만든
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/** 브랜드 메뉴 목록 시트(시안 .sheet): 메뉴 찾기 칸 + 메뉴 .rec 줄 */
+function MenuSheet({ brand, onClose, onPick }: { brand: FranchiseBrand | null; onClose: () => void; onPick: (p: MenuPick) => void }) {
+  const [rows, setRows] = useState<MenuRow[] | null>(null)
+  const [q, setQ] = useState('')
+  const id = brand?.id
+  useEffect(() => {
+    setRows(null)
+    setQ('')
+    if (!id) return
+    let alive = true
+    menusOf(id)
+      .then((r) => alive && setRows(r))
+      .catch(() => alive && setRows([]))
+    return () => {
+      alive = false
+    }
+  }, [id])
+  const c = compact(q)
+  const shown = (rows ?? []).filter((r) => !c || compact(r.pick.name).includes(c) || compact(r.size ?? '').includes(c))
+  return (
+    <BottomSheet open={!!brand} onClose={onClose} title={`${brand?.name ?? ''} 메뉴`}>
+      <label className="fbox" style={{ ...BOX, gap: 10 }}>
+        <Icon name="pen" size={22} className="text-ink-3" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="메뉴 이름 찾기"
+          aria-label="메뉴 이름 찾기"
+          style={{ ...NUM_INPUT, font: '18px var(--f-body)' }}
+        />
+      </label>
+      {rows === null ? (
+        <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: '12px 0 0' }}>불러오는 중…</p>
+      ) : shown.length === 0 ? (
+        <p style={{ fontSize: 13, color: 'var(--ink-3)', margin: '12px 0 0' }}>맞는 메뉴가 없어요.</p>
+      ) : (
+        <div style={{ maxHeight: '50vh', overflowY: 'auto', marginTop: 4 }}>
+          {shown.map((r, i) => (
+            <MenuRowButton key={`${r.pick.menuId ?? r.pick.dbCode ?? r.pick.name}-${i}`} m={r} onPick={() => onPick(r.pick)} />
+          ))}
+        </div>
+      )}
+    </BottomSheet>
+  )
+}
+
+/** 개수 칸(시안 먹은 시간 칸 모양 상자): [−] 1개 [+] · 223g(무게는 작게). 마리는 0.5 단위 */
+function CountBox(props: { count: number; unit: string; grams: number | null; step: number; label: string; onCount: (n: number) => void }) {
+  const { count, unit, grams, step, label, onCount } = props
+  const RND: CSSProperties = { ...CHIP_ON_CARD, width: 40, height: 40, minHeight: 40, padding: 0, flex: 'none', fontSize: 22, lineHeight: 1 }
+  return (
+    <div style={{ ...BOX, gap: 10 }}>
+      <button
+        type="button"
+        className="chipbtn"
+        style={RND}
+        aria-label={`${label} 개수 줄이기`}
+        disabled={count - step < step}
+        onClick={() => onCount(count - step)}
+      >
+        −
+      </button>
+      <b className="num" aria-live="polite" style={{ font: '600 20px var(--f-num)', minWidth: 56, textAlign: 'center' }}>
+        {countLabel(count, unit)}
+      </b>
+      <button
+        type="button"
+        className="chipbtn"
+        style={RND}
+        aria-label={`${label} 개수 늘리기`}
+        disabled={count + step > MAX_COUNT}
+        onClick={() => onCount(count + step)}
+      >
+        +
+      </button>
+      {grams !== null && (
+        <span className="num" style={{ fontSize: 14, color: 'var(--ink-3)' }}>
+          · {Math.round(grams)}g
+        </span>
+      )}
+    </div>
   )
 }
 
