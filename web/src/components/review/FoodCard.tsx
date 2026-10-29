@@ -12,7 +12,7 @@ import { foodName } from '../../lib/foodName'
 import type { MealItem } from '../../types/analysis'
 import { countLabel, countOf, countStep, isNominalUnit, MAX_COUNT, sourceBadgeStyle, sourceLabel } from '../mealText'
 import { BottomSheet, Icon, IconButton } from '../ui'
-import { brandNameOf, brandsFor, categoryOf, menusOf, searchMenus, useFranchiseTable, type FranchiseBrand, type MenuPick, type MenuRow } from './franchiseUi'
+import { brandNameOf, brandsFor, categoryOf, menusOf, relevance, searchMenus, useFranchiseTable, type FranchiseBrand, type MenuPick, type MenuRow } from './franchiseUi'
 
 const AUTOCOMPLETE_DEBOUNCE_MS = 200
 const VARIANT_LIMIT = 50
@@ -585,19 +585,20 @@ export function FoodSearch(props: {
         )
       })()}
 
-      {menus.length > 0 && onPickMenu && (
-        <div style={{ marginTop: 4 }} aria-label="가게 메뉴">
-          {menus.map((m) => (
-            <MenuRowButton key={`${m.pick.brand}-${m.pick.menuId ?? m.pick.dbCode}`} m={m} withBrand onPick={() => onPickMenu(m.pick)} />
-          ))}
-        </div>
-      )}
-
-      {sugs.length > 0 && (
+      {(sugs.length > 0 || (menus.length > 0 && onPickMenu)) && (
         <div style={{ marginTop: 4 }}>
-          {sugs.filter((s) => !menus.some((m) => m.pick.dbCode && m.pick.dbCode === s.dbCode)).map((s, i) => (
-            <SuggestionRow key={`${s.dbCode}-${i}`} s={s} onPick={() => onConfirm(foodName(s.label), s.dbCode)} />
-          ))}
+          {/* 프랜차이즈 메뉴와 DB 후보를 한 목록에 같은 관련도 기준으로(이름 같음 → 앞부분 → 포함, 같은 단계는 대표 음식 먼저·짧은 이름 먼저) */}
+          {mergeCandidates(
+            onPickMenu ? menus : [],
+            sugs.filter((s) => !menus.some((m) => m.pick.dbCode && m.pick.dbCode === s.dbCode)),
+            draft,
+          ).map((c, i) =>
+            c.kind === 'menu' ? (
+              <MenuRowButton key={`m-${c.m.pick.brand}-${c.m.pick.menuId ?? c.m.pick.dbCode}`} m={c.m} withBrand onPick={() => onPickMenu?.(c.m.pick)} />
+            ) : (
+              <SuggestionRow key={`${c.s.dbCode}-${i}`} s={c.s} onPick={() => onConfirm(foodName(c.s.label), c.s.dbCode)} />
+            ),
+          )}
         </div>
       )}
 
@@ -686,6 +687,21 @@ function SuggestionRow({ s, onPick }: { s: FoodSuggestion; onPick: () => void })
 }
 
 /** 프랜차이즈 메뉴 한 줄(시안 .rec): "불고기 버거 · 롯데리아"(withBrand), 사이즈·1개 중량 작은 글자 · 1단위 kcal */
+/** 프랜차이즈 메뉴 후보와 DB 후보를 같은 기준으로 합친다(DB 자동완성 rank와 같은 순서: 관련도 → 대표 음식 → 짧은 이름 → 가나다) */
+type Cand = { kind: 'menu'; m: MenuRow; score: number; len: number; label: string; group: boolean } | { kind: 'db'; s: FoodSuggestion; score: number; len: number; label: string; group: boolean }
+function mergeCandidates(menus: MenuRow[], sugs: FoodSuggestion[], q: string): Cand[] {
+  const all: Cand[] = [
+    ...menus.map((m): Cand => ({ kind: 'menu', m, score: m.score ?? relevance(m.pick.name, q), len: m.pick.name.length, label: m.pick.name, group: false })),
+    ...sugs.map((s): Cand => {
+      const label = foodName(s.label)
+      return { kind: 'db', s, score: Math.max(relevance(label, q), relevance(s.label, q), 2), len: label.length, label, group: s.kind === 'group' }
+    }),
+  ]
+  return all
+    .sort((a, b) => b.score - a.score || (a.group === b.group ? 0 : a.group ? -1 : 1) || a.len - b.len || a.label.localeCompare(b.label, 'ko'))
+    .slice(0, 10)
+}
+
 function MenuRowButton({ m, withBrand, onPick }: { m: MenuRow; withBrand?: boolean; onPick: () => void }) {
   const unitTxt = `1${m.pick.unit}`
   const small = [m.size, m.pick.unitWeight_g ? `${unitTxt} ${Math.round(m.pick.unitWeight_g)}g` : null].filter(Boolean).join(' · ')
@@ -701,7 +717,7 @@ function MenuRowButton({ m, withBrand, onPick }: { m: MenuRow; withBrand?: boole
         {small && <small>{small}</small>}
       </span>
       <span className="num" style={{ fontSize: 14, color: 'var(--ink-2)' }}>
-        {m.kcal != null ? `${m.kcal}kcal/${unitTxt}` : ''}
+        {m.kcal != null ? `${m.approx ? '약 ' : ''}${m.kcal}kcal/${unitTxt}` : ''}
       </span>
     </button>
   )

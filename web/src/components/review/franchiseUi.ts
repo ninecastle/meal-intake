@@ -18,13 +18,14 @@ import {
 } from '../../analysis/nutrition/franchise'
 import { chickenWeight, isWholeChicken } from '../../analysis/nutrition/chickenWeight'
 import { loadedDbIndex } from '../../analysis/nutrition/db'
+import { normalizeFoodName } from '../../analysis/nutrition/normalize'
 import type { MealItem } from '../../types/analysis'
 export { countLabel, countOf, countStep, MAX_COUNT } from '../mealText'
 
 export type { BrandId, FranchiseBrand, MenuPick }
 
 /** 메뉴 목록 한 줄: 메뉴와 1단위 kcal(모르면 null) */
-export type MenuRow = { pick: MenuPick; kcal: number | null; size?: string }
+export type MenuRow = { pick: MenuPick; kcal: number | null; size?: string; /** 검색 관련도(이름 같음 3·앞부분 2·포함·브랜드 1, DB 후보와 같은 기준) */ score?: number; /** kcal이 치킨 조사표 1마리 무게로 계산한 값("약") */ approx?: boolean }
 
 const compact = (s: string) => s.replace(/\s+/g, '').toLowerCase()
 
@@ -70,7 +71,14 @@ function rowOf(t: FranchiseTable, pick: MenuPick): MenuRow {
   const m = pick.menuId ? t.menus.find((x) => x.id === pick.menuId) : undefined
   let kcal: number | null = m?.perUnit?.kcal ?? null
   if (kcal == null && m?.per100?.kcal != null && pick.unitWeight_g) kcal = (m.per100.kcal * pick.unitWeight_g) / 100
-  return { pick, kcal: kcal == null ? null : Math.round(kcal), size: m?.size }
+  // 1마리 무게를 공개하지 않은 치킨(교촌·BBQ 등): 조사표 1마리 먹는 무게로 "약 ○kcal/1마리"(2026-10-29 사용자 결정)
+  let approx = false
+  if (kcal == null && m?.per100?.kcal != null && pick.unit === '마리' && isWholeChicken(pick.name, null)) {
+    const c = chickenWeight(pick.name, pick.brand)
+    kcal = (m.per100.kcal * c.unit_g * (c.half ? 0.5 : 1)) / 100
+    approx = true
+  }
+  return { pick, kcal: kcal == null ? null : Math.round(kcal), size: m?.size, ...(approx ? { approx } : {}) }
 }
 
 /** 그 브랜드 메뉴 목록(보충표 + DB 브랜드 메뉴, brandMenus가 정한 순서) */
@@ -88,13 +96,23 @@ export async function searchMenus(q: string, limit = 6): Promise<MenuRow[]> {
   for (const b of t.brands) {
     const names = [b.name, ...b.aliases].map(compact)
     for (const p of await brandMenus(b.id)) {
-      const nm = compact(p.name)
-      if (nm.includes(c) || names.some((bn) => (bn + nm).includes(c) || (nm + bn).includes(c))) out.push(rowOf(t, p))
+      const score = relevance(p.name, q, names.some((bn) => (bn + compact(p.name)).includes(c) || (compact(p.name) + bn).includes(c)))
+      if (score > 0) out.push({ ...rowOf(t, p), score })
     }
   }
-  // 이름이 짧을수록(더 딱 맞을수록) 먼저
-  out.sort((a, b) => a.pick.name.length - b.pick.name.length)
+  // DB 후보와 같은 기준(관련도 → 짧은 이름)으로 정렬해 함께 섞는다(2026-10-29 사용자 결정: 프랜차이즈를 무조건 위에 두지 않음)
+  out.sort((a, b) => (b.score ?? 0) - (a.score ?? 0) || a.pick.name.length - b.pick.name.length)
   return out.slice(0, limit)
+}
+
+/** 검색 관련도(DB 자동완성과 같은 기준, normalizeFoodName 비교): 이름 같음 3 · 이름이 검색어로 시작 2 · 이름에 들어 있음 또는 브랜드 이름이 맞음 1 · 아님 0 */
+export function relevance(name: string, query: string, brandHit = false): number {
+  const n = normalizeFoodName(name)
+  const q = normalizeFoodName(query)
+  if (!q) return 0
+  if (n === q) return 3
+  if (n.startsWith(q)) return 2
+  return n.includes(q) || brandHit ? 1 : 0
 }
 
 /** 가게 칩 분류: 음식 이름으로 보충표 분류를 고른다(화면 문구 "어느 가게 ○○인가요?"). 분류를 모르면 메뉴가 있는 모든 브랜드 */
