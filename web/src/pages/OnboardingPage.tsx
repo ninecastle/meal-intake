@@ -25,6 +25,7 @@ import { useConsent } from '../components/terms/consentState'
 import { IconButton, Mascot } from '../components/ui'
 import { hasCurrentConsent } from '../data/consent'
 import { GoalStoreError, saveGoal, subscribeGoal, type GoalStoreErrorCode, type StoredGoal } from '../data/goals'
+import { advanceDemoStage, useDemoStage } from '../lib/demoAccount'
 import { setFlash } from '../lib/flash'
 import SchoolSearch from '../components/school/SchoolSearch'
 import { setSchool } from '../data/school'
@@ -120,6 +121,7 @@ export default function OnboardingPage({ user }: { user: User | null }) {
   const [draft, setDraft] = useState<OnboardingDraft>(() => readOnboardingDraft() ?? EMPTY_DRAFT)
   const [goal, setGoal] = useState<{ uid: string; g: StoredGoal | null } | undefined>(undefined)
   const [leaving, setLeaving] = useState(false)
+  const demo = useDemoStage(uid)
 
   useEffect(() => {
     if (!uid) return
@@ -145,7 +147,8 @@ export default function OnboardingPage({ user }: { user: User | null }) {
   if (!hasCurrentConsent(consent)) return <Navigate to="/welcome" replace />
   if (goal?.uid !== uid) return <Loading />
   // 목표가 이미 있는 계정은 목표 질문을 다시 하지 않는다(저장 중·직후 구독이 먼저 와도 결과 화면이 마무리하고 옮긴다)
-  if (goal.g && !leaving) return <Navigate to="/" replace />
+  // 테스트 계정 처음처럼(lib/demoAccount, 'goal' 단계)은 목표가 있어도 질문부터
+  if (goal.g && !leaving && demo !== 'goal') return <Navigate to="/" replace />
 
   const open = firstOpen(draft)
   const stepParam = Number(params.get('step') ?? '0')
@@ -164,6 +167,7 @@ export default function OnboardingPage({ user }: { user: User | null }) {
   function leave(flash: 'goal:saved' | 'goal:pending') {
     setLeaving(true)
     clearOnboardingDraft()
+    if (uid) advanceDemoStage(uid, 'goal', 'tutorial')
     // 추천 화면은 토스트가 없어 플래시를 남기지 않는다(나중에 홈에서 뜨지 않게). 새 계정(들어온 곳 없음)도 홈에 알림 없이
     if (nav.from && nav.from !== 'recommend') setFlash(flash)
     if (nav.from) {

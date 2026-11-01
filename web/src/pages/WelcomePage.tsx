@@ -12,6 +12,8 @@ import { hasCurrentConsent } from '../data/consent'
 import { isWelcomeLogin, markWelcomeLogin, useConsent } from '../components/terms/consentState'
 import { LoginNotice, useGoogleLogin } from '../components/terms/googleLogin'
 import { Crown, MealArt, Mascot } from '../components/ui'
+import { isDemoEmail, setDemoStage } from '../lib/demoAccount'
+import { clearOnboardingDraft } from '../lib/onboardingDraft'
 
 const chip = { background: 'var(--surface)', display: 'inline-flex', alignItems: 'center' } as const
 
@@ -89,6 +91,13 @@ export default function WelcomePage({ user }: { user: User | null }) {
   useEffect(() => {
     if (!user || consent === undefined || !isWelcomeLogin()) return
     markWelcomeLogin(false)
+    // 심사위원용 테스트 계정은 새로 로그인할 때마다 이 기기에서 처음 가입한 것처럼(동의부터, 앞사람이 입력하던 목표 질문 값은 지움)
+    if (isDemoEmail(user.email)) {
+      clearOnboardingDraft()
+      setDemoStage(user.uid, 'consent')
+      void navigate('/consent', { replace: true })
+      return
+    }
     void navigate(hasCurrentConsent(consent) ? '/' : '/consent', { replace: true })
   }, [user, consent, navigate])
   // 리디렉션 로그인이 실패해 돌아왔으면 표시를 지운다(나중에 처음 화면 다시 보기가 저절로 넘어가지 않게)

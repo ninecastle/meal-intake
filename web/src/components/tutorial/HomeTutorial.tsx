@@ -9,6 +9,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Keyboar
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router'
 import { subscribePrefs, setTutorialDone } from '../../data/prefs'
+import { advanceDemoStage, useDemoStage } from '../../lib/demoAccount'
 import { Icon, type IconName } from '../ui'
 import { TrayPhoto } from './TrayPhoto'
 
@@ -210,8 +211,10 @@ export default function HomeTutorial({ uid, ready }: { uid: string; ready: boole
   const [rect, setRect] = useState<Rect | null>(null)
   const boxRef = useRef<HTMLDivElement>(null)
   const pushedRef = useRef(false)
+  // 테스트 계정 처음처럼(lib/demoAccount, 'tutorial' 단계)은 이미 봤어도 한 번 더
+  const demo = useDemoStage(uid)
 
-  useEffect(() => subscribePrefs(uid, (p) => setDone(p.tutorialDone)), [uid])
+  useEffect(() => subscribePrefs(uid, (p) => setDone(p.tutorialDone && demo !== 'tutorial')), [uid, demo])
 
   // 설정 [사용방법] → 홈(state.tutorial === true). 새로고침 때 다시 뜨지 않게 state를 비운다.
   useEffect(() => {
@@ -245,6 +248,7 @@ export default function HomeTutorial({ uid, ready }: { uid: string; ready: boole
       setStep(null)
       setRect(null)
       setDone(true)
+      advanceDemoStage(uid, 'tutorial', null)
       setTutorialDone(uid).catch((e: unknown) => console.warn('[tutorial] 저장 실패', e))
       if (!byBack && pushedRef.current) {
         pushedRef.current = false

@@ -2,6 +2,7 @@
 // undefined = 아직 불러오는 중(또는 로그인 안 함), null = 동의 없음.
 import { createContext, useContext, useEffect, useState } from 'react'
 import { subscribeConsent, type Consent } from '../../data/consent'
+import { useDemoStage } from '../../lib/demoAccount'
 
 export type ConsentState = Consent | null | undefined
 
@@ -15,7 +16,10 @@ export function useConsentSubscription(uid: string | null): ConsentState {
     if (!uid) return
     return subscribeConsent(uid, (c) => setS({ uid, c }))
   }, [uid])
-  return uid && s.uid === uid ? s.c : undefined
+  // 심사위원용 테스트 계정을 그 기기에서 처음처럼 보이는 중(lib/demoAccount)이면 동의가 없는 것처럼
+  const demo = useDemoStage(uid)
+  const c = uid && s.uid === uid ? s.c : undefined
+  return demo === 'consent' && c !== undefined ? null : c
 }
 
 // 소개 [구글로 시작하기]로 로그인을 시작했다는 표시. 팝업이 막혀 리디렉션 로그인으로 페이지가 다시 열려도 다음 화면(홈·동의)으로

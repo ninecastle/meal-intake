@@ -12,6 +12,7 @@ import { Toast } from '../components/ui'
 import { hasCurrentConsent, REQUIRED_KEYS, saveConsent, type ConsentKey } from '../data/consent'
 import { subscribeGoal } from '../data/goals'
 import { subscribePrefs, type Prefs } from '../data/prefs'
+import { advanceDemoStage, useDemoStage } from '../lib/demoAccount'
 import { AGREE, type TermsKey } from '../lib/terms'
 
 type Agree = Partial<Record<ConsentKey, boolean>>
@@ -39,6 +40,7 @@ export default function ConsentPage({ user }: { user: User | null }) {
   const [submitted, setSubmitted] = useState(false)
   const [toast, setToast] = useState<{ text: string; at: number } | null>(null)
   const leaving = useRef(false)
+  const demo = useDemoStage(uid)
 
   useEffect(() => {
     if (!uid) return
@@ -65,7 +67,8 @@ export default function ConsentPage({ user }: { user: User | null }) {
   }, [uid, agree, ready, prefs, consent])
 
   // 저장했으면 구독에 보인 뒤(경로 가드가 다시 소개로 보내지 않게) 새 계정은 목표 질문, 가입한 계정은 홈 맨 위로
-  const hasGoal = goal?.has === true
+  // 테스트 계정 처음처럼(lib/demoAccount): 동의 뒤 늘 목표 질문으로
+  const hasGoal = goal?.has === true && demo !== 'goal'
   useEffect(() => {
     if (!submitted || !hasCurrentConsent(consent ?? null) || leaving.current) return
     leaving.current = true
@@ -90,6 +93,8 @@ export default function ConsentPage({ user }: { user: User | null }) {
     // 학교 등록은 동의 항목에서 뺐다(D13). 규칙이 요구하는 school 칸은 false로 계속 저장한다
     const choice = { photoKeep: a.keep === true, school: false }
     setSubmitted(true)
+    // 테스트 계정 처음처럼: 동의를 눌렀으면 다음 단계(목표 질문)로(저장은 기다리지 않는다, 오프라인이면 끝나지 않으므로)
+    advanceDemoStage(uid, 'consent', 'goal')
     saveConsent(uid, choice).catch((e: unknown) => {
       console.warn('[consent] 저장 실패', e)
       setSubmitted(false)

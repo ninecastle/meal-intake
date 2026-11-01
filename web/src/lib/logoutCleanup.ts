@@ -15,7 +15,7 @@ export const CLEANUP_PENDING_KEY = 'logoutCleanup.pending'
 /** 계정에 딸린 localStorage 키(정확히 같은 이름) */
 const ACCOUNT_LOCAL_KEYS = ['onboardingDraft.v1']
 /** 계정에 딸린 localStorage 키 앞부분 */
-const ACCOUNT_LOCAL_PREFIXES = ['neisMeal.v1:', 'schoolMealOf.v1:', 'fastAuto.v1:']
+const ACCOUNT_LOCAL_PREFIXES = ['neisMeal.v1:', 'schoolMealOf.v1:', 'fastAuto.v1:', 'demoFresh.v1:']
 /** 계정에 딸린 sessionStorage 키 */
 const ACCOUNT_SESSION_KEYS = ['scrollMemory.v1', 'welcome.loginStart', 'timing']
 
