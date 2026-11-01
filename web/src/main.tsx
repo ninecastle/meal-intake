@@ -5,6 +5,7 @@ import App from './App.tsx'
 import { reloadOnceForNewVersion } from './lib/chunkReload'
 import { retryPendingCleanup } from './lib/logoutCleanup'
 import { disableAutofillEverywhere } from './lib/noAutofill'
+import { registerServiceWorker } from './lib/pwa'
 
 disableAutofillEverywhere()
 
@@ -14,6 +15,8 @@ if (import.meta.env.PROD) {
   window.addEventListener('vite:preloadError', (e) => {
     if (reloadOnceForNewVersion()) e.preventDefault()
   })
+  // PWA(2026-11-01 사용자 요청): 화면 파일만 캐시해 빠르게 열고, 새 배포는 다음에 열 때 받는다(lib/pwa)
+  registerServiceWorker()
 }
 
 // 지난 로그아웃 때 다 못 지운 기기 자료가 있으면(표시 키) Firestore를 쓰기 전에 한 번 더 지운다(최대 약 1.5초씩).
