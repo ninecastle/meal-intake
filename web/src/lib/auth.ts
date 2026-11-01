@@ -12,7 +12,6 @@ import {
 import { useEffect, useState } from 'react'
 import { auth } from './firebase'
 import { clearDeviceDataAfterSignOut } from './logoutCleanup'
-import { isStandalone } from './pwa'
 
 export type AuthErrorCode = 'AUTH_CANCELLED' | 'AUTH_INAPP_BROWSER' | 'AUTH_FAILED'
 
@@ -64,19 +63,11 @@ function googleProvider(): GoogleAuthProvider {
 }
 
 /** 팝업 로그인. 팝업이 막히면 리디렉션으로 바꾼다(이때는 페이지가 떠나므로 돌아오지 않는다). 실패는 AuthError.
- *  홈 화면에 추가한 앱(PWA)에서는 처음부터 리디렉션: 아이폰 홈 화면 앱은 팝업 창이 앱과 따로 열려 결과를 돌려받지 못할 수 있다.
- *  authDomain이 앱과 같은 주소라(lib/firebase) 리디렉션도 사파리 저장소 분리에 걸리지 않는다. */
+ *  홈 화면에 추가한 앱(PWA)도 팝업: Firebase가 아이폰 홈 화면 앱의 팝업을 따로 처리한다(_isIOSStandalone → 새 창).
+ *  (2026-11-01 홈 화면 앱만 리디렉션으로 바꿨다가, 로그인 도중 나가면 다음 시작이 "불러오는 중…"에 멈춘다는 사용자 보고로 되돌림) */
 export async function signInWithGoogle(): Promise<void> {
   if (isInAppBrowser()) throw new AuthError('AUTH_INAPP_BROWSER')
   const provider = googleProvider()
-  if (isStandalone()) {
-    try {
-      await signInWithRedirect(auth, provider)
-    } catch (e) {
-      throw toAuthError(e)
-    }
-    return
-  }
   try {
     await signInWithPopup(auth, provider)
   } catch (e) {

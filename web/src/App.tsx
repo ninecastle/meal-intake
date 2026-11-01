@@ -9,6 +9,7 @@ import { createBrowserRouter, Navigate, Outlet, useLocation, type RouteObject } 
 import { RouterProvider } from 'react-router/dom'
 import RouteErrorScreen from './components/RouteErrorScreen'
 import ScrollMemory from './components/ScrollMemory'
+import StartLoading from './components/StartLoading'
 import { ConfirmHost } from './components/ui'
 import TimingOverlay from './components/TimingOverlay'
 import { ConsentContext, useConsent, useConsentSubscription } from './components/terms/consentState'
@@ -57,10 +58,6 @@ function Frame({ children }: { children: ReactNode }) {
   return <div className="app">{children}</div>
 }
 
-function Loading() {
-  return <main className="flex min-h-dvh items-center justify-center p-4 text-sm text-ink-2">불러오는 중…</main>
-}
-
 function Root() {
   return (
     <Frame>
@@ -70,7 +67,7 @@ function Root() {
       <ConfirmHost />
       {/* ?timing=1로 연 탭에서만 단계별 시간(2026-10-29 사용자 요청) */}
       <TimingOverlay />
-      <Suspense fallback={<Loading />}>
+      <Suspense fallback={<StartLoading stage="screen" />}>
         <Outlet />
       </Suspense>
     </Frame>
@@ -83,7 +80,7 @@ function RequireUser() {
   const consent = useConsent()
   if (!user) return <Navigate to="/welcome" replace state={{ from: loc.pathname + loc.search }} />
   // 동의를 불러오는 중
-  if (consent === undefined) return <Loading />
+  if (consent === undefined) return <StartLoading stage="consent" />
   // 동의 전 계정도 소개부터(2026-10-28 사용자 요청: 처음 화면 다시 보기를 누르지 않아도 동의 전에 소개)
   if (!hasCurrentConsent(consent)) return <Navigate to="/welcome" replace state={{ from: loc.pathname + loc.search }} />
   return <Outlet />
@@ -175,7 +172,7 @@ export default function App() {
   if (loading)
     return (
       <Frame>
-        <Loading />
+        <StartLoading stage="auth" />
       </Frame>
     )
   return (

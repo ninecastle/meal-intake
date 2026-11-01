@@ -19,6 +19,8 @@ export type Consent = { version: string; agreedAt: Date | null; photoKeep: boole
 export type ConsentChoice = { photoKeep: boolean; school: boolean }
 
 const userRef = (uid: string) => doc(db, 'users', uid)
+/** 캐시에 계정 문서가 없을 때 서버 답을 기다리는 최대 시간 */
+const CACHE_MISS_WAIT_MS = 5000
 
 /** 지금 버전에 동의했는지 */
 export function hasCurrentConsent(c: Consent | null): boolean {
@@ -30,12 +32,25 @@ export function hasCurrentConsent(c: Consent | null): boolean {
  * 문서·필드가 없거나 형식이 틀리면 null. 구독 오류면 null을 한 번 알린다(오프라인 첫 실행 등 — 동의 화면이 다시 보일 수 있다).
  */
 export function subscribeConsent(uid: string, onData: (c: Consent | null) => void): () => void {
-  return onSnapshot(
+  // 서버 답을 기다리다 CACHE_MISS_WAIT_MS가 지나면 기기 값(동의 없음)으로 진행한다(무한 "불러오는 중…" 막기)
+  let missTimer: ReturnType<typeof setTimeout> | null = null
+  const clearMiss = () => {
+    if (missTimer) clearTimeout(missTimer)
+    missTimer = null
+  }
+  const unsub = onSnapshot(
     userRef(uid),
     (s) => {
-      // 기기 캐시에 계정 문서가 없을 뿐인 첫 값(로그아웃 때 캐시를 지운 뒤 등)은 온라인이면 서버 답을 기다린다
+      // 기기 캐시에 계정 문서가 없을 뿐인 첫 값(로그아웃 때 캐시를 지운 뒤 등)은 온라인이면 잠깐 서버 답을 기다린다
       // (동의한 계정이 잠깐 "동의 없음"으로 보여 소개·동의 화면으로 가지 않게)
-      if (!s.exists() && s.metadata.fromCache && (typeof navigator === 'undefined' || navigator.onLine)) return
+      if (!s.exists() && s.metadata.fromCache && (typeof navigator === 'undefined' || navigator.onLine)) {
+        missTimer ??= setTimeout(() => {
+          missTimer = null
+          onData(null)
+        }, CACHE_MISS_WAIT_MS)
+        return
+      }
+      clearMiss()
       const c = s.exists() ? (s.data() as { consent?: Record<string, unknown> }).consent : undefined
       if (!c || typeof c.version !== 'string' || c.required !== true) return onData(null)
       const at = c.agreedAt as Timestamp | null | undefined
@@ -48,10 +63,15 @@ export function subscribeConsent(uid: string, onData: (c: Consent | null) => voi
       })
     },
     (e) => {
+      clearMiss()
       console.warn('[consent] 구독 오류', e)
       onData(null)
     },
   )
+  return () => {
+    clearMiss()
+    unsub()
+  }
 }
 
 /** 동의 저장(필수 모두 동의한 뒤에만 부른다). prefs.keepPhotos도 같은 쓰기에서 바꾼다. 오프라인이면 서버 확인까지 끝나지 않는다. */
