@@ -1,7 +1,7 @@
 // 설정(디자인 조각 D8, 시안 settings() 마크업·클래스 그대로, 2026-10-28 사용자 확인 _workspace/design/mock/d8_1~7).
 // div.screen > .topbar.sticky(‹ "설정") → .pad.slist: 계정(구글 이메일) / 내 목표(목표 칼로리·탄단지, 목표, 목표 몸무게, 키·몸무게 + 시안에 없는
 // 성별·나이, 활동량) / 기록(시안에 없는 묶음: 같이 먹은 사람 고르기) / 학교 / 사진 / 알림 / 기타(… 내 기록 전체 삭제, 로그아웃).
-// 학교 등록(D13)은 학교 찾기 시트(components/school/SchoolSheet). 아직 만들지 않은 기능의 줄(프리미엄)은 시안처럼 보이고 누르면 "준비 중이에요"(스위치는 꺼진 채).
+// 학교 등록(D13)은 학교 찾기 시트(components/school/SchoolSheet). 프리미엄 줄은 결제 안내 화면(/premium, 2026-11-01 사용자 결정, 결제 없음).
 // 처음 화면 다시 보기(/welcome)·약관·개인정보(/terms)는 D10에서 연결했다.
 // 사진(D9, 2026-10-28 사용자 확인 _workspace/design/mock/d9_5): 식사 사진 보관 켜기·끄기는 바로(끄면 앞으로 찍는 사진만 보관하지 않고
 // 보관한 사진은 남긴다, D10 때 사용자 결정으로 "보관한 사진도 지울까요?" 시트 없앰), 사진 전체 삭제는 확인 시트 뒤 deleteAllMealPhotos.
@@ -88,7 +88,6 @@ export default function SettingsPage({ user }: { user: User }) {
   }, [toast])
 
   const say = (text: string) => setToast({ text, at: Date.now() })
-  const soon = () => say('준비 중이에요')
 
   function goBack() {
     if (leaving.current) return
@@ -223,7 +222,8 @@ export default function SettingsPage({ user }: { user: User }) {
         <Row label="사진 전체 삭제" value="" danger onClick={() => setSheet('delphotos')} />
         {/* 시안 "알림 · 끼니 기록 알림" 묶음은 뺀다(D15 끼니 알림 하지 않음, 2026-10-29 사용자 결정) */}
         <div className="sgroup">기타</div>
-        <Row label="프리미엄" value={<Crown />} onClick={soon} />
+        {/* 프리미엄 안내(2026-11-01 사용자 결정, 결제 없음) */}
+        <Row label="프리미엄" value={<Crown />} onClick={() => void navigate('/premium', { state: { fromSettings: true } })} />
         {/* 첫 홈 튜토리얼 다시 보기(D11): 홈이 state.tutorial을 보고 시작한다 */}
         <Row label="사용방법" onClick={() => void navigate('/', { state: { tutorial: true } })} />
         {/* D10: 처음 화면(소개)은 로그인 상태로, 약관·개인정보는 /terms */}

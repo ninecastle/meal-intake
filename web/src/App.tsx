@@ -37,6 +37,7 @@ const RecommendPage = lazy(() => import('./pages/RecommendPage'))
 // 처음 동의·설정 → 약관·개인정보(디자인 조각 D10)
 const ConsentPage = lazy(() => import('./pages/ConsentPage'))
 const TermsPage = lazy(() => import('./pages/TermsPage'))
+const PremiumPage = lazy(() => import('./pages/PremiumPage'))
 // 개발 빌드에서만 등록한다. 배포 빌드에서는 import.meta.env.DEV가 false로 바뀌어 이 import가 번들에서 빠진다.
 const DevPage = import.meta.env.DEV ? lazy(() => import('./pages/DevPage')) : null
 // 공통 부품 모음(조각 D1-a, /dev/ui). 개발 빌드에서만 등록하고, 사용자 데이터를 쓰지 않아 로그인 없이 연다.
@@ -96,6 +97,7 @@ function LoginRedirect() {
 const WelcomeRoute = () => <WelcomePage user={useContext(UserContext)} />
 const ConsentRoute = () => <ConsentPage user={useContext(UserContext)} />
 const TermsRoute = () => <TermsPage uid={useUser().uid} />
+const PremiumRoute = () => <PremiumPage uid={useUser().uid} />
 
 const HomeRoute = () => <HomePage user={useUser()} />
 const MealRoute = () => <MealPage uid={useUser().uid} />
@@ -138,6 +140,8 @@ const userRoutes: RouteObject[] = [
   { path: '/recommend', element: <RecommendRoute /> },
   // 설정 → 약관·개인정보(D10)
   { path: '/terms', element: <TermsRoute /> },
+  // 설정 → 프리미엄 결제 안내(2026-11-01 사용자 결정, 실제 결제 없음)
+  { path: '/premium', element: <PremiumRoute /> },
   ...(DevPage ? [{ path: '/dev', element: <DevPage /> }] : []),
   { path: '*', element: <Navigate to="/" replace /> },
 ]

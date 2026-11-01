@@ -235,3 +235,33 @@
 .photoview{position:fixed;inset:0;background:rgba(31,42,46,.94);z-index:80;display:grid;grid-template-rows:auto 1fr auto;color:#fff}
 .photoview .iconbtn svg{stroke:#fff}
 .photoview .iconbtn:hover{background:rgba(255,255,255,.12)}
+
+/* 프리미엄 결제 안내(/premium, 2026-11-01 사용자 결정, mock premium_1_top·2_bottom·B_modal): 시안 색·모서리 토큰으로 */
+.pm-hero{background:var(--ink);color:#fff;border-radius:var(--r-lg);padding:26px 22px;text-align:center;margin-top:6px}
+.pm-hero .crown{width:52px;height:52px}
+.pm-hero .crown svg{width:28px;height:28px}
+.pm-hero h2{font-size:25px;line-height:1.35;margin:14px 0 8px;color:#fff}
+.pm-hero p{margin:0;color:#C9D3D6;font-size:15px}
+.pm-hook{margin-top:14px;background:var(--lime-soft);border-radius:var(--r-md);padding:14px 16px;font-weight:700;display:flex;gap:10px;align-items:center}
+.pm-h2{margin:28px 0 4px;font-size:20px}
+.pm-feat{margin-top:12px;border-radius:var(--r-lg);padding:18px}
+.pm-feat h3{margin:0 0 4px;font-size:18px;display:flex;align-items:center;gap:8px}
+.pm-feat p{margin:0 0 12px;color:var(--ink-2);font-size:14px;word-break:keep-all}
+.pm-prev{background:var(--surface);border-radius:var(--r-md);padding:14px;position:relative}
+.pm-ex{position:absolute;top:10px;right:10px;font-size:11px;color:var(--ink-3);background:var(--ground);border-radius:6px;padding:1px 6px}
+.pm-cmp{width:100%;border-collapse:collapse;margin-top:10px;font-size:15px}
+.pm-cmp th,.pm-cmp td{padding:11px 4px;border-bottom:1px solid var(--line);text-align:center}
+.pm-cmp th:first-child,.pm-cmp td:first-child{text-align:left}
+.pm-cmp thead th{font-size:14px;color:var(--ink-2)}
+.pm-yes{color:var(--lime-deep)}
+.pm-no{color:var(--ink-3)}
+.pm-plan{display:flex;align-items:center;gap:12px;border:2px solid var(--line);border-radius:var(--r-md);padding:14px 16px;margin-top:10px;background:var(--surface);width:100%;text-align:left}
+.pm-plan.on{border-color:var(--ink)}
+.pm-radio{width:22px;height:22px;border-radius:50%;border:2px solid var(--ink-3);flex:none;display:grid;place-items:center}
+.pm-plan.on .pm-radio{border-color:var(--ink)}
+.pm-plan.on .pm-radio::after{content:"";width:12px;height:12px;border-radius:50%;background:var(--ink)}
+.pm-plan .t{font-size:17px;font-weight:700;display:flex;gap:6px;align-items:center}
+.pm-plan small{display:block;color:var(--ink-2);font-size:13px}
+.pm-plan .pr{margin-left:auto;text-align:right;font-size:18px;font-weight:700}
+.pm-tag{font-size:12px;background:var(--peach);color:#fff;border-radius:999px;padding:2px 8px}
+.pm-trust{margin:14px 0 0;color:var(--ink-2);font-size:13px;text-align:center;line-height:1.7}

@@ -4,7 +4,8 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
-export type ConfirmOptions = { title: string; body?: string; ok?: string; cancel?: string }
+/** cancel: null이면 [취소] 없이 확인 버튼 하나(알림 창, 프리미엄 결제 준비 중 안내) */
+export type ConfirmOptions = { title: string; body?: string; ok?: string; cancel?: string | null }
 type Pending = ConfirmOptions & { resolve: (ok: boolean) => void }
 
 let show: ((p: Pending) => void) | null = null
@@ -83,9 +84,11 @@ export function ConfirmHost() {
         </h2>
         {cur.body && <p style={{ color: 'var(--ink-2)', margin: '8px 0 0' }}>{cur.body}</p>}
         <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
-          <button type="button" className="btn ghost" style={{ flex: 1 }} onClick={() => done(false)}>
-            {cur.cancel ?? '취소'}
-          </button>
+          {cur.cancel !== null && (
+            <button type="button" className="btn ghost" style={{ flex: 1 }} onClick={() => done(false)}>
+              {cur.cancel ?? '취소'}
+            </button>
+          )}
           <button type="button" className="btn ink" style={{ flex: 1 }} onClick={() => done(true)}>
             {cur.ok ?? '확인'}
           </button>
