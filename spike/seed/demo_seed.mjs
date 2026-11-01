@@ -1,11 +1,13 @@
 // 심사위원용 테스트 계정에 넣을 가상 식단(2026-11-01 사용자 요청). AI 호출 없음.
 // 앱의 계산 코드(web/src/analysis: DB 조회·applyNutrition·applyDetail·국물 나누기·buildAnalysis)를 그대로 써서
-// 앱이 직접 저장한 것과 같은 모양의 문서를 만든다. 같은 날짜 범위면 늘 같은 결과(날짜로 정한 난수, 문서 id도 고정)라
-// 나중에 이어 채워도(11/4) 겹치거나 바뀌지 않는다.
+// 앱이 직접 저장한 것과 같은 모양의 문서를 만든다. 끼니는 날짜로 정한 난수라 범위와 상관없이 같은 날은 늘 같고(문서 id도 고정),
+// 체중은 시작 → 끝 흐름(63.4 → 61kg쯤)이라 이어 채울 때는 시작을 그대로 두고 끝만 늘린 뒤 [이어 채울 첫 날짜]를 준다.
 //
-// 쓰는 법: node spike/seed/demo_seed.mjs <시작 YYYY-MM-DD> <끝 YYYY-MM-DD> <출력 JSON> [사진 폴더]
+// 쓰는 법: node spike/seed/demo_seed.mjs <시작 YYYY-MM-DD> <끝 YYYY-MM-DD> <출력 JSON> [사진 폴더] [이어 채울 첫 날짜]
 //   → { users: {...}, docs: [{ path, fields }] } (path는 users/{UID} 아래 상대 경로, 쓰기는 demo_write.mjs)
 // 사진 폴더: thumbs/<slug>_<n>.jpg(긴 변 360·5:4, make_thumbs.py가 만듦)와 manifest.json. 있으면 그 음식의 먹기 전 사진으로 넣는다.
+// 이어 채울 첫 날짜: 그 날짜부터의 문서만 낸다(사진 차례·목표·체중 흐름은 시작부터 계산). 사용자 문서(목표·목표 몸무게)는 비워
+//   쓰지 않는다(심사위원이 처음처럼 흐름에서 정한 목표를 덮지 않게). 예: 9/1~10/31을 쓴 뒤 2026-09-01 2026-11-04 … 2026-11-01
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -29,8 +31,9 @@ await detailMod.loadDetailDb(async () => readJson(dataFile('mfds-detail-')))
 const brothTable = await brothMod.loadBroth(async () => readJson(dataFile('broth-')))
 const resolver = resolveMod.createNutritionResolver({ loadIndex: async () => index, estimate: null })
 
-const [START, END, OUT, PHOTO_DIR] = process.argv.slice(2)
-if (!START || !END || !OUT) throw new Error('쓰는 법: demo_seed.mjs 시작 끝 출력.json [사진폴더]')
+const [START, END, OUT, PHOTO_DIR, FROM] = process.argv.slice(2)
+if (!START || !END || !OUT) throw new Error('쓰는 법: demo_seed.mjs 시작 끝 출력.json [사진폴더] [이어 채울 첫 날짜]')
+if (FROM && (FROM < START || FROM > END)) throw new Error('이어 채울 첫 날짜는 시작~끝 안이어야 해요')
 
 // ── 날짜로 정한 난수(같은 날짜·같은 칸이면 늘 같은 값) ──
 function hash(s) {
@@ -309,10 +312,21 @@ for (let t = tOf(START); t <= tOf(END); t += DAY_MS) {
 }
 
 const last = goals.at(-1)
-const user = last
+const user = last && !FROM
   ? { goal: { input: last.input, override: null, result: last.result, targets: last.targets, updatedAt: { $ts: kst(last.day, 9, 0) } }, targetWeightKg: 58 }
   : {}
 
-fs.writeFileSync(OUT, JSON.stringify({ range: [START, END], user, docs }))
+// 이어 채우기: FROM 날짜부터의 문서만(사진 문서는 남긴 끼니 id로)
+let out = docs
+if (FROM) {
+  const dayOf = (d) => d.fields.dateKey ?? null
+  const mealIds = new Set(docs.filter((d) => d.path.startsWith('meals/') && dayOf(d) >= FROM).map((d) => d.path.slice('meals/'.length)))
+  out = docs.filter((d) => (d.path.startsWith('mealPhotos/') ? mealIds.has(d.path.slice('mealPhotos/'.length)) : dayOf(d) >= FROM))
+  const count = (p) => out.filter((d) => d.path.startsWith(p)).length
+  Object.assign(stats, { meals: count('meals/'), photos: count('mealPhotos/'), days: count('days/'), weights: count('weights/') })
+  stats.kcalByDay = stats.kcalByDay.filter(([day]) => day >= FROM)
+}
+
+fs.writeFileSync(OUT, JSON.stringify({ range: [FROM ?? START, END], user, docs: out }))
 const kc = stats.kcalByDay.map((x) => x[1])
-console.log(JSON.stringify({ ...stats, kcalByDay: undefined, avgKcal: Math.round(kc.reduce((a, b) => a + b, 0) / kc.length), minKcal: Math.min(...kc), maxKcal: Math.max(...kc), goals: goals.map((g) => [g.day, g.targets.target_kcal]), photoDishes: [...photos.keys()].length }))
+console.log(JSON.stringify({ ...stats, kcalByDay: undefined, ...(FROM ? { perDay: stats.kcalByDay.map(([d, k]) => `${d.slice(5)} ${k}`) } : {}), avgKcal: Math.round(kc.reduce((a, b) => a + b, 0) / kc.length), minKcal: Math.min(...kc), maxKcal: Math.max(...kc), goals: goals.map((g) => [g.day, g.targets.target_kcal]), photoDishes: [...photos.keys()].length }))

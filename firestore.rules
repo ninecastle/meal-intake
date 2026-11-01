@@ -29,6 +29,7 @@ rules_version = '2';
 //   createdAt은 만들 때 요청 시각·그 뒤 그대로, updatedAt == request.time. 크기는 stats·text 키 수와 문장 길이로 대략 막는다.
 // - v14(2026-10-29): reports text에 nutrients·meals(칸마다 300자 이하)·swaps(4개 이하, from·to 100자·why 300자)·focus(300자) 허용(프롬프트 r3).
 //   genCount 상한 3 → 999: 2026-10-29 사용자 테스트용으로 한도 해제. 제출 전(11/4 기능 동결) 3으로 되돌릴지 사용자에게 확인.
+// - v15(2026-11-02 사용자 확인): reports genCount 상한을 999 → 3으로 되돌림(주당 3회, v13과 같음).
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -403,7 +404,7 @@ service cloud.firestore {
         && validReportText(d.text)
         && (!('model' in d) || shortStr(d.model, 60))
         && (!('promptVersion' in d) || shortStr(d.promptVersion, 40))
-        && d.genCount is int && d.genCount >= 1 && d.genCount <= 999
+        && d.genCount is int && d.genCount >= 1 && d.genCount <= 3
         && d.createdAt is timestamp
         && d.updatedAt == request.time;
     }

@@ -11,9 +11,9 @@ import { db } from '../lib/firebase'
 
 export type { ReportText }
 
-/** 주당 만들기 상한(규칙 v14 genCount <= 999).
- *  2026-10-29 사용자 테스트용으로 한도 해제(3 → 999). 제출 전(11/4 기능 동결) 3으로 되돌릴지 사용자에게 확인 */
-export const REPORT_MAX_GEN = 999
+/** 주당 만들기 상한(규칙 v15 genCount <= 3).
+ *  2026-10-29 사용자 테스트용으로 999까지 풀었다가 2026-11-02 사용자 확인으로 3으로 되돌림 */
+export const REPORT_MAX_GEN = 3
 
 export interface StoredReport {
   weekStart: string

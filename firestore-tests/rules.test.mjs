@@ -1180,7 +1180,7 @@ describe('AI 주간 리포트(users/{uid}/reports/{weekStart}, 규칙 v13, 디�
     await assertSucceeds(deleteDoc(doc(fs, rPath())))
   })
 
-  test('genCount: 처음이 1이 아니면, 건너뛰거나 같으면 거부, 4는 허용(v14 한도 999), 1000 거부', async () => {
+  test('genCount: 처음이 1이 아니면, 건너뛰거나 같으면 거부, 4 거부(v15 한도 3)', async () => {
     const fs = alice()
     await assertFails(setDoc(doc(fs, rPath()), report(2, serverTimestamp())))
     await assertFails(setDoc(doc(fs, rPath()), report(1.5, serverTimestamp())))
@@ -1189,16 +1189,16 @@ describe('AI 주간 리포트(users/{uid}/reports/{weekStart}, 규칙 v13, 디�
     await assertFails(setDoc(doc(fs, rPath()), report(1, c)))
     await assertFails(setDoc(doc(fs, rPath()), report(3, c)))
     await assertSucceeds(setDoc(doc(fs, rPath()), report(2, c)))
-    await assertSucceeds(setDoc(doc(fs, rPath()), report(3, c)))
     // createdAt 바꾸기 거부
-    await assertFails(setDoc(doc(fs, rPath()), report(4, serverTimestamp())))
-    await assertSucceeds(setDoc(doc(fs, rPath()), report(4, c)))
-    // 2026-10-29 사용자 테스트용 한도 해제(999): 999 다음 1000은 거부
+    await assertFails(setDoc(doc(fs, rPath()), report(3, serverTimestamp())))
+    await assertSucceeds(setDoc(doc(fs, rPath()), report(3, c)))
+    // 주당 3회(2026-11-02 사용자 확인으로 999에서 되돌림): 3 다음 4는 거부
+    await assertFails(setDoc(doc(fs, rPath()), report(4, c)))
+    // 999에서 남은 문서(4 이상)도 더 올리지 못함
     await env.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), rPath()), { ...report(998, c), updatedAt: serverTimestamp() })
+      await setDoc(doc(ctx.firestore(), rPath()), { ...report(10, c), updatedAt: serverTimestamp() })
     })
-    await assertSucceeds(setDoc(doc(fs, rPath()), report(999, c)))
-    await assertFails(setDoc(doc(fs, rPath()), report(1000, c)))
+    await assertFails(setDoc(doc(fs, rPath()), report(11, c)))
   })
 
   const TEXT3 = {
