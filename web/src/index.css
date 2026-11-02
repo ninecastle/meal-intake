@@ -42,15 +42,19 @@
   --color-heat4: #f3af80;
   --color-crown: #d9a21b;
 
-  --font-jua: "Jua", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
-
   /* 시안 --r-lg 24px(카드) / --r-md 16px(선택 줄·안내 상자) / --r-sm 10px(작은 상자·칩) */
   --radius-card: 24px;
   --radius-tile: 16px;
   --radius-chip: 10px;
 }
 
-/* 글꼴·굵기 400·body 15px/1.5·바탕 ground·.num·.pad는 시안 CSS(prototype 레이어)가 정한다(D1 기본층·유틸리티는 지웠다). */
+/* 글꼴·body 15px/1.5·바탕 ground·.num·.pad는 시안 CSS(prototype 레이어)가 정한다(D1 기본층·유틸리티는 지웠다). */
+/* 글꼴 Pretendard(2026-11-02): style로 제목 글꼴(--f-head)만 준 요소도 시안 제목 목록과 같이 600. 우선순위 0이라 시안 클래스 굵기(.btn 800 등)·인라인 굵기가 이긴다 */
+@layer prototype {
+  :where([style*="--f-head"]) {
+    font-weight: 600;
+  }
+}
 @layer base {
   /* 시안은 .app이 body 바로 아래라 .app{min-height:100%}가 화면 높이를 채운다. 우리는 사이에 #root가 있어 높이를 이어 준다. */
   #root {
