@@ -73,6 +73,28 @@ AI가 틀리면 결과 화면에서 이름·무게·남긴 양을 바로 고칠 
 
 > AI 분석은 Gemini 무료 등급을 쓰므로 호출 수에 한도가 있습니다. 요청이 잠깐 몰려 "잠시 후 다시 시도해 주세요"가 나오면 1분쯤 뒤 [다시 시도]를 눌러 주세요. 하루 한도를 다 쓰면 "오늘 AI 분석 한도를 다 썼어요"가 나옵니다. 그때는 [직접 입력]으로 체험해 주세요. 하루 한도는 매일 17:00(KST)에 초기화됩니다.
 
+### 예시 사진으로 해 보기
+
+찍을 음식이 없을 때는 아래 두 장으로 먹기 전·후 비교를 해 볼 수 있습니다. 쿠키 5개 중 갈색 쿠키 1개를 먹은 사진입니다.
+
+<table>
+  <tr>
+    <th>먹기 전</th>
+    <th>먹은 후</th>
+  </tr>
+  <tr>
+    <td><a href="https://github.com/ninecastle/meal-intake/raw/master/docs/samples/cookie_before.jpg"><img src="docs/samples/cookie_before.jpg" width="240" alt="봉지 안에 단풍잎 쿠키 1개, 갈색 쿠키 2개, 노란 쿠키 2개가 있는 사진"></a></td>
+    <td><a href="https://github.com/ninecastle/meal-intake/raw/master/docs/samples/cookie_after.jpg"><img src="docs/samples/cookie_after.jpg" width="240" alt="같은 봉지에서 갈색 쿠키가 1개로 줄어든 사진"></a></td>
+  </tr>
+</table>
+
+1. 사진을 눌러 연 뒤 기기에 저장합니다.
+2. 홈의 끼니 카드 **[+]** → **[앨범에서 고르기]**(PC는 **[사진 파일 고르기]**)로 `cookie_before.jpg`를 고릅니다.
+3. 분석이 끝나면 끼니 화면에서 "먹은 후 사진 기다림" 음식을 누르고, 같은 버튼으로 `cookie_after.jpg`를 고릅니다.
+4. 결과 화면에서 남긴 양과 칼로리를 확인하고 **[저장]**합니다. 값이 다르면 그 자리에서 고칠 수 있습니다.
+
+두 사진은 같은 기기에서 넣어 주세요. 먹기 전 사진은 그 기기에만 잠깐 보관합니다.
+
 ## 구조
 
 서버 코드 없이 Firebase Spark(무료) 요금제 안에서만 동작합니다.
