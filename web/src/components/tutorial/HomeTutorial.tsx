@@ -46,7 +46,7 @@ function WayRow({ icon, title, sub }: { icon: IconName; title: string; sub: stri
         <Icon name={icon} size={24} />
       </span>
       <div>
-        <b style={{ fontFamily: 'var(--f-head)', fontSize: 17 }}>{title}</b>
+        <b style={{ fontFamily: 'var(--f-head)', fontWeight: 400, fontSize: 17 }}>{title}</b>
         <div style={{ fontSize: 14, color: 'var(--ink-2)' }}>{sub}</div>
       </div>
     </div>

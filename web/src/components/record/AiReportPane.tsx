@@ -333,7 +333,7 @@ export default function AiReportPane({ uid, today, onOpenDay }: AiReportPaneProp
 function Notice({ title, children }: { title: string; children?: ReactNode }) {
   return (
     <div style={{ textAlign: 'center', padding: '26px 8px 10px', color: 'var(--ink-2)' }} role="status">
-      <b style={{ color: 'var(--ink)', fontFamily: 'var(--f-head)', fontSize: 17 }}>{title}</b>
+      <b style={{ color: 'var(--ink)', fontFamily: 'var(--f-head)', fontWeight: 400, fontSize: 17 }}>{title}</b>
       {children && <p style={{ margin: '8px 0 0', fontSize: 14 }}>{children}</p>}
     </div>
   )
@@ -394,7 +394,7 @@ function AiWorking() {
       <div className="progress" style={{ margin: '0 auto 12px', maxWidth: 220 }} role="progressbar" aria-label="AI 분석 진행">
         <i style={{ width: `${pct}%`, transition: 'width .4s linear' }} />
       </div>
-      <b style={{ fontFamily: 'var(--f-head)', fontSize: 17 }}>AI가 한 주를 보고 있어요…</b>
+      <b style={{ fontFamily: 'var(--f-head)', fontWeight: 400, fontSize: 17 }}>AI가 한 주를 보고 있어요…</b>
     </AiSlot>
   )
 }
@@ -803,7 +803,7 @@ function ScoreInfoSheet({ open, onClose }: { open: boolean; onClose: () => void 
     <li style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '10px 0', borderTop: '1px solid var(--line)' }}>
       <b className="num" style={{ minWidth: 44, fontSize: 18 }}>{pts}</b>
       <span>
-        <b style={{ fontFamily: 'var(--f-head)', fontSize: 16 }}>{title}</b>
+        <b style={{ fontFamily: 'var(--f-head)', fontWeight: 400, fontSize: 16 }}>{title}</b>
         <div style={{ fontSize: 14, color: 'var(--ink-2)', marginTop: 2 }}>{desc}</div>
       </span>
     </li>

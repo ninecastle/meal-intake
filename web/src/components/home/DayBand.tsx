@@ -134,7 +134,7 @@ function textWidth(n: Node): number {
 
 /**
  * 사용자가 고른 변경 (8): .ratio 세 줄(점·이름·숫자) 가운데 하나라도 한 줄에 안 들어가면 true.
- * 그때는 세 줄 모두 숫자를 아래 줄 오른쪽에 둔다(index.css .ratio.stacked). 폭이 바뀌거나 글꼴(Pretendard)이 늦게 들어와도 다시 잰다.
+ * 그때는 세 줄 모두 숫자를 아래 줄 오른쪽에 둔다(index.css .ratio.stacked). 폭이 바뀌거나 글꼴(Jua)이 늦게 들어와도 다시 잰다.
  */
 function useStackedRatio(dep: string) {
   const ref = useRef<HTMLDivElement>(null)

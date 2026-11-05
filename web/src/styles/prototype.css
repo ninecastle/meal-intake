@@ -1,6 +1,4 @@
-/* 출처: _workspace/design/diet-app-prototype.html <style> 6~416줄 그대로(D2-S)
-   바꾼 것(2026-11-02 사용자 요청): 글꼴 Jua → Pretendard. Jua는 굵기가 하나라 시안이 모든 글자를 400으로 묶었는데(*{font-weight:400!important}),
-   그 묶음을 풀어 시안 규칙에 적힌 굵기(제목 800·버튼 700·숫자 600 등)를 그대로 쓰고, 굵기가 없는 제목 글꼴(--f-head) 요소는 600. */
+/* 출처: _workspace/design/diet-app-prototype.html <style> 6~416줄 그대로(D2-S) */
 /* Layout: one phone-width column; home is three pastel bands (sky → lime → peach) stacked as the user scrolls. Single light look by choice. */
 :root{
   color-scheme: light;
@@ -17,20 +15,21 @@
   --carb:#4F8DB5; --prot:#E0A02A; --fat:#E27FA3;
   --heat0:#EEF2EF; --heat1:#D6EBC0; --heat2:#B1DA86; --heat3:#7FBE4C; --heat4:#F3AF80;
   --crown:#D9A21B;
-  --f-num:"Pretendard Variable","Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
-  --f-body:"Pretendard Variable","Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
-  --f-head:"Pretendard Variable","Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --f-num:"Jua","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --f-body:"Jua","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --f-head:"Jua","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
   --r-lg:24px; --r-md:16px; --r-sm:10px;
 }
 *{box-sizing:border-box}
 html,body{height:100%}
+*{font-weight:400!important}
 svg text{font-family:var(--f-body)}
 input{font-family:var(--f-body)!important}
 body{background:var(--ground);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
 button{font:inherit;color:inherit;border:0;background:none;cursor:pointer}
 button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid var(--sky-deep);outline-offset:2px;border-radius:8px}
 .num{font-family:var(--f-num);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
-h1,h2,h3,h4,b,.chipbtn,.btn,.tab,.segment button,.linkrow button,.state,.todaypill,.dow,.nchip,.fn,.weight .q,.remain,.ratio div,.bar label,.badge,.gmeal b,.sgroup,.srow,.choice button,.school p,.gcard .kc,.mtotal,.leftcard b,.rec b,.callout b,.more,.meal .empty{font-family:var(--f-head);font-weight:600}
+h1,h2,h3,h4,b,.chipbtn,.btn,.tab,.segment button,.linkrow button,.state,.todaypill,.dow,.nchip,.fn,.weight .q,.remain,.ratio div,.bar label,.badge,.gmeal b,.sgroup,.srow,.choice button,.school p,.gcard .kc,.mtotal,.leftcard b,.rec b,.callout b,.more,.meal .empty{font-family:var(--f-head);font-weight:400!important}
 .nrow,.rank li,.rank .meta,.food,.mgrams>div{font-family:var(--f-head)}
 .donut{position:relative;width:210px;height:210px;margin:6px auto 0}
 .donut svg{width:100%;height:100%;transform:rotate(-90deg)}
