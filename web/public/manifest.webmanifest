@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "식단 기록",
-  "short_name": "식단 기록",
+  "name": "intake",
+  "short_name": "intake",
   "description": "먹기 전·후 사진으로 실제 먹은 칼로리를 기록해요",
   "lang": "ko",
   "start_url": "/",
