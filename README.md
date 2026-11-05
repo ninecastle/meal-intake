@@ -86,6 +86,7 @@ flowchart LR
   B -->|화면 파일| H[Firebase Hosting]
   B -->|급식 메뉴| N[나이스 Open API]
   D["앱에 포함한 JSON<br/>식약처 DB · 프랜차이즈 표"] --- B
+  C[App Check] -.보호.- G
 ```
 
 - **모델은 보고, 코드는 계산합니다.** Gemini는 음식 이름·무게·남긴 비율만 답하고, 칼로리·영양소는 앱 코드가 계산합니다.
