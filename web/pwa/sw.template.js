@@ -72,9 +72,10 @@ async function openPage(req) {
   }
 }
 
-/** 저장본 먼저(앞 버전 캐시까지 찾는다), 없으면 받아서 cacheName에 저장 */
+/** 저장본 먼저, 없으면 받아서 cacheName에 저장. 이번 버전을 먼저 찾고 그다음 앞 버전 캐시까지 찾는다
+ *  (caches.match만 쓰면 오래된 캐시부터 찾아 manifest처럼 이름이 고정된 파일이 옛 내용으로 나온다) */
 async function cacheFirst(req, cacheName) {
-  const hit = await caches.match(req)
+  const hit = (await caches.match(req, { cacheName })) ?? (await caches.match(req))
   if (hit) return hit
   const res = await fetch(req)
   if (res.ok && res.type === 'basic') {
